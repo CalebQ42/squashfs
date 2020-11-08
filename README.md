@@ -3,8 +3,9 @@ My playground to mess around with Squashfs in Go. Might turn into an actual libr
 
 # Ideas
 * Link directly to squashfs-tool using cgo
-  * cgo is a butt
-  * would require the least amount of code for me to do
+  * cgo can be a butt
+  * Would require the least amount of code for me to do
+  * Doing things in pure Go is definately highly superior
 * Improve [distri's](https://github.com/distr1/distri) or [diskfs](https://github.com/diskfs/go-diskfs) squashfs library to meet my needs
   * Both don't work at all ATM.
   * distri's doesn't seem to support any sort of compression, which causes issues all over the place.
