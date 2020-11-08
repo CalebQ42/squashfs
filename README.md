@@ -13,4 +13,4 @@ My playground to mess around with Squashfs in Go. Might turn into an actual libr
   * MUCH more research needed
   * Could look at [squashfs-tools'](https://github.com/plougher/squashfs-tools) code to help out
   * Don't have to deal with other people's code :P
-  * Honestly a bit unnecessary based on how close distri & diskfs's code is.
+  * Honestly a bit unnecessary based on how close distri & diskfs's code is AND how little I know about squashfs.
