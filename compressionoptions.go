@@ -1,6 +1,6 @@
 package squashfs
 
-//CompressionOptions
+//TODO: implement decompress for each type of Options
 type CompressionOptions interface {
 	Decompress([]byte) []byte
 }
