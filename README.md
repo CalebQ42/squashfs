@@ -1,6 +1,8 @@
 # GoSquashfs
 My playground to mess around with Squashfs in Go. Might turn into an actual library someday. Mainly for AppImage
 
+Right Now it's mostly based on [distri's squashfs library](https://github.com/distr1/distri/tree/master/internal/squashfs)
+
 # Ideas
 * Link directly to squashfs-tool using cgo
   * cgo can be a butt

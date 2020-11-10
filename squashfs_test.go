@@ -1,4 +1,4 @@
-package squashfs_test
+package squashfs
 
 import (
 	"io"
@@ -15,8 +15,29 @@ const (
 	squashfsName = "Code_OSS.Squashfs"
 )
 
-func TestCreateSquashFromAppImage(t *testing.T) {
+func TestAppImageSquash(t *testing.T) {
 	t.Parallel()
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Error(err)
+	}
+	squashFil, err := os.Open(wd + "/testing/" + squashfsName)
+	if os.IsNotExist(err) {
+		TestCreateSquashFromAppImage(t)
+		squashFil, err = os.Open(wd + "/testing/" + squashfsName)
+		if err != nil {
+			t.Error(err)
+		}
+	}
+	defer squashFil.Close()
+	squash, err := NewSquashfs(squashFil)
+	if err != nil {
+		t.Error(err)
+	}
+	t.Fatal("Testing")
+}
+
+func TestCreateSquashFromAppImage(t *testing.T) {
 	wd, err := os.Getwd()
 	if err != nil {
 		t.Fatal(err)
