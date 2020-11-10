@@ -3,6 +3,8 @@ My playground to mess around with Squashfs in Go. Might turn into an actual libr
 
 Right Now it's mostly based on [distri's squashfs library](https://github.com/distr1/distri/tree/master/internal/squashfs)
 
+Special thanks to https://dr-emann.github.io/squashfs/ for some VERY important information in an easy to understand format
+
 # Ideas
 * Link directly to squashfs-tool using cgo
   * cgo can be a butt

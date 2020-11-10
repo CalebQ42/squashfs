@@ -1,6 +1,7 @@
 package squashfs
 
 import (
+	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -34,6 +35,7 @@ func TestAppImageSquash(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
+	fmt.Println(squash.GetFlags())
 	t.Fatal("Testing")
 }
 
