@@ -1,5 +1,7 @@
 package squashfs
 
+const squashfsMagic = 0x73717368
+
 //Superblock is a raw representation of a squashfs
 //Descriptions provided by https://dr-emann.github.io/squashfs/
 type Superblock struct {

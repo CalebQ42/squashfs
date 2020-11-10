@@ -1,8 +1,22 @@
 package squashfs
 
+import "io"
+
+const (
+	zlibCompression = 1 + iota
+	lzmaCompression
+	lzoCompression
+	xzCompression
+	lz4Compression
+	zstdCompression
+)
+
 //TODO: implement decompress for each type of Options
 type CompressionOptions interface {
 	Decompress([]byte) []byte
+	DecompressCopy(*io.Reader, *io.Writer)
+	Compress([]byte) []byte
+	CompressCopy(*io.Reader, *io.Writer)
 }
 
 //TODO: Allow creation of options for compression.
@@ -22,6 +36,13 @@ type GzipOptions struct {
 	HuffmanOnlyStrategy      bool
 	RunLengthEncodedStrategy bool
 	FixedStretegy            bool
+}
+
+func NewGzipOptions(raw gzipOptionsRaw) GzipOptions {
+	//TODO: parse strategies
+	return GzipOptions{
+		raw: &raw,
+	}
 }
 
 type xzOptionsRaw struct {

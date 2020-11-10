@@ -31,7 +31,8 @@ func TestAppImageSquash(t *testing.T) {
 		}
 	}
 	defer squashFil.Close()
-	squash, err := NewSquashfs(squashFil)
+	stat, _ := squashFil.Stat()
+	squash, err := NewSquashfs(io.NewSectionReader(squashFil, 0, stat.Size()))
 	if err != nil {
 		t.Error(err)
 	}
