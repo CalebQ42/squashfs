@@ -13,7 +13,7 @@ var (
 
 //Squashfs is a squashfs backed by a ReadSeeker.
 type Squashfs struct {
-	rdr                *io.SectionReader //underlying reader
+	rdr                *Reader //underlying reader
 	offset             int
 	super              Superblock
 	flags              SuperblockFlags
@@ -21,9 +21,10 @@ type Squashfs struct {
 }
 
 //NewSquashfs creates a new Squashfs backed by the given reader
-func NewSquashfs(reader *io.SectionReader) (*Squashfs, error) {
+func NewSquashfs(reader io.ReaderAt) (*Squashfs, error) {
+	rdr := NewReader(reader)
 	var superblock Superblock
-	err := binary.Read(reader, binary.LittleEndian, &superblock)
+	err := binary.Read(&rdr, binary.LittleEndian, &superblock)
 	if err != nil {
 		return nil, err
 	}
@@ -36,11 +37,19 @@ func NewSquashfs(reader *io.SectionReader) (*Squashfs, error) {
 		switch superblock.Compression {
 		case zlibCompression:
 			var gzipOpRaw gzipOptionsRaw
-			err = binary.Read(reader, binary.LittleEndian, &gzipOpRaw)
+			err = binary.Read(&rdr, binary.LittleEndian, &gzipOpRaw)
 			if err != nil {
 				return nil, err
 			}
 			compressionOptions = NewGzipOptions(gzipOpRaw)
+			break
+		case xzCompression:
+			var xzOpRaw xzOptionsRaw
+			err = binary.Read(&rdr, binary.LittleEndian, xzOpRaw)
+			if err != nil {
+				return nil, err
+			}
+			compressionOptions = NewXzOption(xzOpRaw)
 			break
 		default:
 			//TODO: all the compression options
@@ -49,7 +58,7 @@ func NewSquashfs(reader *io.SectionReader) (*Squashfs, error) {
 	}
 	//TODO: parse more info
 	return &Squashfs{
-		rdr:                reader,
+		rdr:                &rdr,
 		super:              superblock,
 		flags:              flags,
 		compressionOptions: compressionOptions,

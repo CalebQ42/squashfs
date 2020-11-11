@@ -16,7 +16,7 @@ type Reader struct {
 	offset int64
 }
 
-//NewReader creates a
+//NewReader creates a squashfs.Reader from a io.ReaderAt
 func NewReader(baseReader io.ReaderAt) Reader {
 	return Reader{
 		rdr:    baseReader,
