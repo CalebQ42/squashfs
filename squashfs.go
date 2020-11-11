@@ -33,28 +33,32 @@ func NewSquashfs(reader io.ReaderAt) (*Squashfs, error) {
 	}
 	flags := superblock.GetFlags()
 	var compressionOptions CompressionOptions
-	if flags.CompressorOptions {
-		switch superblock.Compression {
-		case zlibCompression:
+	switch superblock.Compression {
+	case zlibCompression:
+		if flags.CompressorOptions {
 			var gzipOpRaw gzipOptionsRaw
 			err = binary.Read(&rdr, binary.LittleEndian, &gzipOpRaw)
 			if err != nil {
 				return nil, err
 			}
 			compressionOptions = NewGzipOptions(gzipOpRaw)
-			break
-		case xzCompression:
+		} else {
+			compressionOptions = NewGzipOptions(gzipOptionsRaw{})
+		}
+	case xzCompression:
+		if flags.CompressorOptions {
 			var xzOpRaw xzOptionsRaw
 			err = binary.Read(&rdr, binary.LittleEndian, xzOpRaw)
 			if err != nil {
 				return nil, err
 			}
 			compressionOptions = NewXzOption(xzOpRaw)
-			break
-		default:
-			//TODO: all the compression options
-			return nil, errors.New("This type of compression isn't supported yet")
+		} else {
+			compressionOptions = NewXzOption(xzOptionsRaw{})
 		}
+	default:
+		//TODO: all the compression options
+		return nil, errors.New("This type of compression isn't supported yet")
 	}
 	//TODO: parse more info
 	return &Squashfs{
@@ -70,14 +74,21 @@ func (s *Squashfs) GetFlags() SuperblockFlags {
 	return s.super.GetFlags()
 }
 
-//Metadata is a parsed metadata block
-type Metadata struct {
+//metadata is a parsed metadata block
+type metadata struct {
 	Compressed bool
 	Size       uint16
-	Data       *io.SectionReader
+	Data       io.Reader
 }
 
-func (s *Squashfs) parseNextMetadata() (*Metadata, error) {
+func (m *metadata) close() {
+	switch m.Data.(type) {
+	case io.ReadCloser:
+		m.Data.(io.ReadCloser).Close()
+	}
+}
+
+func (s *Squashfs) parseNextMetadata() (*metadata, error) {
 	var metaHeader uint16
 	err := binary.Read(s.rdr, binary.LittleEndian, metaHeader)
 	if err != nil {
@@ -85,12 +96,38 @@ func (s *Squashfs) parseNextMetadata() (*Metadata, error) {
 	}
 	if metaHeader&0x8000 == 0x8000 {
 		metaHeader = metaHeader &^ 0x8000
-		//TODO: read compressed metadata
-		return nil, errors.New("Metadata is compressed, which is not implemented yet")
+		compressRead, err := s.compressionOptions.Reader(io.NewSectionReader(s.rdr, s.rdr.offset, int64(metaHeader)))
+		return &metadata{
+			Compressed: true,
+			Size:       metaHeader,
+			Data:       *compressRead,
+		}, err
 	}
-	return &Metadata{
+	return &metadata{
 		Compressed: false,
 		Size:       metaHeader,
-		//TODO: Data:       io.NewSectionReader(s.rdr, , metaHeader),
+		Data:       io.NewSectionReader(s.rdr, s.rdr.offset, int64(metaHeader)),
+	}, nil
+}
+
+func (s *Squashfs) parseMetadataAt(offset int64) (*metadata, error) {
+	var metaHeader uint16
+	err := binary.Read(s.rdr, binary.LittleEndian, metaHeader)
+	if err != nil {
+		return nil, err
+	}
+	if metaHeader&0x8000 == 0x8000 {
+		metaHeader = metaHeader &^ 0x8000
+		compressRead, err := s.compressionOptions.Reader(io.NewSectionReader(s.rdr, offset, int64(metaHeader)))
+		return &metadata{
+			Compressed: true,
+			Size:       metaHeader,
+			Data:       *compressRead,
+		}, err
+	}
+	return &metadata{
+		Compressed: false,
+		Size:       metaHeader,
+		Data:       io.NewSectionReader(s.rdr, offset, int64(metaHeader)),
 	}, nil
 }

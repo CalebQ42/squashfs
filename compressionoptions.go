@@ -14,12 +14,13 @@ const (
 	zstdCompression
 )
 
-//TODO: implement decompress for each type of Options
+//TODO: implement for each type of Options
 type CompressionOptions interface {
 	Decompress(*io.SectionReader, int) ([]byte, error)
 	DecompressCopy(*io.Reader, *io.Writer) (int, error)
 	Compress(*io.SectionReader, int) ([]byte, error)
 	CompressCopy(*io.Reader, *io.Writer) (int, error)
+	Reader(io.Reader) (*io.ReadCloser, error)
 }
 
 //TODO: Allow creation of options for compression.
@@ -32,7 +33,7 @@ type gzipOptionsRaw struct {
 
 //GzipOptions is the options used for gzip compression. Backed by the raw format, with strategies parsed.
 type GzipOptions struct {
-	CompressionOptions       //TODO: remove
+	CompressionOptions
 	raw                      *gzipOptionsRaw
 	DefaultStrategy          bool
 	FilteredStrategy         bool
@@ -41,9 +42,54 @@ type GzipOptions struct {
 	FixedStretegy            bool
 }
 
-func NewGzipOptions(raw gzipOptionsRaw) GzipOptions {
+type byteWriterReader struct {
+	byts   []byte
+	offset int
+}
+
+func newByteReadWrite(length int) *byteWriterReader {
+	return &byteWriterReader{
+		byts:   make([]byte, length),
+		offset: 0,
+	}
+}
+
+func newByteReadWriteFromBytes(byts []byte) *byteWriterReader {
+	return &byteWriterReader{
+		byts:   byts,
+		offset: 0,
+	}
+}
+
+func (bwr *byteWriterReader) getBytes() []byte {
+	return bwr.byts
+}
+
+//Read reads the bytes.
+func (bwr *byteWriterReader) Read(byt []byte) (int, error) {
+	if len(bwr.byts) < bwr.offset+len(byt) {
+		bytesWritten := len(bwr.byts) - bwr.offset
+		for i := 0; i < bytesWritten; i++ {
+			byt[i] = bwr.byts[i+bwr.offset]
+		}
+		return bytesWritten, io.EOF
+	}
+	for i := 0; i < len(byt); i++ {
+		byt[i] = bwr.byts[bwr.offset+i]
+	}
+	bwr.offset += len(byt)
+	return len(byt), nil
+}
+
+//Write writes to the bytes. WILL expand to accept the incoming bytes.
+func (bwr *byteWriterReader) Write(byts []byte) (int, error) {
+	bwr.byts = append(bwr.byts, byts...)
+	return len(byts), nil
+}
+
+func NewGzipOptions(raw gzipOptionsRaw) *GzipOptions {
 	//TODO: parse strategies
-	return GzipOptions{
+	return &GzipOptions{
 		raw: &raw,
 	}
 }
@@ -54,21 +100,12 @@ func (gzipOp *GzipOptions) Decompress(rdr *io.SectionReader, blockSize int) ([]b
 	if err != nil {
 		return nil, err
 	}
-	out := make([]byte, 0)
-	var tmp []byte
-	read := blockSize
-	for read == blockSize {
-		tmp = make([]byte, blockSize)
-		read, err = zlibRdr.Read(tmp)
-		if err != io.EOF {
-			return nil, err
-		}
-		if read < blockSize {
-			tmp = tmp[:read]
-		}
-		out = append(out, tmp...)
+	bytrw := newByteReadWrite(0)
+	_, err = io.Copy(bytrw, zlibRdr)
+	if err != nil {
+		return bytrw.byts, err
 	}
-	return out, nil
+	return bytrw.byts, nil
 }
 
 func (gzipOp *GzipOptions) DecompressCopy(rdr *io.Reader, wrt *io.Writer) (int, error) {
@@ -82,16 +119,26 @@ func (gzipOp *GzipOptions) DecompressCopy(rdr *io.Reader, wrt *io.Writer) (int, 
 }
 
 func (gzipOp *GzipOptions) Compress(rdr *io.SectionReader, blockSize int) ([]byte, error) {
-
+	bytWrt := newByteReadWrite(0)
+	zlibWrt := zlib.NewWriter(bytWrt) //TODO: allow setting level
+	defer zlibWrt.Close()
+	_, err := io.Copy(zlibWrt, rdr)
+	if err != nil {
+		return bytWrt.byts, err
+	}
+	return bytWrt.byts, nil
 }
 
 func (gzipOp *GzipOptions) CompressCopy(rdr *io.Reader, wrt *io.Writer) (int, error) {
-	zlibWrt, err := zlib.NewWriter(*wrt) //TODO: allow setting level
+	zlibWrt := zlib.NewWriter(*wrt) //TODO: allow setting level
 	defer zlibWrt.Close()
-	if err != nil {
-		return 0, err
-	}
+	n, err := io.Copy(zlibWrt, *rdr)
+	return int(n), err
+}
 
+func (gzipOp *GzipOptions) Reader(rdr io.Reader) (*io.ReadCloser, error) {
+	read, err := zlib.NewReader(rdr)
+	return &read, err
 }
 
 type xzOptionsRaw struct {
