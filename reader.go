@@ -56,7 +56,7 @@ func (r *Reader) Seek(offset int64, whence int) (int64, error) {
 		n, err := r.Read(make([]byte, offset))
 		return int64(n), err
 	case io.SeekEnd:
-		return 0, errors.New("SeekEnd is NOT currently supported")
+		return 0, errors.New("SeekEnd is NOT supported")
 	}
 	return 0, errors.New("incorrect whence")
 }
