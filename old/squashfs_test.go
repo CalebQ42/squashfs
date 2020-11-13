@@ -35,7 +35,7 @@ func TestAppImageSquash(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	err = squash.printDirTable()
+	err = squash.readRootDirectoryTable()
 	t.Fatal(err)
 }
 

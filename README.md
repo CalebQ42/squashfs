@@ -10,7 +10,6 @@ I am focusing purely on unsquashing before squashing.
 # Working
 
 * Reading the header
-* (Maybe) reading gzip compressed data
 
 # Not Working (Yet). Roughly in order.
 
@@ -22,4 +21,5 @@ I am focusing purely on unsquashing before squashing.
 
 # Where I'm at
 
-* I can read the metadata, but can't read inodes just yet.
+* Redid a bunch. Implemented a custom reader that can read across blocks.
+    * As of yet, doesn't seem to be reading things quite right (seems to be issue with encryption reading)

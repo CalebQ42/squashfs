@@ -42,8 +42,7 @@ type SuperblockFlags struct {
 	UncompressedIDs       bool
 }
 
-//GetFlags returns the Flags parsed into a SuperblockFlags
-func (s *Superblock) GetFlags() SuperblockFlags {
+func (s *Superblock) getFlags() SuperblockFlags {
 	return SuperblockFlags{
 		UncompressedInodes:    s.Flags&0x1 == 0x1,
 		UncompressedData:      s.Flags&0x2 == 0x2,

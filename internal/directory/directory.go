@@ -54,6 +54,7 @@ func NewDirectory(rdr io.Reader) (*Directory, error) {
 	if err != nil {
 		return nil, err
 	}
+	fmt.Println(hdr)
 	headers := hdr.Count / 256
 	if headers%256 > 0 {
 		headers++
