@@ -1,7 +1,6 @@
 package squashfs
 
 import (
-	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -36,8 +35,8 @@ func TestAppImageSquash(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	fmt.Println(squash.GetFlags())
-	t.Fatal("Testing")
+	err = squash.readRootDirectoryTable()
+	t.Fatal(err)
 }
 
 func TestCreateSquashFromAppImage(t *testing.T) {
@@ -78,6 +77,7 @@ func TestCreateSquashFromAppImage(t *testing.T) {
 }
 
 func downloadTestAppImage(t *testing.T, dir string) {
+	//seems to time out. Need to fix that at some point
 	appImage, err := os.Create(dir + "/" + appImageName)
 	if err != nil {
 		t.Fatal(err)

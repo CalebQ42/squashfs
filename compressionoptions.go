@@ -1,12 +1,14 @@
 package squashfs
 
 import (
-	"compress/zlib"
+	"compress/gzip"
 	"io"
+
+	"gopkg.in/src-d/go-git.v4/utils/ioutil"
 )
 
 const (
-	zlibCompression = 1 + iota
+	gzipCompression = 1 + iota
 	lzmaCompression
 	lzoCompression
 	xzCompression
@@ -95,13 +97,13 @@ func NewGzipOptions(raw gzipOptionsRaw) *GzipOptions {
 }
 
 func (gzipOp *GzipOptions) Decompress(rdr *io.SectionReader, blockSize int) ([]byte, error) {
-	zlibRdr, err := zlib.NewReader(rdr)
-	defer zlibRdr.Close()
+	gzipRdr, err := gzip.NewReader(rdr)
+	defer gzipRdr.Close()
 	if err != nil {
 		return nil, err
 	}
 	bytrw := newByteReadWrite(0)
-	_, err = io.Copy(bytrw, zlibRdr)
+	_, err = io.Copy(bytrw, gzipRdr)
 	if err != nil {
 		return bytrw.byts, err
 	}
@@ -109,20 +111,20 @@ func (gzipOp *GzipOptions) Decompress(rdr *io.SectionReader, blockSize int) ([]b
 }
 
 func (gzipOp *GzipOptions) DecompressCopy(rdr *io.Reader, wrt *io.Writer) (int, error) {
-	zlibRdr, err := zlib.NewReader(*rdr)
-	defer zlibRdr.Close()
+	gzipRdr, err := gzip.NewReader(*rdr)
+	defer gzipRdr.Close()
 	if err != nil {
 		return 0, err
 	}
-	n, err := io.Copy(*wrt, zlibRdr)
+	n, err := io.Copy(*wrt, gzipRdr)
 	return int(n), err
 }
 
 func (gzipOp *GzipOptions) Compress(rdr *io.SectionReader, blockSize int) ([]byte, error) {
 	bytWrt := newByteReadWrite(0)
-	zlibWrt := zlib.NewWriter(bytWrt) //TODO: allow setting level
-	defer zlibWrt.Close()
-	_, err := io.Copy(zlibWrt, rdr)
+	gzipWrt := gzip.NewWriter(bytWrt) //TODO: allow setting level
+	defer gzipWrt.Close()
+	_, err := io.Copy(gzipWrt, rdr)
 	if err != nil {
 		return bytWrt.byts, err
 	}
@@ -130,15 +132,16 @@ func (gzipOp *GzipOptions) Compress(rdr *io.SectionReader, blockSize int) ([]byt
 }
 
 func (gzipOp *GzipOptions) CompressCopy(rdr *io.Reader, wrt *io.Writer) (int, error) {
-	zlibWrt := zlib.NewWriter(*wrt) //TODO: allow setting level
-	defer zlibWrt.Close()
-	n, err := io.Copy(zlibWrt, *rdr)
+	gzipWrt := gzip.NewWriter(*wrt) //TODO: allow setting level
+	defer gzipWrt.Close()
+	n, err := io.Copy(gzipWrt, *rdr)
 	return int(n), err
 }
 
 func (gzipOp *GzipOptions) Reader(rdr io.Reader) (*io.ReadCloser, error) {
-	read, err := zlib.NewReader(rdr)
-	return &read, err
+	read, err := gzip.NewReader(rdr)
+	redClo := ioutil.NewReadCloser(read, read)
+	return &redClo, err
 }
 
 type xzOptionsRaw struct {

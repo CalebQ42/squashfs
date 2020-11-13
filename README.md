@@ -19,3 +19,7 @@ I am focusing purely on unsquashing before squashing.
 * Reading the Directory structure
 * Implement other compression types
 * Squashing
+
+# Where I'm at
+
+* I can read the metadata, but can't read inodes just yet.

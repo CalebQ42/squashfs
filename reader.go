@@ -9,9 +9,6 @@ import (
 
 //Reader is a reader which implements Reader, ReaderAt, and Seeker, all with an accesible offset (for reasons)
 type Reader struct {
-	io.Reader
-	io.ReaderAt
-	io.Seeker
 	rdr    io.ReaderAt
 	offset int64
 }
