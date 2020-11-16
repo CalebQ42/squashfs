@@ -31,11 +31,15 @@ type Entry struct {
 func NewEntry(rdr io.Reader) (Entry, error) {
 	var entry Entry
 	err := binary.Read(rdr, binary.LittleEndian, &entry.Init)
+	fmt.Println("entry", entry.Init)
 	if err != nil {
-		return entry, err
+		return Entry{}, err
 	}
 	entry.Name = make([]byte, entry.Init.NameSize+1, entry.Init.NameSize+1)
 	err = binary.Read(rdr, binary.LittleEndian, &entry.Name)
+	if err != nil {
+		return Entry{}, err
+	}
 	return entry, err
 }
 
@@ -55,6 +59,7 @@ func NewDirectory(rdr io.Reader) (*Directory, error) {
 		return nil, err
 	}
 	hdr.Count++
+	fmt.Println("entries coutn", hdr.Count)
 	headers := hdr.Count / 256
 	if hdr.Count%256 > 0 {
 		headers++
@@ -63,7 +68,9 @@ func NewDirectory(rdr io.Reader) (*Directory, error) {
 	dir.Headers = make([]Header, headers)
 	dir.Headers[0] = hdr
 	for i := uint32(0); i < hdr.Count; i++ {
+		fmt.Println("reading entry", i)
 		if i != 0 && i%256 == 0 {
+			fmt.Println("reading new header...")
 			var newHdr Header
 			err = binary.Read(rdr, binary.LittleEndian, &newHdr)
 			if err != nil {

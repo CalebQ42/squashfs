@@ -24,4 +24,4 @@ I am focusing purely on unsquashing before squashing.
 
 # Where I'm at
 
-* Re-redid a bunch to try to make sure I wasn't durping. After that didn't work, I tried to figure out why things wheren't working, then realized HOW I was durping.
+* Something is wrong with my directory table reading. Need to figure that out.

@@ -60,6 +60,7 @@ func (r *Reader) readRootDirTable() error {
 	if err != nil {
 		return err
 	}
+	fmt.Println("Done reading inode...")
 	dirRdr, err := r.NewBlockReader(int64(r.super.DirTableStart + uint64(i.Info.(inode.BasicDirectory).DirectoryIndex)))
 	if err != nil {
 		return err

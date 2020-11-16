@@ -23,7 +23,6 @@ type BlockReader struct {
 }
 
 func (s *Reader) NewBlockReader(offset int64) (*BlockReader, error) {
-	fmt.Println("Offset", offset)
 	var br BlockReader
 	br.s = s
 	br.offset = offset
@@ -39,7 +38,6 @@ func (s *Reader) NewBlockReader(offset int64) (*BlockReader, error) {
 }
 
 func (br *BlockReader) parseMetadata() error {
-	fmt.Println("meta offset", br.offset)
 	var raw uint16
 	err := binary.Read(io.NewSectionReader(br.s.r, br.offset, 2), binary.LittleEndian, &raw)
 	if err != nil {
@@ -53,7 +51,6 @@ func (br *BlockReader) parseMetadata() error {
 		size:       size,
 		compressed: compressed,
 	})
-	fmt.Println("compression", compressed)
 	return nil
 }
 
@@ -80,28 +77,30 @@ func (br *BlockReader) readNextDataBlock() error {
 }
 
 func (br *BlockReader) Read(p []byte) (int, error) {
+	fmt.Println("reading", len(p))
 	if br.readOffset+len(p) < len(br.data) {
 		for i := 0; i < len(p); i++ {
 			p[i] = br.data[br.readOffset+i]
 		}
 		br.readOffset += len(p)
+		fmt.Println("enough data available")
 		return len(p), nil
 	}
 	read := 0
 	for read < len(p) {
-		if read+br.readOffset == len(br.data) {
-			err := br.parseMetadata()
-			if err != nil {
-				br.readOffset += read
-				return read, err
-			}
-			err = br.readNextDataBlock()
-			if err != nil {
-				br.readOffset += read
-				return read, err
-			}
+		fmt.Println("Reading new block")
+		err := br.parseMetadata()
+		if err != nil {
+			br.readOffset += read
+			return read, err
+		}
+		err = br.readNextDataBlock()
+		if err != nil {
+			br.readOffset += read
+			return read, err
 		}
 		for ; read < len(p); read++ {
+			// fmt.Println("Reading...")
 			if br.readOffset+read < len(br.data) {
 				p[read] = br.data[br.readOffset+read]
 			} else {
@@ -113,7 +112,6 @@ func (br *BlockReader) Read(p []byte) (int, error) {
 	if read != len(p) {
 		return read, errors.New("Didn't read enough data")
 	}
-	fmt.Println("Read", p)
 	return read, nil
 }
 
