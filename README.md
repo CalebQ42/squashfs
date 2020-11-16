@@ -10,16 +10,18 @@ I am focusing purely on unsquashing before squashing.
 # Working
 
 * Reading the header
+* Reading data (slightly important :P)
+* Reading inodes
+* Reading directories
+* Basic gzip compression (Shouldn't be too hard to implement other, but for right now, this works)
 
 # Not Working (Yet). Roughly in order.
 
-* Actually reading the compressed data
-* Reading Inodes
-* Reading the Directory structure
+* Understanding the directory table. It's a bit weird TBH.
+* Reading the UID, GUID, Xatt, Compression Options, Export, and Fragment tables.
 * Implement other compression types
 * Squashing
 
 # Where I'm at
 
-* Redid a bunch. Implemented a custom reader that can read across blocks.
-    * As of yet, doesn't seem to be reading things quite right (seems to be issue with encryption reading)
+* Re-redid a bunch to try to make sure I wasn't durping. After that didn't work, I tried to figure out why things wheren't working, then realized HOW I was durping.

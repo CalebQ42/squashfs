@@ -6,8 +6,25 @@ import (
 	"io"
 )
 
-//Common is the comon header for all inodes
-type Common struct {
+const (
+	BasicDirectoryType = iota + 1
+	BasicFileType
+	BasicSymlinkType
+	BasicBlockDeviceType
+	BasicCharDeviceType
+	BasicFifoType
+	BasicSocketType
+	ExtDirType
+	ExtFileType
+	ExtSymlinkType
+	ExtBlockDeviceType
+	ExtCharDeviceType
+	ExtFifoType
+	ExtSocketType
+)
+
+//Header is the common header for all inodes
+type Header struct {
 	InodeType    uint16
 	Permissions  uint16
 	UID          uint16
@@ -43,9 +60,9 @@ type ExtendedDirectory struct {
 }
 
 //NewExtendedDirectory creates a new ExtendedDirectory
-func NewExtendedDirectory(rdr *io.Reader) (*ExtendedDirectory, error) {
+func NewExtendedDirectory(rdr io.Reader) (*ExtendedDirectory, error) {
 	var inode ExtendedDirectory
-	err := binary.Read(*rdr, binary.LittleEndian, inode.Init)
+	err := binary.Read(rdr, binary.LittleEndian, &inode.Init)
 	if err != nil {
 		return &inode, err
 	}
@@ -76,14 +93,14 @@ type DirectoryIndex struct {
 }
 
 //NewDirectoryIndex return a new DirectoryIndex
-func NewDirectoryIndex(rdr *io.Reader) (DirectoryIndex, error) {
+func NewDirectoryIndex(rdr io.Reader) (DirectoryIndex, error) {
 	var index DirectoryIndex
-	err := binary.Read(*rdr, binary.LittleEndian, index.Init)
+	err := binary.Read(rdr, binary.LittleEndian, &index.Init)
 	if err != nil {
 		return index, err
 	}
 	index.Name = make([]byte, index.Init.NameSize, index.Init.NameSize)
-	err = binary.Read(*rdr, binary.LittleEndian, index.Name)
+	err = binary.Read(rdr, binary.LittleEndian, &index.Name)
 	return index, err
 }
 
@@ -102,9 +119,9 @@ type BasicFile struct {
 }
 
 //NewBasicFile creates a new BasicFile
-func NewBasicFile(rdr *io.Reader, blockSize uint32) (*BasicFile, error) {
+func NewBasicFile(rdr io.Reader, blockSize uint32) (*BasicFile, error) {
 	var inode BasicFile
-	err := binary.Read(*rdr, binary.LittleEndian, inode.Init)
+	err := binary.Read(rdr, binary.LittleEndian, &inode.Init)
 	if err != nil {
 		return &inode, err
 	}
@@ -113,7 +130,7 @@ func NewBasicFile(rdr *io.Reader, blockSize uint32) (*BasicFile, error) {
 		blocks++
 	}
 	inode.BlockSizes = make([]uint32, blocks, blocks)
-	err = binary.Read(*rdr, binary.LittleEndian, inode.BlockSizes)
+	err = binary.Read(rdr, binary.LittleEndian, &inode.BlockSizes)
 	return &inode, err
 }
 
@@ -135,9 +152,9 @@ type ExtendedFile struct {
 }
 
 //NewExtendedFile creates a new ExtendedFile
-func NewExtendedFile(rdr *io.Reader, blockSize uint32) (ExtendedFile, error) {
+func NewExtendedFile(rdr io.Reader, blockSize uint32) (ExtendedFile, error) {
 	var inode ExtendedFile
-	err := binary.Read(*rdr, binary.LittleEndian, inode.Init)
+	err := binary.Read(rdr, binary.LittleEndian, &inode.Init)
 	if err != nil {
 		return inode, err
 	}
@@ -146,7 +163,7 @@ func NewExtendedFile(rdr *io.Reader, blockSize uint32) (ExtendedFile, error) {
 		blocks++
 	}
 	inode.BlockSizes = make([]uint32, blocks, blocks)
-	err = binary.Read(*rdr, binary.LittleEndian, inode.BlockSizes)
+	err = binary.Read(rdr, binary.LittleEndian, &inode.BlockSizes)
 	return inode, err
 }
 
@@ -163,14 +180,14 @@ type BasicSymlink struct {
 }
 
 //NewBasicSymlink creates a new BasicSymlink
-func NewBasicSymlink(rdr *io.Reader) (BasicSymlink, error) {
+func NewBasicSymlink(rdr io.Reader) (BasicSymlink, error) {
 	var inode BasicSymlink
-	err := binary.Read(*rdr, binary.LittleEndian, inode.Init)
+	err := binary.Read(rdr, binary.LittleEndian, &inode.Init)
 	if err != nil {
 		return inode, err
 	}
 	inode.targetPath = make([]byte, inode.Init.TargetPathSize, inode.Init.TargetPathSize)
-	err = binary.Read(*rdr, binary.LittleEndian, inode.targetPath)
+	err = binary.Read(rdr, binary.LittleEndian, &inode.targetPath)
 	return inode, err
 }
 
@@ -188,14 +205,14 @@ type ExtendedSymlink struct {
 }
 
 //NewExtendedSymlink creates a new ExtendedSymlink
-func NewExtendedSymlink(rdr *io.Reader) (ExtendedSymlink, error) {
+func NewExtendedSymlink(rdr io.Reader) (ExtendedSymlink, error) {
 	var inode ExtendedSymlink
-	err := binary.Read(*rdr, binary.LittleEndian, inode.Init)
+	err := binary.Read(rdr, binary.LittleEndian, &inode.Init)
 	if err != nil {
 		return inode, err
 	}
 	inode.TargetPath = make([]uint8, inode.Init.TargetPathSize, inode.Init.TargetPathSize)
-	err = binary.Read(*rdr, binary.LittleEndian, &inode.XattrIndex)
+	err = binary.Read(rdr, binary.LittleEndian, &inode.XattrIndex)
 	return inode, err
 }
 

@@ -6,7 +6,7 @@ import (
 	"os"
 	"testing"
 
-	appimage "github.com/CalebQ42/GoAppImage"
+	goappimage "github.com/CalebQ42/GoAppImage"
 )
 
 const (
@@ -15,27 +15,30 @@ const (
 	squashfsName = "Code_OSS.Squashfs"
 )
 
-func TestAppImageSquash(t *testing.T) {
+func TestMain(t *testing.T) {
 	t.Parallel()
 	wd, err := os.Getwd()
 	if err != nil {
-		t.Error(err)
+		t.Fatal(err)
 	}
 	squashFil, err := os.Open(wd + "/testing/" + squashfsName)
 	if os.IsNotExist(err) {
 		TestCreateSquashFromAppImage(t)
 		squashFil, err = os.Open(wd + "/testing/" + squashfsName)
 		if err != nil {
-			t.Error(err)
+			t.Fatal(err)
 		}
 	}
 	defer squashFil.Close()
 	stat, _ := squashFil.Stat()
-	squash, err := NewSquashfs(io.NewSectionReader(squashFil, 0, stat.Size()))
+	rdr, err := NewSquashfsReader(io.NewSectionReader(squashFil, 0, stat.Size()))
 	if err != nil {
-		t.Error(err)
+		t.Fatal(err)
 	}
-	err = squash.printDirTable()
+	err = rdr.readRootDirTable()
+	if err != nil {
+		t.Fatal(err)
+	}
 	t.Fatal(err)
 }
 
@@ -58,7 +61,7 @@ func TestCreateSquashFromAppImage(t *testing.T) {
 	} else if err != nil {
 		t.Fatal(err)
 	}
-	ai := appimage.NewAppImage(wd + "/testing/" + appImageName)
+	ai := goappimage.NewAppImage(wd + "/testing/" + appImageName)
 	aiFil, err := os.Open(wd + "/testing/" + appImageName)
 	if err != nil {
 		t.Fatal(err)
@@ -98,9 +101,4 @@ func downloadTestAppImage(t *testing.T, dir string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-}
-
-func TestLookInsideSquash(t *testing.T) {
-	t.Parallel()
-	//TODO
 }

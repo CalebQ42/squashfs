@@ -30,12 +30,12 @@ type Entry struct {
 //NewEntry creates a new directory entry
 func NewEntry(rdr io.Reader) (Entry, error) {
 	var entry Entry
-	err := binary.Read(rdr, binary.LittleEndian, entry.Init)
+	err := binary.Read(rdr, binary.LittleEndian, &entry.Init)
 	if err != nil {
 		return entry, err
 	}
-	entry.Name = make([]byte, entry.Init.NameSize, entry.Init.NameSize)
-	err = binary.Read(rdr, binary.LittleEndian, entry.Name)
+	entry.Name = make([]byte, entry.Init.NameSize+1, entry.Init.NameSize+1)
+	err = binary.Read(rdr, binary.LittleEndian, &entry.Name)
 	return entry, err
 }
 
@@ -54,9 +54,9 @@ func NewDirectory(rdr io.Reader) (*Directory, error) {
 	if err != nil {
 		return nil, err
 	}
-	fmt.Println(hdr)
+	hdr.Count++
 	headers := hdr.Count / 256
-	if headers%256 > 0 {
+	if hdr.Count%256 > 0 {
 		headers++
 	}
 	headersRead := 1
