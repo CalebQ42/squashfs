@@ -1,27 +1,29 @@
 # GoSquashfs
-My playground to mess around with Squashfs in Go. Might turn into an actual library someday. Mainly for AppImage
 
-Right Now it's mostly based on [distri's squashfs library](https://github.com/distr1/distri/tree/master/internal/squashfs)
+A PURE Go library to read and write squashfs. Right now I'm focusing on unsquashing.
+Currently IS NOT a functional library. Some things that are currently public IS going to become private. Not very well documented either.
 
-Special thanks to https://dr-emann.github.io/squashfs/ for some VERY important information in an easy to understand format
+It's roughly based on [distri's squashfs library](https://github.com/distr1/distri/tree/master/internal/squashfs)
 
-I am focusing purely on unsquashing before squashing. 
+Special thanks to https://dr-emann.github.io/squashfs/ for some VERY important information in an easy to understand format.
+Thanks also to [distri's squashfs library](https://github.com/distr1/distri/tree/master/internal/squashfs) as I referenced it to figure some things out.
 
 # Working
 
 * Reading the header
-* Reading data (slightly important :P)
+* Reading data blocks (whether encrypted or not)
 * Reading inodes
 * Reading directories
 * Basic gzip compression (Shouldn't be too hard to implement other, but for right now, this works)
 
 # Not Working (Yet). Roughly in order.
 
-* Understanding the directory table. It's a bit weird TBH.
+* Give a list of files
+    * In string & io.FileStat (?) form
+* Extracting files
+    * from inodes.
+    * from path.
+    * from file info.
 * Reading the UID, GUID, Xatt, Compression Options, Export, and Fragment tables.
-* Implement other compression types
+* Implement other compression types (Should be relatively easy)
 * Squashing
-
-# Where I'm at
-
-* Something is wrong with my directory table reading. Need to figure that out.
