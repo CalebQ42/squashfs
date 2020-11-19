@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+	"math"
 )
 
 //Header is the header for a directory in the directory table
@@ -28,26 +29,25 @@ type Entry struct {
 }
 
 //NewEntry creates a new directory entry
-func NewEntry(rdr io.Reader) (Entry, error) {
+func NewEntry(rdr io.Reader) (*Entry, error) {
 	var entry Entry
 	err := binary.Read(rdr, binary.LittleEndian, &entry.Init)
-	fmt.Println("entry", entry.Init)
 	if err != nil {
-		return Entry{}, err
+		return nil, err
 	}
-	entry.Name = make([]byte, entry.Init.NameSize+1, entry.Init.NameSize+1)
+	entry.Name = make([]byte, entry.Init.NameSize+1)
 	err = binary.Read(rdr, binary.LittleEndian, &entry.Name)
 	if err != nil {
-		return Entry{}, err
+		return nil, err
 	}
-	return entry, err
+	return &entry, err
 }
 
 //Directory is an entry in the directory table of a squashfs.
 //Will only have multiple headers if there are more then 256 entries
 type Directory struct {
 	Headers []Header
-	Entries []Entry
+	Entries []*Entry
 }
 
 //NewDirectory reads the directory from rdr
@@ -59,22 +59,20 @@ func NewDirectory(rdr io.Reader) (*Directory, error) {
 		return nil, err
 	}
 	hdr.Count++
-	fmt.Println("entries coutn", hdr.Count)
 	headers := hdr.Count / 256
 	if hdr.Count%256 > 0 {
 		headers++
 	}
+	fmt.Println("headers", headers)
+	fmt.Println("headers ceil", math.Ceil(float64(hdr.Count)/256))
 	headersRead := 1
 	dir.Headers = make([]Header, headers)
 	dir.Headers[0] = hdr
 	for i := uint32(0); i < hdr.Count; i++ {
-		fmt.Println("reading entry", i)
 		if i != 0 && i%256 == 0 {
-			fmt.Println("reading new header...")
 			var newHdr Header
 			err = binary.Read(rdr, binary.LittleEndian, &newHdr)
 			if err != nil {
-				fmt.Println("Error processing header ", headersRead)
 				return &dir, err
 			}
 			dir.Headers[headersRead] = newHdr
@@ -82,7 +80,6 @@ func NewDirectory(rdr io.Reader) (*Directory, error) {
 		}
 		ent, err := NewEntry(rdr)
 		if err != nil {
-			fmt.Println("Error processing entry ", len(dir.Entries))
 			return &dir, err
 		}
 		dir.Entries = append(dir.Entries, ent)

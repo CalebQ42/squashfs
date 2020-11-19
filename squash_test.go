@@ -35,7 +35,7 @@ func TestMain(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = rdr.readRootDirTable()
+	err = rdr.readDirTable()
 	if err != nil {
 		t.Fatal(err)
 	}

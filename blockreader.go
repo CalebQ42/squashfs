@@ -37,6 +37,28 @@ func (s *Reader) NewBlockReader(offset int64) (*BlockReader, error) {
 	return &br, nil
 }
 
+func (s *Reader) NewBlockReaderFromInodeRef(ref uint64) (*BlockReader, error) {
+	offset, metaOffset := processInodeRef(ref)
+	br, err := s.NewBlockReader(int64(s.super.InodeTableStart + offset))
+	if err != nil {
+		return nil, err
+	}
+	_, err = br.Seek(int64(metaOffset), io.SeekStart)
+	if err != nil {
+		return nil, err
+	}
+	return br, nil
+}
+
+func (s *Reader) NewBlockReaderFromDirIndex(index uint64) (*BlockReader, error) {
+	br, err := s.NewBlockReader(int64(s.super.DirTableStart))
+	if err != nil {
+		return nil, err
+	}
+	readIndex := 0
+	for readIndex < 
+}
+
 func (br *BlockReader) parseMetadata() error {
 	var raw uint16
 	err := binary.Read(io.NewSectionReader(br.s.r, br.offset, 2), binary.LittleEndian, &raw)
@@ -77,18 +99,16 @@ func (br *BlockReader) readNextDataBlock() error {
 }
 
 func (br *BlockReader) Read(p []byte) (int, error) {
-	fmt.Println("reading", len(p))
+	fmt.Println("reading", len(p), "bytes")
 	if br.readOffset+len(p) < len(br.data) {
 		for i := 0; i < len(p); i++ {
 			p[i] = br.data[br.readOffset+i]
 		}
 		br.readOffset += len(p)
-		fmt.Println("enough data available")
 		return len(p), nil
 	}
 	read := 0
 	for read < len(p) {
-		fmt.Println("Reading new block")
 		err := br.parseMetadata()
 		if err != nil {
 			br.readOffset += read

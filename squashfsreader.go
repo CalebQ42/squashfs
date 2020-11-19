@@ -19,6 +19,7 @@ type Reader struct {
 	super        Superblock
 	flags        SuperblockFlags
 	decompressor Decompressor
+	dirs         []*directory.Directory
 }
 
 func NewSquashfsReader(r io.ReaderAt) (*Reader, error) {
@@ -46,31 +47,24 @@ func NewSquashfsReader(r io.ReaderAt) (*Reader, error) {
 	return &rdr, nil
 }
 
-func (r *Reader) readRootDirTable() error {
-	offset, blockOffset := processInodeRef(r.super.RootInodeRef)
-	br, err := r.NewBlockReader(int64(r.super.InodeTableStart + offset))
+func (r *Reader) readDirTable() error {
+	inoderdr, err := r.NewBlockReaderFromInodeRef(r.super.RootInodeRef)
 	if err != nil {
 		return err
 	}
-	_, err = br.Seek(int64(blockOffset), io.SeekStart)
+	i, err := inode.ProcessInode(inoderdr, r.super.BlockSize)
 	if err != nil {
 		return err
 	}
-	i, err := inode.ProcessInode(br, r.super.BlockSize)
+	inDir := i.Info.(inode.BasicDirectory)
+	dirrdr, err := r.NewBlockReader(int64(r.super.DirTableStart) + int64(inDir.DirectoryIndex))
 	if err != nil {
 		return err
 	}
-	fmt.Println("Done reading inode...")
-	dirRdr, err := r.NewBlockReader(int64(r.super.DirTableStart + uint64(i.Info.(inode.BasicDirectory).DirectoryIndex)))
+	dir, err := directory.NewDirectory(dirrdr)
 	if err != nil {
 		return err
 	}
-	dir, err := directory.NewDirectory(dirRdr)
-	if err != nil {
-		return err
-	}
-	for _, entry := range dir.Entries {
-		fmt.Println(string(entry.Name))
-	}
+	fmt.Println("Entries", len(dir.Entries))
 	return nil
 }
