@@ -50,15 +50,6 @@ func (s *Reader) NewBlockReaderFromInodeRef(ref uint64) (*BlockReader, error) {
 	return br, nil
 }
 
-func (s *Reader) NewBlockReaderFromDirIndex(index uint64) (*BlockReader, error) {
-	br, err := s.NewBlockReader(int64(s.super.DirTableStart))
-	if err != nil {
-		return nil, err
-	}
-	readIndex := 0
-	for readIndex < 
-}
-
 func (br *BlockReader) parseMetadata() error {
 	var raw uint16
 	err := binary.Read(io.NewSectionReader(br.s.r, br.offset, 2), binary.LittleEndian, &raw)

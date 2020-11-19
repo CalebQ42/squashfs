@@ -56,15 +56,12 @@ func (r *Reader) readDirTable() error {
 	if err != nil {
 		return err
 	}
-	inDir := i.Info.(inode.BasicDirectory)
-	dirrdr, err := r.NewBlockReader(int64(r.super.DirTableStart) + int64(inDir.DirectoryIndex))
+	dir, err := r.ReadDirFromInode(i)
 	if err != nil {
 		return err
 	}
-	dir, err := directory.NewDirectory(dirrdr)
-	if err != nil {
-		return err
+	for _, entry := range dir.Entries {
+		fmt.Println(entry.Name)
 	}
-	fmt.Println("Entries", len(dir.Entries))
 	return nil
 }

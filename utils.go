@@ -2,6 +2,7 @@ package squashfs
 
 import (
 	"errors"
+	"io"
 
 	"github.com/CalebQ42/GoSquashfs/internal/directory"
 	"github.com/CalebQ42/GoSquashfs/internal/inode"
@@ -19,11 +20,32 @@ func processInodeRef(inodeRef uint64) (tableOffset uint64, metaOffset uint64) {
 }
 
 func (r *Reader) ReadDirFromInode(i inode.Inode) (*directory.Directory, error) {
-	if i.Type == inode.BasicDirectoryType {
-
-	} else if i.Type == inode.ExtDirType {
-
-	} else {
+	var offset uint32
+	var metaOffset uint16
+	var size uint16
+	switch i.Type {
+	case inode.BasicDirectoryType:
+		offset = i.Info.(inode.BasicDirectory).DirectoryIndex
+		metaOffset = i.Info.(inode.BasicDirectory).DirectoryOffset
+		size = i.Info.(inode.BasicDirectory).DirectorySize
+	case inode.ExtDirType:
+		offset = i.Info.(inode.ExtendedDirectory).Init.DirectoryIndex
+		metaOffset = i.Info.(inode.ExtendedDirectory).Init.DirectoryOffset
+		size = uint16(i.Info.(inode.ExtendedDirectory).Init.DirectorySize)
+	default:
 		return nil, errors.New("Not a directory inode")
 	}
+	br, err := r.NewBlockReader(int64(r.super.DirTableStart + uint64(offset)))
+	if err != nil {
+		return nil, err
+	}
+	_, err = br.Seek(int64(metaOffset), io.SeekStart)
+	if err != nil {
+		return nil, err
+	}
+	dir, err := directory.NewDirectory(br, size)
+	if err != nil {
+		return dir, err
+	}
+	return dir, nil
 }

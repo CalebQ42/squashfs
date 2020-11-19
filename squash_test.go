@@ -39,7 +39,7 @@ func TestMain(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Fatal(err)
+	t.Fatal("No problems here!")
 }
 
 func TestCreateSquashFromAppImage(t *testing.T) {
