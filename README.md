@@ -20,6 +20,7 @@ Thanks also to [distri's squashfs library](https://github.com/distr1/distri/tree
 
 * Give a list of files
     * In string & io.FileStat (?) form
+* Figure out fragments
 * Extracting files
     * from inodes.
     * from path.
@@ -27,3 +28,7 @@ Thanks also to [distri's squashfs library](https://github.com/distr1/distri/tree
 * Reading the UID, GUID, Xatt, Compression Options, Export, and Fragment tables.
 * Implement other compression types (Should be relatively easy)
 * Squashing
+
+# Where I'm at.
+
+* I CAN READ THE ENTIRE DIRECTORY!!!!! (This is a big ol' step)

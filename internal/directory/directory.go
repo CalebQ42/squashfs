@@ -23,8 +23,9 @@ type EntryInit struct {
 
 //Entry is an entry in a directory.
 type Entry struct {
-	Init EntryInit
-	Name string
+	Init   EntryInit
+	Name   string
+	Header *Header
 }
 
 //NewEntry creates a new directory entry
@@ -85,6 +86,7 @@ func NewDirectory(base io.Reader, size uint16) (*Directory, error) {
 			if err != nil {
 				return nil, err
 			}
+			ent.Header = &dir.Headers[len(dir.Headers)-1]
 			dir.Entries = append(dir.Entries, ent)
 		}
 	}

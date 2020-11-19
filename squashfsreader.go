@@ -47,6 +47,35 @@ func NewSquashfsReader(r io.ReaderAt) (*Reader, error) {
 	return &rdr, nil
 }
 
+func (r *Reader) readDir(i *inode.Inode) (paths []string, err error) {
+	dir, err := r.ReadDirFromInode(*i)
+	if err != nil {
+		return
+	}
+	for _, entry := range dir.Entries {
+		if entry.Init.Type == inode.BasicDirectoryType {
+			paths = append(paths)
+			i, err = r.GetInodeFromEntry(&entry)
+			if err != nil {
+				return
+			}
+			var subPaths []string
+			subPaths, err = r.readDir(i)
+			if err != nil {
+				return
+			}
+			for pathI := range subPaths {
+				subPaths[pathI] = entry.Name + "/" + subPaths[pathI]
+			}
+			paths = append(paths, entry.Name+"/")
+			paths = append(paths, subPaths...)
+		} else {
+			paths = append(paths, entry.Name)
+		}
+	}
+	return
+}
+
 func (r *Reader) readDirTable() error {
 	inoderdr, err := r.NewBlockReaderFromInodeRef(r.super.RootInodeRef)
 	if err != nil {
@@ -56,12 +85,12 @@ func (r *Reader) readDirTable() error {
 	if err != nil {
 		return err
 	}
-	dir, err := r.ReadDirFromInode(i)
+	paths, err := r.readDir(&i)
 	if err != nil {
 		return err
 	}
-	for _, entry := range dir.Entries {
-		fmt.Println(entry.Name)
+	for _, path := range paths {
+		fmt.Println(path)
 	}
 	return nil
 }

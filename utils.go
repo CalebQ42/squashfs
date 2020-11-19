@@ -49,3 +49,19 @@ func (r *Reader) ReadDirFromInode(i inode.Inode) (*directory.Directory, error) {
 	}
 	return dir, nil
 }
+
+func (r *Reader) GetInodeFromEntry(en *directory.Entry) (*inode.Inode, error) {
+	br, err := r.NewBlockReader(int64(r.super.InodeTableStart + uint64(en.Header.InodeOffset)))
+	if err != nil {
+		return nil, err
+	}
+	_, err = br.Seek(int64(en.Init.Offset), io.SeekStart)
+	if err != nil {
+		return nil, err
+	}
+	i, err := inode.ProcessInode(br, r.super.BlockSize)
+	if err != nil {
+		return nil, err
+	}
+	return &i, nil
+}

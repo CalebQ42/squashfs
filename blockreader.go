@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
-	"fmt"
 	"io"
 )
 
@@ -90,7 +89,6 @@ func (br *BlockReader) readNextDataBlock() error {
 }
 
 func (br *BlockReader) Read(p []byte) (int, error) {
-	fmt.Println("reading", len(p), "bytes")
 	if br.readOffset+len(p) < len(br.data) {
 		for i := 0; i < len(p); i++ {
 			p[i] = br.data[br.readOffset+i]
@@ -111,7 +109,6 @@ func (br *BlockReader) Read(p []byte) (int, error) {
 			return read, err
 		}
 		for ; read < len(p); read++ {
-			// fmt.Println("Reading...")
 			if br.readOffset+read < len(br.data) {
 				p[read] = br.data[br.readOffset+read]
 			} else {

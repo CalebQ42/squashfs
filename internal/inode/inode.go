@@ -60,11 +60,11 @@ type ExtendedDirectory struct {
 }
 
 //NewExtendedDirectory creates a new ExtendedDirectory
-func NewExtendedDirectory(rdr io.Reader) (*ExtendedDirectory, error) {
+func NewExtendedDirectory(rdr io.Reader) (ExtendedDirectory, error) {
 	var inode ExtendedDirectory
 	err := binary.Read(rdr, binary.LittleEndian, &inode.Init)
 	if err != nil {
-		return &inode, err
+		return inode, err
 	}
 	if inode.Init.IndexCount > 0 {
 		inode.Indexes = make([]DirectoryIndex, inode.Init.IndexCount)
@@ -72,11 +72,11 @@ func NewExtendedDirectory(rdr io.Reader) (*ExtendedDirectory, error) {
 			inode.Indexes[i], err = NewDirectoryIndex(rdr)
 			if err != nil {
 				fmt.Println("Error while reading Directory Index ", i)
-				return &inode, err
+				return inode, err
 			}
 		}
 	}
-	return &inode, err
+	return inode, err
 }
 
 //DirectoryIndexInit holds the values that can be easily decoded
@@ -116,22 +116,24 @@ type BasicFileInit struct {
 type BasicFile struct {
 	Init       BasicFileInit
 	BlockSizes []uint32
+	Fragmented bool
 }
 
 //NewBasicFile creates a new BasicFile
-func NewBasicFile(rdr io.Reader, blockSize uint32) (*BasicFile, error) {
+func NewBasicFile(rdr io.Reader, blockSize uint32) (BasicFile, error) {
 	var inode BasicFile
 	err := binary.Read(rdr, binary.LittleEndian, &inode.Init)
 	if err != nil {
-		return &inode, err
+		return inode, err
 	}
+	inode.Fragmented = inode.Init.FragmentIndex != 0xFFFFFFFF
 	blocks := inode.Init.Size / blockSize
 	if inode.Init.Size%blockSize > 0 {
 		blocks++
 	}
 	inode.BlockSizes = make([]uint32, blocks, blocks)
 	err = binary.Read(rdr, binary.LittleEndian, &inode.BlockSizes)
-	return &inode, err
+	return inode, err
 }
 
 //ExtendedFileInit is the information that can be directly decoded
