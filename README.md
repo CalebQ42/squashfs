@@ -3,10 +3,8 @@
 A PURE Go library to read and write squashfs. Right now I'm focusing on unsquashing.
 Currently IS NOT a functional library. Some things that are currently public IS going to become private. Not very well documented either.
 
-It's roughly based on [distri's squashfs library](https://github.com/distr1/distri/tree/master/internal/squashfs)
-
 Special thanks to https://dr-emann.github.io/squashfs/ for some VERY important information in an easy to understand format.
-Thanks also to [distri's squashfs library](https://github.com/distr1/distri/tree/master/internal/squashfs) as I referenced it to figure some things out.
+Thanks also to [distri's squashfs library](https://github.com/distr1/distri/tree/master/internal/squashfs) as I referenced it to figure some things out (and double check others).
 
 # Working
 
