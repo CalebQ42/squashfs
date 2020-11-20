@@ -7,7 +7,6 @@ import (
 	"io"
 	"strings"
 
-	"github.com/CalebQ42/GoSquashfs/internal/directory"
 	"github.com/CalebQ42/GoSquashfs/internal/inode"
 )
 
@@ -22,6 +21,9 @@ var (
 	ErrIncompatibleCompression = errors.New("Compression type unsupported")
 	//ErrCompressorOptions is returned if compressor options is present. It's not currently supported.
 	ErrCompressorOptions = errors.New("Compressor options is not currently supported")
+	//ErrFragmentTableIssues is returned if there's trouble reading the fragment table when creating a reader.
+	//When this is returned, the reader is still returned.
+	ErrFragmentTableIssues = errors.New("Trouble while reading the fragment table")
 )
 
 //Reader processes and reads a squashfs archive.
@@ -31,7 +33,7 @@ type Reader struct {
 	super        Superblock
 	flags        SuperblockFlags
 	decompressor Decompressor
-	dirs         []*directory.Directory
+	fragEntries  []*FragmentEntry
 }
 
 //NewSquashfsReader returns a new squashfs.Reader from an io.ReaderAt
@@ -55,6 +57,17 @@ func NewSquashfsReader(r io.ReaderAt) (*Reader, error) {
 	if rdr.flags.CompressorOptions {
 		//TODO: parse compressor options
 		return nil, ErrCompressorOptions
+	}
+	br, err := rdr.NewBlockReader(int64(rdr.super.FragTableStart))
+	if err != nil {
+		return &rdr, err
+	}
+	for i := 0; i < int(rdr.super.FragCount); i++ {
+		entry, err := rdr.NewFragmentEntry(br)
+		if err != nil {
+			return &rdr, err
+		}
+		rdr.fragEntries = append(rdr.fragEntries, entry)
 	}
 	return &rdr, nil
 }

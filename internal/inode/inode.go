@@ -151,6 +151,7 @@ type ExtendedFileInit struct {
 type ExtendedFile struct {
 	Init       ExtendedFileInit
 	BlockSizes []uint32
+	Fragmented bool
 }
 
 //NewExtendedFile creates a new ExtendedFile
@@ -160,6 +161,7 @@ func NewExtendedFile(rdr io.Reader, blockSize uint32) (ExtendedFile, error) {
 	if err != nil {
 		return inode, err
 	}
+	inode.Fragmented = inode.Init.FragmentIndex != 0xFFFFFFFF
 	blocks := inode.Init.Size / blockSize
 	if inode.Init.Size%blockSize > 0 {
 		blocks++

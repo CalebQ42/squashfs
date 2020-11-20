@@ -39,6 +39,23 @@ func TestMain(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	i, err := rdr.GetInodeFromPath("code-oss.desktop")
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.Remove(wd + "/testing/code-oss.desktop")
+	desk, err := os.Create(wd + "/testing/code-oss.desktop")
+	if err != nil {
+		t.Fatal(err)
+	}
+	btys, err := rdr.GetFragmentDataFromInode(i)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = desk.Write(btys)
+	if err != nil {
+		t.Fatal(err)
+	}
 	t.Fatal("No problems here!")
 }
 

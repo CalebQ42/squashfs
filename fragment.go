@@ -9,8 +9,9 @@ import (
 )
 
 type FragmentEntryRaw struct {
-	Start uint64
-	Size  uint32
+	Start   uint64
+	Size    uint32
+	_unused uint32
 }
 
 type FragmentEntry struct {
@@ -20,10 +21,10 @@ type FragmentEntry struct {
 }
 
 //NewFragmentEntry reads a fragment entry from the given io.Reader.
-func (r *Reader) NewFragmentEntry(rdr *io.Reader) (*FragmentEntry, error) {
+func (r *Reader) NewFragmentEntry(rdr io.Reader) (*FragmentEntry, error) {
 	var entry FragmentEntry
 	var raw FragmentEntryRaw
-	err := binary.Read(*rdr, binary.LittleEndian, &raw)
+	err := binary.Read(rdr, binary.LittleEndian, &raw)
 	if err != nil {
 		return nil, err
 	}
@@ -33,16 +34,52 @@ func (r *Reader) NewFragmentEntry(rdr *io.Reader) (*FragmentEntry, error) {
 	return &entry, nil
 }
 
-//GetFragmentFromInode returns the fragment data for a given inode
-func (r *Reader) GetFragmentFromInode(in *inode.Inode) ([]byte, error) {
-	if in.Type != inode.BasicFileType {
-		return nil, errors.New("Only basic file is supported right now")
-	}
-	bf := in.Info.(inode.BasicFile)
+//GetFragmentDataFromInode returns the fragment data for a given inode.
+//If the inode does not have a fragment, harmlessly returns an empty slice without an error.
+func (r *Reader) GetFragmentDataFromInode(in *inode.Inode) ([]byte, error) {
 	var size uint32
-	if bf.Init.BlockStart == 0 {
-		size = bf.Init.Size
+	var fragIndex uint32
+	var fragOffset uint32
+	if in.Type == inode.BasicFileType {
+		bf := in.Info.(inode.BasicFile)
+		if !bf.Fragmented {
+			return make([]byte, 0), nil
+		}
+		if bf.Init.BlockStart == 0 {
+			size = bf.Init.Size
+		} else {
+			size = bf.BlockSizes[len(bf.BlockSizes)-1]
+		}
+		fragIndex = bf.Init.FragmentIndex
+		fragOffset = bf.Init.FragmentOffset
+	} else if in.Type == inode.ExtFileType {
+		bf := in.Info.(inode.ExtendedFile)
+		if !bf.Fragmented {
+			return make([]byte, 0), nil
+		}
+		if bf.Init.BlockStart == 0 {
+			size = bf.Init.Size
+		} else {
+			size = bf.BlockSizes[len(bf.BlockSizes)-1]
+		}
+		fragIndex = bf.Init.FragmentIndex
+		fragOffset = bf.Init.FragmentOffset
 	} else {
-		size = bf.BlockSizes
+		return nil, errors.New("Inode type not supported")
 	}
+	frag := r.fragEntries[fragIndex]
+	datRdr, err := r.NewDataReader(int64(frag.start), []uint32{frag.size})
+	if err != nil {
+		return nil, err
+	}
+	_, err = datRdr.Seek(int64(fragOffset), io.SeekStart)
+	if err != nil {
+		return nil, err
+	}
+	tmp := make([]byte, size)
+	_, err = datRdr.Read(tmp)
+	if err != nil {
+		return nil, err
+	}
+	return tmp, nil
 }
