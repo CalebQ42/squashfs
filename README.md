@@ -11,7 +11,7 @@ Thanks also to [distri's squashfs library](https://github.com/distr1/distri/tree
 # Working
 
 * Reading the header
-* Reading data blocks (whether encrypted or not)
+* Reading metadata blocks (whether encrypted or not)
 * Reading inodes
 * Reading directories
 * Basic gzip compression (Shouldn't be too hard to implement other, but for right now, this works)
@@ -20,7 +20,7 @@ Thanks also to [distri's squashfs library](https://github.com/distr1/distri/tree
 # Not Working (Yet). Roughly in order.
 
 * Give a list of files
-    * In string & io.FileStat (?) form
+    * In io.FileStat (?) form
 * Figure out fragments
 * Extracting files
     * from inodes.
@@ -32,4 +32,4 @@ Thanks also to [distri's squashfs library](https://github.com/distr1/distri/tree
 
 # Where I'm at.
 
-* Started work on fragments
+* Working on reading data blocks
