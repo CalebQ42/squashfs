@@ -85,6 +85,7 @@ func (d *DataReader) readCurBlock() error {
 	if err != nil {
 		return err
 	}
+	d.curData = buf.Bytes()
 	d.blocks[d.curBlock].begOffset = d.offset
 	d.offset += int64(d.blocks[d.curBlock].size)
 	return err
@@ -113,7 +114,7 @@ func (d *DataReader) Read(p []byte) (int, error) {
 		for ; read < len(p); read++ {
 			curRead++
 			if d.curReadOffset+curRead < len(d.curData) {
-				p[read] = d.curData[d.readOffset+curRead]
+				p[read] = d.curData[d.curReadOffset+curRead]
 			} else {
 				break
 			}
@@ -130,12 +131,26 @@ func (d *DataReader) Seek(offset int64, whence int) (int, error) {
 	if whence == io.SeekStart {
 		d.readOffset = int(offset)
 		d.curReadOffset = int(offset)
-
+		d.curBlock = 0
+		read := int64(0)
+		for i, block := range d.blocks {
+			if block.uncompressedSize == 0 {
+				d.curBlock = i
+				err := d.readCurBlock()
+				if err != nil {
+					return 0, err
+				}
+			}
+			read += int64(block.uncompressedSize)
+			if offset-read < 0 {
+				d.curReadOffset = int((offset - read) + int64(block.uncompressedSize))
+			}
+		}
 	}
 	switch whence {
 	case io.SeekCurrent:
 		d.readOffset += int(offset)
 		d.curReadOffset += int(offset)
-	case io.SeekStart:
+	case io.SeekEnd:
 	}
 }
