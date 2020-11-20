@@ -3,9 +3,15 @@ package squashfs
 import (
 	"errors"
 	"io"
+	"strings"
 
 	"github.com/CalebQ42/GoSquashfs/internal/directory"
 	"github.com/CalebQ42/GoSquashfs/internal/inode"
+)
+
+var (
+	//ErrNotFound means that the given path is NOT present in the archive
+	ErrNotFound = errors.New("Path not found")
 )
 
 //ProcessInodeRef processes an inode reference and returns two values
@@ -19,7 +25,9 @@ func processInodeRef(inodeRef uint64) (tableOffset uint64, metaOffset uint64) {
 	return
 }
 
-func (r *Reader) ReadDirFromInode(i inode.Inode) (*directory.Directory, error) {
+//ReadDirFromInode returns a fully populated directory.Directory from a given inode.Inode.
+//If the given inode is not a directory it returns an error.
+func (r *Reader) ReadDirFromInode(i *inode.Inode) (*directory.Directory, error) {
 	var offset uint32
 	var metaOffset uint16
 	var size uint16
@@ -50,6 +58,7 @@ func (r *Reader) ReadDirFromInode(i inode.Inode) (*directory.Directory, error) {
 	return dir, nil
 }
 
+//GetInodeFromEntry returns the inode associated with a given directory.Entry
 func (r *Reader) GetInodeFromEntry(en *directory.Entry) (*inode.Inode, error) {
 	br, err := r.NewBlockReader(int64(r.super.InodeTableStart + uint64(en.Header.InodeOffset)))
 	if err != nil {
@@ -63,5 +72,45 @@ func (r *Reader) GetInodeFromEntry(en *directory.Entry) (*inode.Inode, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &i, nil
+	return i, nil
+}
+
+//GetInodeFromPath returns the inode at the given path, relative to root.
+//The given path can start or without "/".
+func (r *Reader) GetInodeFromPath(path string) (*inode.Inode, error) {
+	path = strings.TrimSuffix(strings.TrimPrefix(path, "/"), "/")
+	pathDirs := strings.Split(path, "/")
+	rdr, err := r.NewBlockReaderFromInodeRef(r.super.RootInodeRef)
+	if err != nil {
+		return nil, err
+	}
+	curInodeDir, err := inode.ProcessInode(rdr, r.super.BlockSize)
+	if err != nil {
+		return nil, err
+	}
+	for depth := 0; depth < len(pathDirs); depth++ {
+		if curInodeDir.Type != inode.BasicDirectoryType && curInodeDir.Type != inode.ExtDirType {
+			return nil, ErrNotFound
+		}
+		dir, err := r.ReadDirFromInode(curInodeDir)
+		if err != nil {
+			return nil, err
+		}
+		for _, entry := range dir.Entries {
+			if entry.Name == pathDirs[depth] {
+				if depth == len(pathDirs)-1 {
+					in, err := r.GetInodeFromEntry(&entry)
+					if err != nil {
+						return nil, err
+					}
+					return in, nil
+				}
+				curInodeDir, err = r.GetInodeFromEntry(&entry)
+				if err != nil {
+					return nil, err
+				}
+			}
+		}
+	}
+	return nil, ErrNotFound
 }

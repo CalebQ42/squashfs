@@ -15,11 +15,11 @@ type Inode struct {
 }
 
 //ProcessInode tries to read an inode from the BlockReader
-func ProcessInode(br io.Reader, blockSize uint32) (Inode, error) {
+func ProcessInode(br io.Reader, blockSize uint32) (*Inode, error) {
 	var head Header
 	err := binary.Read(br, binary.LittleEndian, &head)
 	if err != nil {
-		return Inode{}, err
+		return nil, err
 	}
 	var info interface{}
 	switch head.InodeType {
@@ -27,97 +27,97 @@ func ProcessInode(br io.Reader, blockSize uint32) (Inode, error) {
 		var inode BasicDirectory
 		err = binary.Read(br, binary.LittleEndian, &inode)
 		if err != nil {
-			return Inode{}, err
+			return nil, err
 		}
 		info = inode
 	case BasicFileType:
 		inode, err := NewBasicFile(br, blockSize)
 		if err != nil {
-			return Inode{}, err
+			return nil, err
 		}
 		info = inode
 	case BasicSymlinkType:
 		inode, err := NewBasicSymlink(br)
 		if err != nil {
-			return Inode{}, err
+			return nil, err
 		}
 		info = inode
 	case BasicBlockDeviceType:
 		var inode BasicDevice
 		err = binary.Read(br, binary.LittleEndian, &inode)
 		if err != nil {
-			return Inode{}, err
+			return nil, err
 		}
 		info = inode
 	case BasicCharDeviceType:
 		var inode BasicDevice
 		err = binary.Read(br, binary.LittleEndian, &inode)
 		if err != nil {
-			return Inode{}, err
+			return nil, err
 		}
 		info = inode
 	case BasicFifoType:
 		var inode BasicIPC
 		err = binary.Read(br, binary.LittleEndian, &inode)
 		if err != nil {
-			return Inode{}, err
+			return nil, err
 		}
 		info = inode
 	case BasicSocketType:
 		var inode BasicIPC
 		err = binary.Read(br, binary.LittleEndian, &inode)
 		if err != nil {
-			return Inode{}, err
+			return nil, err
 		}
 		info = inode
 	case ExtDirType:
 		inode, err := NewExtendedDirectory(br)
 		if err != nil {
-			return Inode{}, err
+			return nil, err
 		}
 		info = inode
 	case ExtFileType:
 		inode, err := NewExtendedFile(br, blockSize)
 		if err != nil {
-			return Inode{}, err
+			return nil, err
 		}
 		info = inode
 	case ExtSymlinkType:
 		inode, err := NewExtendedSymlink(br)
 		if err != nil {
-			return Inode{}, err
+			return nil, err
 		}
 		info = inode
 	case ExtBlockDeviceType:
 		var inode ExtendedDevice
 		err = binary.Read(br, binary.LittleEndian, &inode)
 		if err != nil {
-			return Inode{}, err
+			return nil, err
 		}
 		info = inode
 	case ExtCharDeviceType:
 		var inode ExtendedDevice
 		err = binary.Read(br, binary.LittleEndian, &inode)
 		if err != nil {
-			return Inode{}, err
+			return nil, err
 		}
 		info = inode
 	case ExtFifoType:
 		var inode ExtendedIPC
 		err = binary.Read(br, binary.LittleEndian, &inode)
 		if err != nil {
-			return Inode{}, err
+			return nil, err
 		}
 		info = inode
 	case ExtSocketType:
 		var inode ExtendedIPC
 		err = binary.Read(br, binary.LittleEndian, &inode)
 		if err != nil {
-			return Inode{}, err
+			return nil, err
 		}
 		info = inode
 	}
-	return Inode{
+	return &Inode{
 		Type:   int(head.InodeType),
 		Header: head,
 		Info:   info,

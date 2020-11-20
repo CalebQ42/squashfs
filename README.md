@@ -15,6 +15,7 @@ Thanks also to [distri's squashfs library](https://github.com/distr1/distri/tree
 * Reading inodes
 * Reading directories
 * Basic gzip compression (Shouldn't be too hard to implement other, but for right now, this works)
+* Listing all files via a string slice
 
 # Not Working (Yet). Roughly in order.
 
@@ -31,4 +32,4 @@ Thanks also to [distri's squashfs library](https://github.com/distr1/distri/tree
 
 # Where I'm at.
 
-* I CAN READ THE ENTIRE DIRECTORY!!!!! (This is a big ol' step)
+* Started work on fragments
