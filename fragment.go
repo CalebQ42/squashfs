@@ -3,35 +3,16 @@ package squashfs
 import (
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"io"
 
 	"github.com/CalebQ42/GoSquashfs/internal/inode"
 )
 
-type FragmentEntryRaw struct {
-	Start   uint64
-	Size    uint32
-	_unused uint32
-}
-
 type FragmentEntry struct {
-	start      uint64
-	size       uint32
-	compressed bool
-}
-
-//NewFragmentEntry reads a fragment entry from the given io.Reader.
-func (r *Reader) NewFragmentEntry(rdr io.Reader) (*FragmentEntry, error) {
-	var entry FragmentEntry
-	var raw FragmentEntryRaw
-	err := binary.Read(rdr, binary.LittleEndian, &raw)
-	if err != nil {
-		return nil, err
-	}
-	entry.start = raw.Start
-	entry.compressed = raw.Size&0x1000000 == 0x1000000
-	entry.size = raw.Size &^ 0x1000000
-	return &entry, nil
+	Start  uint64
+	Size   uint32
+	Unused uint32
 }
 
 //GetFragmentDataFromInode returns the fragment data for a given inode.
@@ -52,6 +33,7 @@ func (r *Reader) GetFragmentDataFromInode(in *inode.Inode) ([]byte, error) {
 		}
 		fragIndex = bf.Init.FragmentIndex
 		fragOffset = bf.Init.FragmentOffset
+		fmt.Println(fragIndex, fragOffset, size)
 	} else if in.Type == inode.ExtFileType {
 		bf := in.Info.(inode.ExtendedFile)
 		if !bf.Fragmented {
@@ -67,17 +49,33 @@ func (r *Reader) GetFragmentDataFromInode(in *inode.Inode) ([]byte, error) {
 	} else {
 		return nil, errors.New("Inode type not supported")
 	}
-	frag := r.fragEntries[fragIndex]
-	datRdr, err := r.NewDataReader(int64(frag.start), []uint32{frag.size})
+	fmt.Println("fragment index", fragIndex)
+	//reading the fragment entry first
+	fragBlockIndex := int(fragIndex / 512)
+	fragEntryRdr, err := r.NewBlockReader(int64(r.fragOffsets[fragBlockIndex]))
 	if err != nil {
 		return nil, err
 	}
-	_, err = datRdr.Seek(int64(fragOffset), io.SeekStart)
+	_, err = fragEntryRdr.Seek(int64(16*fragIndex), io.SeekStart)
+	if err != nil {
+		return nil, err
+	}
+	var entry FragmentEntry
+	err = binary.Read(fragEntryRdr, binary.LittleEndian, &entry)
+	if err != nil {
+		return nil, err
+	}
+	//now reading the actual fragment
+	dr, err := r.NewDataReader(int64(entry.Start), []uint32{entry.Size})
+	if err != nil {
+		return nil, err
+	}
+	_, err = dr.Read(make([]byte, fragOffset))
 	if err != nil {
 		return nil, err
 	}
 	tmp := make([]byte, size)
-	_, err = datRdr.Read(tmp)
+	err = binary.Read(dr, binary.LittleEndian, &tmp)
 	if err != nil {
 		return nil, err
 	}

@@ -17,17 +17,17 @@ Thanks also to [distri's squashfs library](https://github.com/distr1/distri/tree
 
 # Not Working (Yet). Roughly in order.
 
-* Give a list of files
-    * In io.FileStat (?) form
 * Figure out fragments
 * Extracting files
     * from inodes.
     * from path.
     * from file info.
+* Give a list of files
+    * In io.FileStat (?) form
 * Reading the UID, GUID, Xatt, Compression Options, Export, and Fragment tables.
 * Implement other compression types (Should be relatively easy)
 * Squashing
 
 # Where I'm at.
 
-* Working on reading data blocks
+* Reading fragments does not seem to be working right now

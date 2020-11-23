@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"io"
 )
 
@@ -67,6 +68,7 @@ func (br *BlockReader) parseMetadata() error {
 }
 
 func (br *BlockReader) readNextDataBlock() error {
+	fmt.Println("reading new block")
 	meta := br.headers[len(br.headers)-1]
 	r := io.NewSectionReader(br.s.r, br.offset, int64(meta.size))
 	if meta.compressed {

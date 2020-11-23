@@ -35,10 +35,6 @@ func TestMain(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = rdr.readDirTable()
-	if err != nil {
-		t.Fatal(err)
-	}
 	i, err := rdr.GetInodeFromPath("code-oss.desktop")
 	if err != nil {
 		t.Fatal(err)

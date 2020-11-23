@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"strings"
+	"math"
 
 	"github.com/CalebQ42/GoSquashfs/internal/inode"
 )
@@ -33,7 +33,7 @@ type Reader struct {
 	super        Superblock
 	flags        SuperblockFlags
 	decompressor Decompressor
-	fragEntries  []*FragmentEntry
+	fragOffsets  []uint64
 }
 
 //NewSquashfsReader returns a new squashfs.Reader from an io.ReaderAt
@@ -58,16 +58,19 @@ func NewSquashfsReader(r io.ReaderAt) (*Reader, error) {
 		//TODO: parse compressor options
 		return nil, ErrCompressorOptions
 	}
-	br, err := rdr.NewBlockReader(int64(rdr.super.FragTableStart))
-	if err != nil {
-		return &rdr, err
-	}
-	for i := 0; i < int(rdr.super.FragCount); i++ {
-		entry, err := rdr.NewFragmentEntry(br)
-		if err != nil {
-			return &rdr, err
+	fragBlocks := int(math.Ceil(float64(rdr.super.FragCount) / 512.0))
+	if fragBlocks > 0 {
+		offset := int64(rdr.super.FragTableStart)
+		for i := 0; i < fragBlocks; i++ {
+			tmp := make([]byte, 8)
+			_, err = r.ReadAt(tmp, offset)
+			if err != nil {
+				fmt.Println("Error while reading fragment block offsets")
+				return nil, err
+			}
+			rdr.fragOffsets = append(rdr.fragOffsets, binary.LittleEndian.Uint64(tmp))
+			offset += 8
 		}
-		rdr.fragEntries = append(rdr.fragEntries, entry)
 	}
 	return &rdr, nil
 }
@@ -118,13 +121,4 @@ func (r *Reader) readDir(i *inode.Inode) (paths []string, err error) {
 		}
 	}
 	return
-}
-
-func (r *Reader) readDirTable() error {
-	paths, err := r.GetFilesList()
-	if err != nil {
-		return err
-	}
-	fmt.Println(strings.Join(paths, "\n"))
-	return nil
 }

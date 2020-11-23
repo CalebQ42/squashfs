@@ -6,6 +6,7 @@ import (
 	"io"
 )
 
+//DataReader reads data from data blocks.
 type DataReader struct {
 	r             *Reader
 	offset        int64 //offset relative to the beginning of the squash file
@@ -13,9 +14,9 @@ type DataReader struct {
 	curBlock      int //Which block in sizes is currently cached
 	curData       []byte
 	curReadOffset int //offset relative to the currently cached data
-	readOffset    int //offset relative to the beginning
 }
 
+//DataBlock holds info about a given data block from it's size
 type DataBlock struct {
 	begOffset        int64 //The offset relative to the beginning of the squash file. Makes it easier to seek to it.
 	size             uint32
@@ -23,6 +24,7 @@ type DataBlock struct {
 	uncompressedSize uint32
 }
 
+//NewDataBlockSize creates a new squashfs.datablock from a given size.
 func NewDataBlockSize(raw uint32) (dbs DataBlock) {
 	dbs.compressed = raw&1<<24 != 1<<24
 	dbs.size = raw &^ 1 << 24
@@ -32,6 +34,7 @@ func NewDataBlockSize(raw uint32) (dbs DataBlock) {
 	return
 }
 
+//NewDataReader creates a new data reader at the given offset, with the blocks defined by sizes
 func (r *Reader) NewDataReader(offset int64, sizes []uint32) (*DataReader, error) {
 	var dr DataReader
 	dr.r = r
@@ -62,6 +65,9 @@ func (d *DataReader) readNextBlock() error {
 }
 
 func (d *DataReader) readCurBlock() error {
+	if d.curBlock >= len(d.blocks) {
+		return io.EOF
+	}
 	if d.blocks[d.curBlock].size == 0 {
 		d.curData = make([]byte, d.r.super.BlockSize)
 		d.blocks[d.curBlock].uncompressedSize = d.r.super.BlockSize
@@ -96,7 +102,6 @@ func (d *DataReader) Read(p []byte) (int, error) {
 		for i := 0; i < len(p); i++ {
 			p[i] = d.curData[d.curReadOffset+i]
 		}
-		d.readOffset += len(p)
 		d.curReadOffset += len(p)
 		return len(p), nil
 	}
@@ -106,7 +111,6 @@ func (d *DataReader) Read(p []byte) (int, error) {
 		if d.curReadOffset == len(d.curData) {
 			err := d.readNextBlock()
 			if err != nil {
-				d.readOffset += read
 				return read, err
 			}
 			curRead = 0
@@ -120,37 +124,8 @@ func (d *DataReader) Read(p []byte) (int, error) {
 			}
 		}
 	}
-	d.readOffset += read
 	if read != len(p) {
 		return read, errors.New("Didn't read enough data")
 	}
 	return read, nil
-}
-
-func (d *DataReader) Seek(offset int64, whence int) (int, error) {
-	if whence == io.SeekStart {
-		d.readOffset = int(offset)
-		d.curReadOffset = int(offset)
-		d.curBlock = 0
-		read := int64(0)
-		for i, block := range d.blocks {
-			if block.uncompressedSize == 0 {
-				d.curBlock = i
-				err := d.readCurBlock()
-				if err != nil {
-					return 0, err
-				}
-			}
-			read += int64(block.uncompressedSize)
-			if offset-read < 0 {
-				d.curReadOffset = int((offset - read) + int64(block.uncompressedSize))
-			}
-		}
-	}
-	switch whence {
-	case io.SeekCurrent:
-		d.readOffset += int(offset)
-		d.curReadOffset += int(offset)
-	case io.SeekEnd:
-	}
 }
