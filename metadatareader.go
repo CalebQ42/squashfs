@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
-	"fmt"
 	"io"
 )
 
@@ -14,7 +13,7 @@ type metadata struct {
 	compressed bool
 }
 
-type BlockReader struct {
+type MetadataReader struct {
 	s          *Reader
 	offset     int64
 	headers    []*metadata
@@ -22,8 +21,8 @@ type BlockReader struct {
 	readOffset int
 }
 
-func (s *Reader) NewBlockReader(offset int64) (*BlockReader, error) {
-	var br BlockReader
+func (s *Reader) NewMetadataReader(offset int64) (*MetadataReader, error) {
+	var br MetadataReader
 	br.s = s
 	br.offset = offset
 	err := br.parseMetadata()
@@ -37,9 +36,9 @@ func (s *Reader) NewBlockReader(offset int64) (*BlockReader, error) {
 	return &br, nil
 }
 
-func (s *Reader) NewBlockReaderFromInodeRef(ref uint64) (*BlockReader, error) {
+func (s *Reader) NewMetadataReaderFromInodeRef(ref uint64) (*MetadataReader, error) {
 	offset, metaOffset := processInodeRef(ref)
-	br, err := s.NewBlockReader(int64(s.super.InodeTableStart + offset))
+	br, err := s.NewMetadataReader(int64(s.super.InodeTableStart + offset))
 	if err != nil {
 		return nil, err
 	}
@@ -50,7 +49,7 @@ func (s *Reader) NewBlockReaderFromInodeRef(ref uint64) (*BlockReader, error) {
 	return br, nil
 }
 
-func (br *BlockReader) parseMetadata() error {
+func (br *MetadataReader) parseMetadata() error {
 	var raw uint16
 	err := binary.Read(io.NewSectionReader(br.s.r, br.offset, 2), binary.LittleEndian, &raw)
 	if err != nil {
@@ -67,8 +66,7 @@ func (br *BlockReader) parseMetadata() error {
 	return nil
 }
 
-func (br *BlockReader) readNextDataBlock() error {
-	fmt.Println("reading new block")
+func (br *MetadataReader) readNextDataBlock() error {
 	meta := br.headers[len(br.headers)-1]
 	r := io.NewSectionReader(br.s.r, br.offset, int64(meta.size))
 	if meta.compressed {
@@ -90,7 +88,7 @@ func (br *BlockReader) readNextDataBlock() error {
 	return nil
 }
 
-func (br *BlockReader) Read(p []byte) (int, error) {
+func (br *MetadataReader) Read(p []byte) (int, error) {
 	if br.readOffset+len(p) < len(br.data) {
 		for i := 0; i < len(p); i++ {
 			p[i] = br.data[br.readOffset+i]
@@ -128,7 +126,7 @@ func (br *BlockReader) Read(p []byte) (int, error) {
 //Seek will seek to the specified location (if possible).
 //When io.SeekCurrent or io.SeekStart is set, if seeking would put the offset beyond the current cached data, it will try to read the next data blocks to accomodate. On a failure it will seek to the end of the data.
 //When io.SeekEnd is set, it wil seek reletive to the currently cached data.
-func (br *BlockReader) Seek(offset int64, whence int) (int64, error) {
+func (br *MetadataReader) Seek(offset int64, whence int) (int64, error) {
 	switch whence {
 	case io.SeekCurrent:
 		br.readOffset += int(offset)

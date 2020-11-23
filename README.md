@@ -17,7 +17,7 @@ Thanks also to [distri's squashfs library](https://github.com/distr1/distri/tree
 
 # Not Working (Yet). Roughly in order.
 
-* Figure out fragments
+* Figure out fragments (I can't seem to make them work ATM)
 * Extracting files
     * from inodes.
     * from path.
@@ -30,4 +30,5 @@ Thanks also to [distri's squashfs library](https://github.com/distr1/distri/tree
 
 # Where I'm at.
 
-* Reading fragments does not seem to be working right now
+* I've given up on fragments for now and will work on reading files.
+    * Once I have basic file reading working, I'll have a first pre-release available. No fragment support, but shouldn't be too hard... right?

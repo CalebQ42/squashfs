@@ -43,7 +43,7 @@ func (r *Reader) ReadDirFromInode(i *inode.Inode) (*directory.Directory, error) 
 	default:
 		return nil, errors.New("Not a directory inode")
 	}
-	br, err := r.NewBlockReader(int64(r.super.DirTableStart + uint64(offset)))
+	br, err := r.NewMetadataReader(int64(r.super.DirTableStart + uint64(offset)))
 	if err != nil {
 		return nil, err
 	}
@@ -60,7 +60,7 @@ func (r *Reader) ReadDirFromInode(i *inode.Inode) (*directory.Directory, error) 
 
 //GetInodeFromEntry returns the inode associated with a given directory.Entry
 func (r *Reader) GetInodeFromEntry(en *directory.Entry) (*inode.Inode, error) {
-	br, err := r.NewBlockReader(int64(r.super.InodeTableStart + uint64(en.Header.InodeOffset)))
+	br, err := r.NewMetadataReader(int64(r.super.InodeTableStart + uint64(en.Header.InodeOffset)))
 	if err != nil {
 		return nil, err
 	}
@@ -80,13 +80,16 @@ func (r *Reader) GetInodeFromEntry(en *directory.Entry) (*inode.Inode, error) {
 func (r *Reader) GetInodeFromPath(path string) (*inode.Inode, error) {
 	path = strings.TrimSuffix(strings.TrimPrefix(path, "/"), "/")
 	pathDirs := strings.Split(path, "/")
-	rdr, err := r.NewBlockReaderFromInodeRef(r.super.RootInodeRef)
+	rdr, err := r.NewMetadataReaderFromInodeRef(r.super.RootInodeRef)
 	if err != nil {
 		return nil, err
 	}
 	curInodeDir, err := inode.ProcessInode(rdr, r.super.BlockSize)
 	if err != nil {
 		return nil, err
+	}
+	if path == "" {
+		return curInodeDir, nil
 	}
 	for depth := 0; depth < len(pathDirs); depth++ {
 		if curInodeDir.Type != inode.BasicDirectoryType && curInodeDir.Type != inode.ExtDirType {

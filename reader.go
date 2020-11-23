@@ -78,7 +78,7 @@ func NewSquashfsReader(r io.ReaderAt) (*Reader, error) {
 //GetFilesList returns a list of ALL files in the squashfs, going down every folder.
 //Paths that terminate in a folder end with /
 func (r *Reader) GetFilesList() ([]string, error) {
-	inoderdr, err := r.NewBlockReaderFromInodeRef(r.super.RootInodeRef)
+	inoderdr, err := r.NewMetadataReaderFromInodeRef(r.super.RootInodeRef)
 	if err != nil {
 		return nil, err
 	}
@@ -100,6 +100,12 @@ func (r *Reader) readDir(i *inode.Inode) (paths []string, err error) {
 		return
 	}
 	for _, entry := range dir.Entries {
+		if entry.Init.Type == inode.BasicFileType {
+			in, _ := r.GetInodeFromEntry(&entry)
+			fil := in.Info.(inode.BasicFile)
+			fmt.Println("name:", entry.Name)
+			fmt.Println("frag index:", fil.Init.FragmentIndex, "frag offset:", fil.Init.FragmentOffset)
+		}
 		if entry.Init.Type == inode.BasicDirectoryType {
 			paths = append(paths)
 			i, err = r.GetInodeFromEntry(&entry)
@@ -121,4 +127,12 @@ func (r *Reader) readDir(i *inode.Inode) (paths []string, err error) {
 		}
 	}
 	return
+}
+
+func (r *Reader) GetFileStructure() ([]string, error) {
+	in, err := r.GetInodeFromPath("")
+	if err != nil {
+		return nil, err
+	}
+	return r.readDir(in)
 }

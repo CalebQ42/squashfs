@@ -1,6 +1,7 @@
 package squashfs
 
 import (
+	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -9,6 +10,7 @@ import (
 	"github.com/CalebQ42/GoSquashfs/internal/inode"
 )
 
+//FragmentEntry is an entry in the fragment table
 type FragmentEntry struct {
 	Start  uint64
 	Size   uint32
@@ -51,8 +53,7 @@ func (r *Reader) GetFragmentDataFromInode(in *inode.Inode) ([]byte, error) {
 	}
 	fmt.Println("fragment index", fragIndex)
 	//reading the fragment entry first
-	fragBlockIndex := int(fragIndex / 512)
-	fragEntryRdr, err := r.NewBlockReader(int64(r.fragOffsets[fragBlockIndex]))
+	fragEntryRdr, err := r.NewMetadataReader(int64(r.fragOffsets[int(fragIndex/512)]))
 	if err != nil {
 		return nil, err
 	}
@@ -79,5 +80,10 @@ func (r *Reader) GetFragmentDataFromInode(in *inode.Inode) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	return tmp, nil
+	dataRdr := bytes.NewBuffer(tmp)
+	dta, err := r.decompressor.Decompress(dataRdr)
+	if err != nil {
+		return nil, err
+	}
+	return dta, nil
 }

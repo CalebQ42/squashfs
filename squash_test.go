@@ -35,12 +35,14 @@ func TestMain(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	i, err := rdr.GetInodeFromPath("code-oss.desktop")
+	rdr.GetFileStructure()
+	extractionFil := ".DirIcon"
+	i, err := rdr.GetInodeFromPath(extractionFil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	os.Remove(wd + "/testing/code-oss.desktop")
-	desk, err := os.Create(wd + "/testing/code-oss.desktop")
+	os.Remove(wd + "/testing/" + extractionFil)
+	desk, err := os.Create(wd + "/testing/" + extractionFil)
 	if err != nil {
 		t.Fatal(err)
 	}
