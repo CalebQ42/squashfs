@@ -1,7 +1,6 @@
 package squashfs
 
 import (
-	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -13,7 +12,7 @@ import (
 const (
 	downloadURL  = "https://github.com/zilti/code-oss.AppImage/releases/download/continuous/Code_OSS-x86_64.AppImage"
 	appImageName = "Code_OSS.AppImage"
-	squashfsName = "testing.squashfs"
+	squashfsName = "Code_OSS.Squashfs"
 )
 
 func TestMain(t *testing.T) {
@@ -38,7 +37,7 @@ func TestMain(t *testing.T) {
 	}
 	//testing code to print out the directory structure
 	// rdr.GetFileStructure()
-	extractionFil := "Proton-5.9-GE-8-ST.tar.gz"
+	extractionFil := "code-oss.desktop"
 	os.Remove(wd + "/testing/" + extractionFil)
 	desk, err := os.Create(wd + "/testing/" + extractionFil)
 	if err != nil {
@@ -48,10 +47,8 @@ func TestMain(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	fmt.Println("Size!", ext.FileSize)
-	n, err := io.CopyBuffer(desk, ext, make([]byte, rdr.super.BlockSize/2))
+	_, err = io.Copy(desk, ext)
 	if err != nil {
-		fmt.Println("Read", n)
 		t.Fatal(err)
 	}
 	t.Fatal("No problems here!")

@@ -19,9 +19,11 @@ Thanks also to [distri's squashfs library](https://github.com/distr1/distri/tree
 * Basic gzip compression (Shouldn't be too hard to implement other, but for right now, this works)
 * Listing all files via a string slice
 
-# Not Working (Yet). Roughly in order.
+# Not Working (Yet). Not necessarily in order.
 
-* Reading the UID, GUID, Xatt, Compression Options, and Export tables.
+* Rename repo so it's easier to import
+* Provide an easy interface to find and list files and their properties
+    * Maybe squashfs.File
 * Extracting files
     * from inodes.
     * from file info.
@@ -31,7 +33,12 @@ Thanks also to [distri's squashfs library](https://github.com/distr1/distri/tree
 * Implement other compression types (Should be relatively easy)
 * Squashing
 * Threading processes to speed them up
+* Reasonable tests
 
-# Where I'm at.
+# TODO
 
-* I FINALLY GOT FILE EXTRACTION WORKING!!
+* Go over all documentation again (especially for exported structs and functions) to make sure it's easy to understand.
+
+# Where I'm at
+
+* v0.1 is the first working version!
