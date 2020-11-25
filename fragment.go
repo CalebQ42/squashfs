@@ -1,7 +1,6 @@
 package squashfs
 
 import (
-	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -35,7 +34,6 @@ func (r *Reader) GetFragmentDataFromInode(in *inode.Inode) ([]byte, error) {
 		}
 		fragIndex = bf.Init.FragmentIndex
 		fragOffset = bf.Init.FragmentOffset
-		fmt.Println(fragIndex, fragOffset, size)
 	} else if in.Type == inode.ExtFileType {
 		bf := in.Info.(inode.ExtendedFile)
 		if !bf.Fragmented {
@@ -51,6 +49,7 @@ func (r *Reader) GetFragmentDataFromInode(in *inode.Inode) ([]byte, error) {
 	} else {
 		return nil, errors.New("Inode type not supported")
 	}
+	fmt.Println(fragIndex, fragOffset, size)
 	fmt.Println("fragment index", fragIndex)
 	//reading the fragment entry first
 	fragEntryRdr, err := r.NewMetadataReader(int64(r.fragOffsets[int(fragIndex/512)]))
@@ -80,10 +79,5 @@ func (r *Reader) GetFragmentDataFromInode(in *inode.Inode) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	dataRdr := bytes.NewBuffer(tmp)
-	dta, err := r.decompressor.Decompress(dataRdr)
-	if err != nil {
-		return nil, err
-	}
-	return dta, nil
+	return tmp, nil
 }

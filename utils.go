@@ -76,7 +76,7 @@ func (r *Reader) GetInodeFromEntry(en *directory.Entry) (*inode.Inode, error) {
 }
 
 //GetInodeFromPath returns the inode at the given path, relative to root.
-//The given path can start or without "/".
+//The given path can start with or without "/"
 func (r *Reader) GetInodeFromPath(path string) (*inode.Inode, error) {
 	path = strings.TrimSuffix(strings.TrimPrefix(path, "/"), "/")
 	pathDirs := strings.Split(path, "/")

@@ -1,6 +1,7 @@
 package squashfs
 
 import (
+	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -35,23 +36,21 @@ func TestMain(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	rdr.GetFileStructure()
-	extractionFil := ".DirIcon"
-	i, err := rdr.GetInodeFromPath(extractionFil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	//testing code to print out the directory structure
+	// rdr.GetFileStructure()
+	extractionFil := "code-oss.desktop"
 	os.Remove(wd + "/testing/" + extractionFil)
 	desk, err := os.Create(wd + "/testing/" + extractionFil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	btys, err := rdr.GetFragmentDataFromInode(i)
+	ext, err := rdr.ReadFile(extractionFil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = desk.Write(btys)
+	n, err := io.Copy(desk, ext)
 	if err != nil {
+		fmt.Println("Read", n)
 		t.Fatal(err)
 	}
 	t.Fatal("No problems here!")

@@ -3,7 +3,15 @@ package squashfs
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"io"
+
+	"github.com/CalebQ42/GoSquashfs/internal/inode"
+)
+
+var (
+	//ErrInodeNotFile is given when giving an inode, but the function requires a file inode.
+	ErrInodeNotFile = errors.New("Given inode is NOT a file type")
 )
 
 //DataReader reads data from data blocks.
@@ -24,8 +32,8 @@ type DataBlock struct {
 	uncompressedSize uint32
 }
 
-//NewDataBlockSize creates a new squashfs.datablock from a given size.
-func NewDataBlockSize(raw uint32) (dbs DataBlock) {
+//NewDataBlock creates a new squashfs.datablock from a given size.
+func NewDataBlock(raw uint32) (dbs DataBlock) {
 	dbs.compressed = raw&1<<24 != 1<<24
 	dbs.size = raw &^ 1 << 24
 	if !dbs.compressed {
@@ -40,13 +48,39 @@ func (r *Reader) NewDataReader(offset int64, sizes []uint32) (*DataReader, error
 	dr.r = r
 	dr.offset = offset
 	for _, size := range sizes {
-		dr.blocks = append(dr.blocks, NewDataBlockSize(size))
+		dr.blocks = append(dr.blocks, NewDataBlock(size))
 	}
 	err := dr.readCurBlock()
 	if err != nil {
 		return nil, err
 	}
 	return &dr, nil
+}
+
+//NewDataReaderFromInode creates a new DataReader from a given inode. Inode must be of BasicFile or ExtendedFile types
+func (r *Reader) NewDataReaderFromInode(i *inode.Inode) (*DataReader, error) {
+	var rdr DataReader
+	switch i.Type {
+	case inode.BasicFileType:
+		fil := i.Info.(inode.BasicFile)
+		rdr.offset = int64(fil.Init.BlockStart)
+		for _, sizes := range fil.BlockSizes {
+			rdr.blocks = append(rdr.blocks, NewDataBlock(sizes))
+		}
+	case inode.ExtFileType:
+		fil := i.Info.(inode.ExtendedFile)
+		rdr.offset = int64(fil.Init.BlockStart)
+		for _, sizes := range fil.BlockSizes {
+			rdr.blocks = append(rdr.blocks, NewDataBlock(sizes))
+		}
+	default:
+		return nil, ErrInodeNotFile
+	}
+	err := rdr.readCurBlock()
+	if err != nil {
+		return nil, err
+	}
+	return &rdr, nil
 }
 
 func (d *DataReader) readNextBlock() error {
@@ -94,10 +128,14 @@ func (d *DataReader) readCurBlock() error {
 	d.curData = buf.Bytes()
 	d.blocks[d.curBlock].begOffset = d.offset
 	d.offset += int64(d.blocks[d.curBlock].size)
+	fmt.Println("dat red")
+	fmt.Println(len(d.curData))
 	return err
 }
 
 func (d *DataReader) Read(p []byte) (int, error) {
+	fmt.Println("dat")
+	fmt.Println(len(d.curData))
 	if d.curReadOffset+len(p) < len(d.curData) {
 		for i := 0; i < len(p); i++ {
 			p[i] = d.curData[d.curReadOffset+i]
