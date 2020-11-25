@@ -49,8 +49,6 @@ func (r *Reader) GetFragmentDataFromInode(in *inode.Inode) ([]byte, error) {
 	} else {
 		return nil, errors.New("Inode type not supported")
 	}
-	fmt.Println(fragIndex, fragOffset, size)
-	fmt.Println("fragment index", fragIndex)
 	//reading the fragment entry first
 	fragEntryRdr, err := r.NewMetadataReader(int64(r.fragOffsets[int(fragIndex/512)]))
 	if err != nil {
@@ -79,5 +77,6 @@ func (r *Reader) GetFragmentDataFromInode(in *inode.Inode) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	fmt.Println("read fragment with size", len(tmp))
 	return tmp, nil
 }

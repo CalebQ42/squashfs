@@ -36,43 +36,46 @@ func (r *Reader) ReadFile(location string) (*FileReader, error) {
 	if in.Type != inode.BasicFileType && in.Type != inode.ExtFileType {
 		return nil, ErrPathIsNotFile
 	}
-	var offset uint32
-	var sizes []uint32
 	switch in.Type {
 	case inode.BasicFileType:
-		rdr.fragged = in.Info.(inode.BasicFile).Fragmented
-		rdr.fragOnly = in.Info.(inode.BasicFile).Init.BlockStart == 0
-		rdr.FileSize = int(in.Info.(inode.BasicFile).Init.Size)
-		offset = in.Info.(inode.BasicFile).Init.BlockStart
-		sizes = in.Info.(inode.BasicFile).BlockSizes
+		fil := in.Info.(inode.BasicFile)
+		rdr.fragged = fil.Fragmented
+		rdr.fragOnly = fil.Init.BlockStart == 0
+		rdr.FileSize = int(fil.Init.Size)
 	case inode.ExtFileType:
-		rdr.fragged = in.Info.(inode.ExtendedFile).Fragmented
-		rdr.fragOnly = in.Info.(inode.ExtendedFile).Init.BlockStart == 0
-		rdr.FileSize = int(in.Info.(inode.ExtendedFile).Init.Size)
-		offset = in.Info.(inode.ExtendedFile).Init.BlockStart
-		sizes = in.Info.(inode.ExtendedFile).BlockSizes
+		fil := in.Info.(inode.ExtendedFile)
+		rdr.fragged = fil.Fragmented
+		rdr.fragOnly = fil.Init.BlockStart == 0
+		rdr.FileSize = int(fil.Init.Size)
 	}
-	fmt.Println("HIIII")
 	if rdr.fragged {
 		rdr.fragmentData, err = r.GetFragmentDataFromInode(in)
 		if err != nil {
 			return nil, err
 		}
 	}
-	if rdr.fragged {
-		rdr.data, err = r.NewDataReader(int64(offset), sizes[:len(sizes)-1])
-	} else {
-		rdr.data, err = r.NewDataReader(int64(offset), sizes)
+	if !rdr.fragOnly {
+		rdr.data, err = r.NewDataReaderFromInode(in)
 	}
 	return &rdr, nil
 }
 
 func (f *FileReader) Read(p []byte) (int, error) {
-	fmt.Println("reading!")
+	fmt.Println("reading!", len(p))
+	if f.fragOnly {
+		fmt.Println("HII")
+		n, err := bytes.NewBuffer(f.fragmentData[f.read:]).Read(p)
+		f.read += n
+		if err != nil {
+			return n, err
+		}
+		return n, nil
+	}
 	var read int
 	n, err := f.data.Read(p)
 	read += n
 	if f.fragged && err == io.EOF {
+		fmt.Println("Trying to read fragment AFTER main data")
 		n, err = bytes.NewBuffer(f.fragmentData).Read(p[read:])
 		read += n
 		if err != nil {
@@ -81,5 +84,6 @@ func (f *FileReader) Read(p []byte) (int, error) {
 	} else if err != nil {
 		return read, err
 	}
+	fmt.Println("read", n)
 	return read, nil
 }

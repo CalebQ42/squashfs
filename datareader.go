@@ -12,6 +12,8 @@ import (
 var (
 	//ErrInodeNotFile is given when giving an inode, but the function requires a file inode.
 	ErrInodeNotFile = errors.New("Given inode is NOT a file type")
+	//ErrInodeOnlyFragment is given when trying to make a DataReader from an inode, but the inode only had data in a fragment
+	ErrInodeOnlyFragment = errors.New("Given inode ONLY has fragment data")
 )
 
 //DataReader reads data from data blocks.
@@ -34,8 +36,8 @@ type DataBlock struct {
 
 //NewDataBlock creates a new squashfs.datablock from a given size.
 func NewDataBlock(raw uint32) (dbs DataBlock) {
-	dbs.compressed = raw&1<<24 != 1<<24
-	dbs.size = raw &^ 1 << 24
+	dbs.compressed = raw&(1<<24) != (1 << 24)
+	dbs.size = raw &^ (1 << 24)
 	if !dbs.compressed {
 		dbs.uncompressedSize = dbs.size
 	}
@@ -60,18 +62,31 @@ func (r *Reader) NewDataReader(offset int64, sizes []uint32) (*DataReader, error
 //NewDataReaderFromInode creates a new DataReader from a given inode. Inode must be of BasicFile or ExtendedFile types
 func (r *Reader) NewDataReaderFromInode(i *inode.Inode) (*DataReader, error) {
 	var rdr DataReader
+	rdr.r = r
 	switch i.Type {
 	case inode.BasicFileType:
 		fil := i.Info.(inode.BasicFile)
+		if fil.Init.BlockStart == 0 {
+			return nil, ErrInodeOnlyFragment
+		}
 		rdr.offset = int64(fil.Init.BlockStart)
 		for _, sizes := range fil.BlockSizes {
 			rdr.blocks = append(rdr.blocks, NewDataBlock(sizes))
 		}
+		if fil.Fragmented {
+			rdr.blocks = rdr.blocks[:len(rdr.blocks)-1]
+		}
 	case inode.ExtFileType:
 		fil := i.Info.(inode.ExtendedFile)
+		if fil.Init.BlockStart == 0 {
+			return nil, ErrInodeOnlyFragment
+		}
 		rdr.offset = int64(fil.Init.BlockStart)
 		for _, sizes := range fil.BlockSizes {
 			rdr.blocks = append(rdr.blocks, NewDataBlock(sizes))
+		}
+		if fil.Fragmented {
+			rdr.blocks = rdr.blocks[:len(rdr.blocks)-1]
 		}
 	default:
 		return nil, ErrInodeNotFile
@@ -87,18 +102,21 @@ func (d *DataReader) readNextBlock() error {
 	d.curBlock++
 	if d.curBlock >= len(d.blocks) {
 		d.curBlock--
-		return errors.New("Ran out of blocks")
+		return io.EOF
 	}
 	err := d.readCurBlock()
 	if err != nil {
 		d.curBlock--
 		d.readCurBlock()
+		fmt.Println("running back because of issues")
 		return err
 	}
+	fmt.Println("Read block success!")
 	return nil
 }
 
 func (d *DataReader) readCurBlock() error {
+	fmt.Println("reading into block", d.curBlock, "out of", len(d.blocks))
 	if d.curBlock >= len(d.blocks) {
 		return io.EOF
 	}
@@ -106,22 +124,21 @@ func (d *DataReader) readCurBlock() error {
 		d.curData = make([]byte, d.r.super.BlockSize)
 		d.blocks[d.curBlock].uncompressedSize = d.r.super.BlockSize
 		d.blocks[d.curBlock].begOffset = d.offset
-		fmt.Println("dat red")
-		fmt.Println(len(d.curData))
 		return nil
 	}
 	sec := io.NewSectionReader(d.r.r, d.offset, int64(d.blocks[d.curBlock].size))
+	fmt.Println("block size", d.r.super.BlockSize)
+	fmt.Println("compressed size", int64(d.blocks[d.curBlock].size))
 	if d.blocks[d.curBlock].compressed {
 		btys, err := d.r.decompressor.Decompress(sec)
 		if err != nil {
+			fmt.Println("HERE!")
 			return err
 		}
 		d.blocks[d.curBlock].uncompressedSize = uint32(len(btys))
 		d.curData = btys
 		d.blocks[d.curBlock].begOffset = d.offset
 		d.offset += int64(d.blocks[d.curBlock].size)
-		fmt.Println("dat red")
-		fmt.Println(len(d.curData))
 		return nil
 	}
 	var buf bytes.Buffer
@@ -132,15 +149,12 @@ func (d *DataReader) readCurBlock() error {
 	d.curData = buf.Bytes()
 	d.blocks[d.curBlock].begOffset = d.offset
 	d.offset += int64(d.blocks[d.curBlock].size)
-	fmt.Println("dat red")
-	fmt.Println(len(d.curData))
 	return err
 }
 
 func (d *DataReader) Read(p []byte) (int, error) {
-	fmt.Println("dat")
-	fmt.Println(len(d.curData))
 	if d.curReadOffset+len(p) < len(d.curData) {
+		fmt.Println("Enough data in cache for direct read")
 		for i := 0; i < len(p); i++ {
 			p[i] = d.curData[d.curReadOffset+i]
 		}
@@ -148,20 +162,21 @@ func (d *DataReader) Read(p []byte) (int, error) {
 		return len(p), nil
 	}
 	read := 0
-	curRead := 0
 	for read < len(p) {
 		if d.curReadOffset == len(d.curData) {
+			fmt.Println("reading new block...")
 			err := d.readNextBlock()
 			if err != nil {
 				return read, err
 			}
-			curRead = 0
+			d.curReadOffset = 0
 		}
 		for ; read < len(p); read++ {
-			curRead++
-			if d.curReadOffset+curRead < len(d.curData) {
-				p[read] = d.curData[d.curReadOffset+curRead]
+			d.curReadOffset++
+			if d.curReadOffset < len(d.curData) {
+				p[read] = d.curData[d.curReadOffset]
 			} else {
+				fmt.Println("breaking out!")
 				break
 			}
 		}
