@@ -12,7 +12,6 @@ import (
 const (
 	downloadURL  = "https://github.com/zilti/code-oss.AppImage/releases/download/continuous/Code_OSS-x86_64.AppImage"
 	appImageName = "Code_OSS.AppImage"
-	squashfsName = "Code_OSS.Squashfs"
 )
 
 func TestMain(t *testing.T) {
@@ -21,22 +20,23 @@ func TestMain(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	squashFil, err := os.Open(wd + "/testing/" + squashfsName)
+	aiFil, err := os.Open(wd + "/testing/" + appImageName)
 	if os.IsNotExist(err) {
-		TestCreateSquashFromAppImage(t)
-		squashFil, err = os.Open(wd + "/testing/" + squashfsName)
+		downloadTestAppImage(t, wd+"/testing")
+		aiFil, err = os.Open(wd + "/testing/" + appImageName)
 		if err != nil {
 			t.Fatal(err)
 		}
+	} else {
+		t.Fatal(err)
 	}
-	defer squashFil.Close()
-	stat, _ := squashFil.Stat()
-	rdr, err := NewSquashfsReader(io.NewSectionReader(squashFil, 0, stat.Size()))
+	defer aiFil.Close()
+	stat, _ := aiFil.Stat()
+	ai := goappimage.NewAppImage(wd + "/testing/" + appImageName)
+	rdr, err := NewSquashfsReader(io.NewSectionReader(aiFil, ai.Offset, stat.Size()-ai.Offset))
 	if err != nil {
 		t.Fatal(err)
 	}
-	//testing code to print out the directory structure
-	// rdr.GetFileStructure()
 	extractionFil := "code-oss.desktop"
 	os.Remove(wd + "/testing/" + extractionFil)
 	desk, err := os.Create(wd + "/testing/" + extractionFil)
@@ -54,45 +54,9 @@ func TestMain(t *testing.T) {
 	t.Fatal("No problems here!")
 }
 
-func TestCreateSquashFromAppImage(t *testing.T) {
-	wd, err := os.Getwd()
-	if err != nil {
-		t.Fatal(err)
-	}
-	err = os.Mkdir(wd+"/testing", 0777)
-	if err != nil && !os.IsExist(err) {
-		t.Fatal(err)
-	}
-	_, err = os.Open(wd + "/testing/" + appImageName)
-	if os.IsNotExist(err) {
-		downloadTestAppImage(t, wd+"/testing")
-		_, err = os.Open(wd + "/testing/" + appImageName)
-		if err != nil {
-			t.Fatal(err)
-		}
-	} else if err != nil {
-		t.Fatal(err)
-	}
-	ai := goappimage.NewAppImage(wd + "/testing/" + appImageName)
-	aiFil, err := os.Open(wd + "/testing/" + appImageName)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer aiFil.Close()
-	aiFil.Seek(ai.Offset, 0)
-	os.Remove(wd + "/testing/" + squashfsName)
-	aiSquash, err := os.Create(wd + "/testing/" + squashfsName)
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, err = io.Copy(aiSquash, aiFil)
-	if err != nil {
-		t.Fatal(err)
-	}
-}
-
 func downloadTestAppImage(t *testing.T, dir string) {
-	//seems to time out. Need to fix that at some point
+	//seems to time out on slow connections. Might fix that at some point... or not
+	os.Mkdir(dir, 0777)
 	appImage, err := os.Create(dir + "/" + appImageName)
 	if err != nil {
 		t.Fatal(err)
