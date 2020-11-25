@@ -3,7 +3,6 @@ package squashfs
 import (
 	"encoding/binary"
 	"errors"
-	"fmt"
 	"io"
 	"math"
 
@@ -30,9 +29,9 @@ var (
 //TODO: Give a way to actually read files :P
 type Reader struct {
 	r            io.ReaderAt
-	super        Superblock
-	flags        SuperblockFlags
-	decompressor Decompressor
+	super        superblock
+	flags        superblockFlags
+	decompressor decompressor
 	fragOffsets  []uint64
 }
 
@@ -50,7 +49,7 @@ func NewSquashfsReader(r io.ReaderAt) (*Reader, error) {
 	rdr.flags = rdr.super.GetFlags()
 	switch rdr.super.CompressionType {
 	case gzipCompression:
-		rdr.decompressor = &ZlibDecompressor{}
+		rdr.decompressor = &zlibDecompressor{}
 	default:
 		return nil, ErrIncompatibleCompression
 	}
@@ -65,7 +64,6 @@ func NewSquashfsReader(r io.ReaderAt) (*Reader, error) {
 			tmp := make([]byte, 8)
 			_, err = r.ReadAt(tmp, offset)
 			if err != nil {
-				fmt.Println("Error while reading fragment block offsets")
 				return nil, err
 			}
 			rdr.fragOffsets = append(rdr.fragOffsets, binary.LittleEndian.Uint64(tmp))
@@ -76,9 +74,9 @@ func NewSquashfsReader(r io.ReaderAt) (*Reader, error) {
 }
 
 //GetFilesList returns a list of ALL files in the squashfs, going down every folder.
-//Paths that terminate in a folder end with /
+//Folders end in /
 func (r *Reader) GetFilesList() ([]string, error) {
-	inoderdr, err := r.NewMetadataReaderFromInodeRef(r.super.RootInodeRef)
+	inoderdr, err := r.newMetadataReaderFromInodeRef(r.super.RootInodeRef)
 	if err != nil {
 		return nil, err
 	}
@@ -95,20 +93,14 @@ func (r *Reader) GetFilesList() ([]string, error) {
 
 //readDir returns a list of all decendents of a given inode. Inode given MUST be a directory type.
 func (r *Reader) readDir(i *inode.Inode) (paths []string, err error) {
-	dir, err := r.ReadDirFromInode(i)
+	dir, err := r.readDirFromInode(i)
 	if err != nil {
 		return
 	}
 	for _, entry := range dir.Entries {
-		if entry.Init.Type == inode.BasicFileType {
-			in, _ := r.GetInodeFromEntry(&entry)
-			fil := in.Info.(inode.BasicFile)
-			fmt.Println("name:", entry.Name)
-			fmt.Println("frag index:", fil.Init.FragmentIndex, "frag offset:", fil.Init.FragmentOffset)
-		}
 		if entry.Init.Type == inode.BasicDirectoryType {
 			paths = append(paths)
-			i, err = r.GetInodeFromEntry(&entry)
+			i, err = r.getInodeFromEntry(&entry)
 			if err != nil {
 				return
 			}
@@ -127,13 +119,4 @@ func (r *Reader) readDir(i *inode.Inode) (paths []string, err error) {
 		}
 	}
 	return
-}
-
-//GetFileStructure returns ALL folders and files contained in the squashfs. Folders end with a "/".
-func (r *Reader) GetFileStructure() ([]string, error) {
-	in, err := r.GetInodeFromPath("")
-	if err != nil {
-		return nil, err
-	}
-	return r.readDir(in)
 }

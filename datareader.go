@@ -3,7 +3,6 @@ package squashfs
 import (
 	"bytes"
 	"errors"
-	"fmt"
 	"io"
 
 	"github.com/CalebQ42/GoSquashfs/internal/inode"
@@ -17,17 +16,17 @@ var (
 )
 
 //DataReader reads data from data blocks.
-type DataReader struct {
+type dataReader struct {
 	r             *Reader
 	offset        int64 //offset relative to the beginning of the squash file
-	blocks        []DataBlock
+	blocks        []dataBlock
 	curBlock      int //Which block in sizes is currently cached
 	curData       []byte
 	curReadOffset int //offset relative to the currently cached data
 }
 
 //DataBlock holds info about a given data block from it's size
-type DataBlock struct {
+type dataBlock struct {
 	begOffset        int64 //The offset relative to the beginning of the squash file. Makes it easier to seek to it.
 	size             uint32
 	compressed       bool
@@ -35,7 +34,7 @@ type DataBlock struct {
 }
 
 //NewDataBlock creates a new squashfs.datablock from a given size.
-func NewDataBlock(raw uint32) (dbs DataBlock) {
+func newDataBlock(raw uint32) (dbs dataBlock) {
 	dbs.compressed = raw&(1<<24) != (1 << 24)
 	dbs.size = raw &^ (1 << 24)
 	if !dbs.compressed {
@@ -45,12 +44,12 @@ func NewDataBlock(raw uint32) (dbs DataBlock) {
 }
 
 //NewDataReader creates a new data reader at the given offset, with the blocks defined by sizes
-func (r *Reader) NewDataReader(offset int64, sizes []uint32) (*DataReader, error) {
-	var dr DataReader
+func (r *Reader) newDataReader(offset int64, sizes []uint32) (*dataReader, error) {
+	var dr dataReader
 	dr.r = r
 	dr.offset = offset
 	for _, size := range sizes {
-		dr.blocks = append(dr.blocks, NewDataBlock(size))
+		dr.blocks = append(dr.blocks, newDataBlock(size))
 	}
 	err := dr.readCurBlock()
 	if err != nil {
@@ -60,8 +59,8 @@ func (r *Reader) NewDataReader(offset int64, sizes []uint32) (*DataReader, error
 }
 
 //NewDataReaderFromInode creates a new DataReader from a given inode. Inode must be of BasicFile or ExtendedFile types
-func (r *Reader) NewDataReaderFromInode(i *inode.Inode) (*DataReader, error) {
-	var rdr DataReader
+func (r *Reader) newDataReaderFromInode(i *inode.Inode) (*dataReader, error) {
+	var rdr dataReader
 	rdr.r = r
 	switch i.Type {
 	case inode.BasicFileType:
@@ -71,7 +70,7 @@ func (r *Reader) NewDataReaderFromInode(i *inode.Inode) (*DataReader, error) {
 		}
 		rdr.offset = int64(fil.Init.BlockStart)
 		for _, sizes := range fil.BlockSizes {
-			rdr.blocks = append(rdr.blocks, NewDataBlock(sizes))
+			rdr.blocks = append(rdr.blocks, newDataBlock(sizes))
 		}
 		if fil.Fragmented {
 			rdr.blocks = rdr.blocks[:len(rdr.blocks)-1]
@@ -83,7 +82,7 @@ func (r *Reader) NewDataReaderFromInode(i *inode.Inode) (*DataReader, error) {
 		}
 		rdr.offset = int64(fil.Init.BlockStart)
 		for _, sizes := range fil.BlockSizes {
-			rdr.blocks = append(rdr.blocks, NewDataBlock(sizes))
+			rdr.blocks = append(rdr.blocks, newDataBlock(sizes))
 		}
 		if fil.Fragmented {
 			rdr.blocks = rdr.blocks[:len(rdr.blocks)-1]
@@ -98,7 +97,7 @@ func (r *Reader) NewDataReaderFromInode(i *inode.Inode) (*DataReader, error) {
 	return &rdr, nil
 }
 
-func (d *DataReader) readNextBlock() error {
+func (d *dataReader) readNextBlock() error {
 	d.curBlock++
 	if d.curBlock >= len(d.blocks) {
 		d.curBlock--
@@ -108,15 +107,12 @@ func (d *DataReader) readNextBlock() error {
 	if err != nil {
 		d.curBlock--
 		d.readCurBlock()
-		fmt.Println("running back because of issues")
 		return err
 	}
-	fmt.Println("Read block success!")
 	return nil
 }
 
-func (d *DataReader) readCurBlock() error {
-	fmt.Println("reading into block", d.curBlock, "out of", len(d.blocks))
+func (d *dataReader) readCurBlock() error {
 	if d.curBlock >= len(d.blocks) {
 		return io.EOF
 	}
@@ -127,12 +123,9 @@ func (d *DataReader) readCurBlock() error {
 		return nil
 	}
 	sec := io.NewSectionReader(d.r.r, d.offset, int64(d.blocks[d.curBlock].size))
-	fmt.Println("block size", d.r.super.BlockSize)
-	fmt.Println("compressed size", int64(d.blocks[d.curBlock].size))
 	if d.blocks[d.curBlock].compressed {
 		btys, err := d.r.decompressor.Decompress(sec)
 		if err != nil {
-			fmt.Println("HERE!")
 			return err
 		}
 		d.blocks[d.curBlock].uncompressedSize = uint32(len(btys))
@@ -152,9 +145,8 @@ func (d *DataReader) readCurBlock() error {
 	return err
 }
 
-func (d *DataReader) Read(p []byte) (int, error) {
+func (d *dataReader) Read(p []byte) (int, error) {
 	if d.curReadOffset+len(p) < len(d.curData) {
-		fmt.Println("Enough data in cache for direct read")
 		for i := 0; i < len(p); i++ {
 			p[i] = d.curData[d.curReadOffset+i]
 		}
@@ -164,7 +156,6 @@ func (d *DataReader) Read(p []byte) (int, error) {
 	read := 0
 	for read < len(p) {
 		if d.curReadOffset == len(d.curData) {
-			fmt.Println("reading new block...")
 			err := d.readNextBlock()
 			if err != nil {
 				return read, err
@@ -176,7 +167,6 @@ func (d *DataReader) Read(p []byte) (int, error) {
 			if d.curReadOffset < len(d.curData) {
 				p[read] = d.curData[d.curReadOffset]
 			} else {
-				fmt.Println("breaking out!")
 				break
 			}
 		}

@@ -14,7 +14,7 @@ type metadata struct {
 }
 
 //MetadataReader is a block reader for metadata. It will automatically read the next block, when it reaches the end of a block.
-type MetadataReader struct {
+type metadataReader struct {
 	s          *Reader
 	offset     int64
 	headers    []*metadata
@@ -23,8 +23,8 @@ type MetadataReader struct {
 }
 
 //NewMetadataReader creates a new MetadataReader, beginning to read at the given offset. It will automatically cache the first block at the location.
-func (s *Reader) NewMetadataReader(offset int64) (*MetadataReader, error) {
-	var br MetadataReader
+func (s *Reader) newMetadataReader(offset int64) (*metadataReader, error) {
+	var br metadataReader
 	br.s = s
 	br.offset = offset
 	err := br.parseMetadata()
@@ -39,9 +39,9 @@ func (s *Reader) NewMetadataReader(offset int64) (*MetadataReader, error) {
 }
 
 //NewMetadataReaderFromInodeRef creates a new MetadataReader with the offsets set by the given inode reference.
-func (s *Reader) NewMetadataReaderFromInodeRef(ref uint64) (*MetadataReader, error) {
+func (s *Reader) newMetadataReaderFromInodeRef(ref uint64) (*metadataReader, error) {
 	offset, metaOffset := processInodeRef(ref)
-	br, err := s.NewMetadataReader(int64(s.super.InodeTableStart + offset))
+	br, err := s.newMetadataReader(int64(s.super.InodeTableStart + offset))
 	if err != nil {
 		return nil, err
 	}
@@ -52,7 +52,7 @@ func (s *Reader) NewMetadataReaderFromInodeRef(ref uint64) (*MetadataReader, err
 	return br, nil
 }
 
-func (br *MetadataReader) parseMetadata() error {
+func (br *metadataReader) parseMetadata() error {
 	var raw uint16
 	err := binary.Read(io.NewSectionReader(br.s.r, br.offset, 2), binary.LittleEndian, &raw)
 	if err != nil {
@@ -69,7 +69,7 @@ func (br *MetadataReader) parseMetadata() error {
 	return nil
 }
 
-func (br *MetadataReader) readNextDataBlock() error {
+func (br *metadataReader) readNextDataBlock() error {
 	meta := br.headers[len(br.headers)-1]
 	r := io.NewSectionReader(br.s.r, br.offset, int64(meta.size))
 	if meta.compressed {
@@ -92,7 +92,7 @@ func (br *MetadataReader) readNextDataBlock() error {
 }
 
 //Read reads bytes into the given byte slice. Returns the amount of data read.
-func (br *MetadataReader) Read(p []byte) (int, error) {
+func (br *metadataReader) Read(p []byte) (int, error) {
 	if br.readOffset+len(p) < len(br.data) {
 		for i := 0; i < len(p); i++ {
 			p[i] = br.data[br.readOffset+i]
@@ -130,7 +130,7 @@ func (br *MetadataReader) Read(p []byte) (int, error) {
 //Seek will seek to the specified location (if possible). Seeking is relative to the uncompressed data.
 //When io.SeekCurrent or io.SeekStart is set, if seeking would put the offset beyond the current cached data, it will try to read the next data blocks to accomodate. On a failure it will seek to the end of the data.
 //When io.SeekEnd is set, it wil seek reletive to the currently cached data.
-func (br *MetadataReader) Seek(offset int64, whence int) (int64, error) {
+func (br *metadataReader) Seek(offset int64, whence int) (int64, error) {
 	switch whence {
 	case io.SeekCurrent:
 		br.readOffset += int(offset)

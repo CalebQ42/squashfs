@@ -10,7 +10,7 @@ const (
 )
 
 //Superblock contains important information about a squashfs file. Located at the very front of the archive.
-type Superblock struct {
+type superblock struct {
 	Magic            uint32
 	InodeCount       uint32
 	CreationTime     uint32
@@ -33,7 +33,7 @@ type Superblock struct {
 }
 
 //SuperblockFlags is the parsed version of Superblock.Flags
-type SuperblockFlags struct {
+type superblockFlags struct {
 	UncompressedInodes    bool
 	UncompressedData      bool
 	Check                 bool
@@ -49,8 +49,8 @@ type SuperblockFlags struct {
 }
 
 //GetFlags returns a SuperblockFlags for a given superblock.
-func (s *Superblock) GetFlags() SuperblockFlags {
-	return SuperblockFlags{
+func (s *superblock) GetFlags() superblockFlags {
+	return superblockFlags{
 		UncompressedInodes:    s.Flags&0x1 == 0x1,
 		UncompressedData:      s.Flags&0x2 == 0x2,
 		Check:                 s.Flags&0x4 == 0x4,

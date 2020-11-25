@@ -3,16 +3,15 @@ package squashfs
 import (
 	"bytes"
 	"errors"
-	"fmt"
 	"io"
 
 	"github.com/CalebQ42/GoSquashfs/internal/inode"
 )
 
-//FileReader provides a io.Reader interface for files within
+//FileReader provides a io.Reader interface for files within a squashfs archive
 type FileReader struct {
 	r            *Reader
-	data         *DataReader
+	data         *dataReader
 	fragmentData []byte
 	fragged      bool
 	fragOnly     bool
@@ -49,21 +48,19 @@ func (r *Reader) ReadFile(location string) (*FileReader, error) {
 		rdr.FileSize = int(fil.Init.Size)
 	}
 	if rdr.fragged {
-		rdr.fragmentData, err = r.GetFragmentDataFromInode(in)
+		rdr.fragmentData, err = r.getFragmentDataFromInode(in)
 		if err != nil {
 			return nil, err
 		}
 	}
 	if !rdr.fragOnly {
-		rdr.data, err = r.NewDataReaderFromInode(in)
+		rdr.data, err = r.newDataReaderFromInode(in)
 	}
 	return &rdr, nil
 }
 
 func (f *FileReader) Read(p []byte) (int, error) {
-	fmt.Println("reading!", len(p))
 	if f.fragOnly {
-		fmt.Println("HII")
 		n, err := bytes.NewBuffer(f.fragmentData[f.read:]).Read(p)
 		f.read += n
 		if err != nil {
@@ -75,7 +72,6 @@ func (f *FileReader) Read(p []byte) (int, error) {
 	n, err := f.data.Read(p)
 	read += n
 	if f.fragged && err == io.EOF {
-		fmt.Println("Trying to read fragment AFTER main data")
 		n, err = bytes.NewBuffer(f.fragmentData).Read(p[read:])
 		read += n
 		if err != nil {
@@ -84,6 +80,5 @@ func (f *FileReader) Read(p []byte) (int, error) {
 	} else if err != nil {
 		return read, err
 	}
-	fmt.Println("read", n)
 	return read, nil
 }

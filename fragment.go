@@ -3,7 +3,6 @@ package squashfs
 import (
 	"encoding/binary"
 	"errors"
-	"fmt"
 	"io"
 
 	"github.com/CalebQ42/GoSquashfs/internal/inode"
@@ -18,7 +17,7 @@ type FragmentEntry struct {
 
 //GetFragmentDataFromInode returns the fragment data for a given inode.
 //If the inode does not have a fragment, harmlessly returns an empty slice without an error.
-func (r *Reader) GetFragmentDataFromInode(in *inode.Inode) ([]byte, error) {
+func (r *Reader) getFragmentDataFromInode(in *inode.Inode) ([]byte, error) {
 	var size uint32
 	var fragIndex uint32
 	var fragOffset uint32
@@ -50,7 +49,7 @@ func (r *Reader) GetFragmentDataFromInode(in *inode.Inode) ([]byte, error) {
 		return nil, errors.New("Inode type not supported")
 	}
 	//reading the fragment entry first
-	fragEntryRdr, err := r.NewMetadataReader(int64(r.fragOffsets[int(fragIndex/512)]))
+	fragEntryRdr, err := r.newMetadataReader(int64(r.fragOffsets[int(fragIndex/512)]))
 	if err != nil {
 		return nil, err
 	}
@@ -64,7 +63,7 @@ func (r *Reader) GetFragmentDataFromInode(in *inode.Inode) ([]byte, error) {
 		return nil, err
 	}
 	//now reading the actual fragment
-	dr, err := r.NewDataReader(int64(entry.Start), []uint32{entry.Size})
+	dr, err := r.newDataReader(int64(entry.Start), []uint32{entry.Size})
 	if err != nil {
 		return nil, err
 	}
@@ -77,6 +76,5 @@ func (r *Reader) GetFragmentDataFromInode(in *inode.Inode) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	fmt.Println("read fragment with size", len(tmp))
 	return tmp, nil
 }
