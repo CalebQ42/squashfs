@@ -5,8 +5,8 @@ import (
 	"io"
 	"strings"
 
-	"github.com/CalebQ42/GoSquashfs/internal/directory"
-	"github.com/CalebQ42/GoSquashfs/internal/inode"
+	"github.com/CalebQ42/squashfs/internal/directory"
+	"github.com/CalebQ42/squashfs/internal/inode"
 )
 
 var (

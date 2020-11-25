@@ -6,7 +6,7 @@ import (
 	"io"
 	"math"
 
-	"github.com/CalebQ42/GoSquashfs/internal/inode"
+	"github.com/CalebQ42/squashfs/internal/inode"
 )
 
 const (

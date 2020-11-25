@@ -5,7 +5,7 @@ import (
 	"errors"
 	"io"
 
-	"github.com/CalebQ42/GoSquashfs/internal/inode"
+	"github.com/CalebQ42/squashfs/internal/inode"
 )
 
 //FileReader provides a io.Reader interface for files within a squashfs archive
