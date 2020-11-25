@@ -21,9 +21,9 @@ Thanks also to [distri's squashfs library](https://github.com/distr1/distri/tree
 
 # Not Working (Yet). Not necessarily in order.
 
-* Rename repo so it's easier to import
 * Provide an easy interface to find and list files and their properties
     * Maybe squashfs.File
+* Make device, socket, symlink, and all extended types of inode work properly. (I need to find an archive that uses it first.)
 * Extracting files
     * from inodes.
     * from file info.
@@ -41,4 +41,4 @@ Thanks also to [distri's squashfs library](https://github.com/distr1/distri/tree
 
 # Where I'm at
 
-* v0.1 is the first working version!
+* Working on the File interface that should make it easier to deal with squashfs files. I'm also trying to make them capable for when I get squashing working.
