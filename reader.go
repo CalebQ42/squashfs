@@ -129,6 +129,7 @@ func (r *Reader) readDir(i *inode.Inode) (paths []string, err error) {
 	return
 }
 
+//GetFileStructure returns ALL folders and files contained in the squashfs. Folders end with a "/".
 func (r *Reader) GetFileStructure() ([]string, error) {
 	in, err := r.GetInodeFromPath("")
 	if err != nil {

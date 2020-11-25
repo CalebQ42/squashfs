@@ -9,6 +9,7 @@ const (
 	zstdCompression
 )
 
+//Superblock contains important information about a squashfs file. Located at the very front of the archive.
 type Superblock struct {
 	Magic            uint32
 	InodeCount       uint32
@@ -31,6 +32,7 @@ type Superblock struct {
 	ExportTableStart uint64
 }
 
+//SuperblockFlags is the parsed version of Superblock.Flags
 type SuperblockFlags struct {
 	UncompressedInodes    bool
 	UncompressedData      bool
@@ -46,6 +48,7 @@ type SuperblockFlags struct {
 	UncompressedIDs       bool
 }
 
+//GetFlags returns a SuperblockFlags for a given superblock.
 func (s *Superblock) GetFlags() SuperblockFlags {
 	return SuperblockFlags{
 		UncompressedInodes:    s.Flags&0x1 == 0x1,

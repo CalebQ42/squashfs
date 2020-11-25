@@ -13,6 +13,7 @@ type metadata struct {
 	compressed bool
 }
 
+//MetadataReader is a block reader for metadata. It will automatically read the next block, when it reaches the end of a block.
 type MetadataReader struct {
 	s          *Reader
 	offset     int64
@@ -21,6 +22,7 @@ type MetadataReader struct {
 	readOffset int
 }
 
+//NewMetadataReader creates a new MetadataReader, beginning to read at the given offset. It will automatically cache the first block at the location.
 func (s *Reader) NewMetadataReader(offset int64) (*MetadataReader, error) {
 	var br MetadataReader
 	br.s = s
@@ -36,6 +38,7 @@ func (s *Reader) NewMetadataReader(offset int64) (*MetadataReader, error) {
 	return &br, nil
 }
 
+//NewMetadataReaderFromInodeRef creates a new MetadataReader with the offsets set by the given inode reference.
 func (s *Reader) NewMetadataReaderFromInodeRef(ref uint64) (*MetadataReader, error) {
 	offset, metaOffset := processInodeRef(ref)
 	br, err := s.NewMetadataReader(int64(s.super.InodeTableStart + offset))
@@ -88,6 +91,7 @@ func (br *MetadataReader) readNextDataBlock() error {
 	return nil
 }
 
+//Read reads bytes into the given byte slice. Returns the amount of data read.
 func (br *MetadataReader) Read(p []byte) (int, error) {
 	if br.readOffset+len(p) < len(br.data) {
 		for i := 0; i < len(p); i++ {
@@ -123,7 +127,7 @@ func (br *MetadataReader) Read(p []byte) (int, error) {
 	return read, nil
 }
 
-//Seek will seek to the specified location (if possible).
+//Seek will seek to the specified location (if possible). Seeking is relative to the uncompressed data.
 //When io.SeekCurrent or io.SeekStart is set, if seeking would put the offset beyond the current cached data, it will try to read the next data blocks to accomodate. On a failure it will seek to the end of the data.
 //When io.SeekEnd is set, it wil seek reletive to the currently cached data.
 func (br *MetadataReader) Seek(offset int64, whence int) (int64, error) {

@@ -106,6 +106,8 @@ func (d *DataReader) readCurBlock() error {
 		d.curData = make([]byte, d.r.super.BlockSize)
 		d.blocks[d.curBlock].uncompressedSize = d.r.super.BlockSize
 		d.blocks[d.curBlock].begOffset = d.offset
+		fmt.Println("dat red")
+		fmt.Println(len(d.curData))
 		return nil
 	}
 	sec := io.NewSectionReader(d.r.r, d.offset, int64(d.blocks[d.curBlock].size))
@@ -118,6 +120,8 @@ func (d *DataReader) readCurBlock() error {
 		d.curData = btys
 		d.blocks[d.curBlock].begOffset = d.offset
 		d.offset += int64(d.blocks[d.curBlock].size)
+		fmt.Println("dat red")
+		fmt.Println(len(d.curData))
 		return nil
 	}
 	var buf bytes.Buffer
