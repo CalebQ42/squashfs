@@ -1,5 +1,7 @@
 # GoSquashfs
 
+[![PkgGoDev](https://pkg.go.dev/badge/github.com/CalebQ42/GoSquashfs)](https://pkg.go.dev/github.com/CalebQ42/GoSquashfs)
+
 A PURE Go library to read and write squashfs.
 
 Currently, you can read a squashfs and extract files (only files at the moment). Many things are public that shouldn't be, but you can use it by using NewSquashfsReader and subsequent ReadFile.
