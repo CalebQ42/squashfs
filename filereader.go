@@ -28,7 +28,7 @@ var (
 func (r *Reader) ReadFile(location string) (*FileReader, error) {
 	var rdr FileReader
 	rdr.r = r
-	in, err := r.GetInodeFromPath(location)
+	in, err := r.getInodeFromPath(location)
 	if err != nil {
 		return nil, err
 	}

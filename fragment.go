@@ -9,7 +9,7 @@ import (
 )
 
 //FragmentEntry is an entry in the fragment table
-type FragmentEntry struct {
+type fragmentEntry struct {
 	Start  uint64
 	Size   uint32
 	Unused uint32
@@ -57,7 +57,7 @@ func (r *Reader) getFragmentDataFromInode(in *inode.Inode) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	var entry FragmentEntry
+	var entry fragmentEntry
 	err = binary.Read(fragEntryRdr, binary.LittleEndian, &entry)
 	if err != nil {
 		return nil, err
