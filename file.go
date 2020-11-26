@@ -24,7 +24,7 @@ type File struct {
 	Name    string       //The name of the file or folder. Root folder will not have a name ("")
 	Parent  *File        //The parent directory. If it's the root directory, will be nil
 	Reader  io.Reader    //Underlying reader. When writing, will probably be an os.File. When reading this is kept nil UNTIL reading to save memory.
-	Path    string       //The folder the File is located in.
+	Path    string       //The path to the folder the File is located in.
 	r       *Reader      //The squashfs.Reader where this file is contained.
 	in      *inode.Inode //Underlyting inode when reading.
 	filType int          //The file's type, using inode types.

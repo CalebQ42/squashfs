@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"math"
+	"strings"
 
 	"github.com/CalebQ42/squashfs/internal/inode"
 )
@@ -97,11 +98,90 @@ func (r *Reader) GetAllFiles() (fils []*File, err error) {
 	return root.GetChildrenRecursively()
 }
 
-//FindFile returns the first file (in the same order as Reader.GetAllFiles) that the given function returns true for
+//FindFile returns the first file (in the same order as Reader.GetAllFiles) that the given function returns true for. Returns nil if nothing is found.
 func (r *Reader) FindFile(query func(*File) bool) *File {
 	root, err := r.GetRootFolder()
 	if err != nil {
 		return nil
 	}
+	fils, err := root.GetChildren()
+	if err != nil {
+		return nil
+	}
+	var childrenDirs []*File
+	for _, fil := range fils {
+		if query(fil) {
+			return fil
+		}
+		if fil.IsDir() {
+			childrenDirs = append(childrenDirs, fil)
+		}
+	}
+	for len(childrenDirs) != 0 {
+		var tmp []*File
+		for _, dirs := range childrenDirs {
+			chil, err := dirs.GetChildren()
+			if err != nil {
+				return nil
+			}
+			for _, child := range chil {
+				if query(child) {
+					return child
+				}
+				if child.IsDir() {
+					tmp = append(tmp, child)
+				}
+			}
+		}
+		childrenDirs = tmp
+	}
+	return nil
+}
 
+//FindAll returns all files where the given function returns true.
+func (r *Reader) FindAll(query func(*File) bool) (all []*File) {
+	root, err := r.GetRootFolder()
+	if err != nil {
+		return nil
+	}
+	fils, err := root.GetChildrenRecursively()
+	if err != nil {
+		return nil
+	}
+	for _, fil := range fils {
+		if query(fil) {
+			all = append(all, fil)
+		}
+	}
+	return
+}
+
+//GetFileAtPath will return the file at the given path. If the file cannot be found, will return nil.
+func (r *Reader) GetFileAtPath(path string) *File {
+	path = "/" + strings.TrimSuffix(strings.TrimPrefix(path, "/"), "/")
+	pathDirs := strings.Split(path, "/")
+	dir, err := r.GetRootFolder()
+	if err != nil {
+		return nil
+	}
+	children, err := dir.GetChildren()
+	if err != nil {
+		return nil
+	}
+	for _, folder := range pathDirs {
+		for _, child := range children {
+			if child.Name == folder {
+				dir = child
+				children, err = dir.GetChildren()
+				if err != nil {
+					return nil
+				}
+				break
+			}
+		}
+	}
+	if dir.Path+"/"+dir.Name == path {
+		return dir
+	}
+	return nil
 }
