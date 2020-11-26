@@ -22,7 +22,7 @@ var (
 	ErrCompressorOptions = errors.New("Compressor options is not currently supported")
 	//ErrFragmentTableIssues is returned if there's trouble reading the fragment table when creating a reader.
 	//When this is returned, the reader is still returned.
-	ErrFragmentTableIssues = errors.New("Trouble while reading the fragment table")
+	errFragmentTableIssues = errors.New("Trouble while reading the fragment table")
 )
 
 //Reader processes and reads a squashfs archive.
@@ -73,50 +73,35 @@ func NewSquashfsReader(r io.ReaderAt) (*Reader, error) {
 	return &rdr, nil
 }
 
-//GetFilesList returns a list of ALL files in the squashfs, going down every folder.
-//Folders end in /
-func (r *Reader) GetFilesList() ([]string, error) {
-	inoderdr, err := r.newMetadataReaderFromInodeRef(r.super.RootInodeRef)
+//GetRootFolder returns a squashfs.File that references the root directory of the squashfs archive.
+func (r *Reader) GetRootFolder() (root *File, err error) {
+	mr, err := r.newMetadataReaderFromInodeRef(r.super.RootInodeRef)
 	if err != nil {
 		return nil, err
 	}
-	i, err := inode.ProcessInode(inoderdr, r.super.BlockSize)
+	root.in, err = inode.ProcessInode(mr, r.super.BlockSize)
 	if err != nil {
 		return nil, err
 	}
-	paths, err := r.readDir(i)
-	if err != nil {
-		return nil, err
-	}
-	return paths, nil
+	root.Path = "/"
+	root.filType = root.in.Type
+	return root, nil
 }
 
-//readDir returns a list of all decendents of a given inode. Inode given MUST be a directory type.
-func (r *Reader) readDir(i *inode.Inode) (paths []string, err error) {
-	dir, err := r.readDirFromInode(i)
+//GetAllFiles returns a slice of ALL files and folders contained in the squashfs.
+func (r *Reader) GetAllFiles() (fils []*File, err error) {
+	root, err := r.GetRootFolder()
 	if err != nil {
-		return
+		return nil, err
 	}
-	for _, entry := range dir.Entries {
-		if entry.Init.Type == inode.BasicDirectoryType {
-			paths = append(paths)
-			i, err = r.getInodeFromEntry(&entry)
-			if err != nil {
-				return
-			}
-			var subPaths []string
-			subPaths, err = r.readDir(i)
-			if err != nil {
-				return
-			}
-			for pathI := range subPaths {
-				subPaths[pathI] = entry.Name + "/" + subPaths[pathI]
-			}
-			paths = append(paths, entry.Name+"/")
-			paths = append(paths, subPaths...)
-		} else {
-			paths = append(paths, entry.Name)
-		}
+	return root.GetChildrenRecursively()
+}
+
+//FindFile returns the first file (in the same order as Reader.GetAllFiles) that the given function returns true for
+func (r *Reader) FindFile(query func(*File) bool) *File {
+	root, err := r.GetRootFolder()
+	if err != nil {
+		return nil
 	}
-	return
+
 }

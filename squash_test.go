@@ -43,9 +43,11 @@ func TestMain(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ext, err := rdr.ReadFile(extractionFil)
-	if err != nil {
-		t.Fatal(err)
+	ext := rdr.FindFile(func(fil *File) bool {
+		return fil.Name == extractionFil
+	})
+	if ext == nil {
+		t.Fatal("Cannot find file")
 	}
 	_, err = io.Copy(desk, ext)
 	if err != nil {

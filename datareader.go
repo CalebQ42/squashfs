@@ -10,9 +10,9 @@ import (
 
 var (
 	//ErrInodeNotFile is given when giving an inode, but the function requires a file inode.
-	ErrInodeNotFile = errors.New("Given inode is NOT a file type")
+	errInodeNotFile = errors.New("Given inode is NOT a file type")
 	//ErrInodeOnlyFragment is given when trying to make a DataReader from an inode, but the inode only had data in a fragment
-	ErrInodeOnlyFragment = errors.New("Given inode ONLY has fragment data")
+	errInodeOnlyFragment = errors.New("Given inode ONLY has fragment data")
 )
 
 //DataReader reads data from data blocks.
@@ -66,7 +66,7 @@ func (r *Reader) newDataReaderFromInode(i *inode.Inode) (*dataReader, error) {
 	case inode.BasicFileType:
 		fil := i.Info.(inode.BasicFile)
 		if fil.Init.BlockStart == 0 {
-			return nil, ErrInodeOnlyFragment
+			return nil, errInodeOnlyFragment
 		}
 		rdr.offset = int64(fil.Init.BlockStart)
 		for _, sizes := range fil.BlockSizes {
@@ -78,7 +78,7 @@ func (r *Reader) newDataReaderFromInode(i *inode.Inode) (*dataReader, error) {
 	case inode.ExtFileType:
 		fil := i.Info.(inode.ExtendedFile)
 		if fil.Init.BlockStart == 0 {
-			return nil, ErrInodeOnlyFragment
+			return nil, errInodeOnlyFragment
 		}
 		rdr.offset = int64(fil.Init.BlockStart)
 		for _, sizes := range fil.BlockSizes {
@@ -88,7 +88,7 @@ func (r *Reader) newDataReaderFromInode(i *inode.Inode) (*dataReader, error) {
 			rdr.blocks = rdr.blocks[:len(rdr.blocks)-1]
 		}
 	default:
-		return nil, ErrInodeNotFile
+		return nil, errInodeNotFile
 	}
 	err := rdr.readCurBlock()
 	if err != nil {
@@ -145,7 +145,16 @@ func (d *dataReader) readCurBlock() error {
 	return err
 }
 
+//Close frees up the curData from memory
+func (d *dataReader) Close() error {
+	d.curData = nil
+	return nil
+}
+
 func (d *dataReader) Read(p []byte) (int, error) {
+	if d.curData == nil {
+		d.readCurBlock()
+	}
 	if d.curReadOffset+len(p) < len(d.curData) {
 		for i := 0; i < len(p); i++ {
 			p[i] = d.curData[d.curReadOffset+i]

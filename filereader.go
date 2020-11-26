@@ -9,9 +9,10 @@ import (
 )
 
 //FileReader provides a io.Reader interface for files within a squashfs archive
-type FileReader struct {
+type fileReader struct {
 	r            *Reader
 	data         *dataReader
+	in           *inode.Inode
 	fragmentData []byte
 	fragged      bool
 	fragOnly     bool
@@ -25,13 +26,9 @@ var (
 )
 
 //ReadFile provides a squashfs.FileReader for the file at the given location.
-func (r *Reader) ReadFile(location string) (*FileReader, error) {
-	var rdr FileReader
-	rdr.r = r
-	in, err := r.getInodeFromPath(location)
-	if err != nil {
-		return nil, err
-	}
+func (r *Reader) newFileReader(in *inode.Inode) (*fileReader, error) {
+	var rdr fileReader
+	rdr.in = in
 	if in.Type != inode.BasicFileType && in.Type != inode.ExtFileType {
 		return nil, ErrPathIsNotFile
 	}
@@ -47,6 +44,7 @@ func (r *Reader) ReadFile(location string) (*FileReader, error) {
 		rdr.fragOnly = fil.Init.BlockStart == 0
 		rdr.FileSize = int(fil.Init.Size)
 	}
+	var err error
 	if rdr.fragged {
 		rdr.fragmentData, err = r.getFragmentDataFromInode(in)
 		if err != nil {
@@ -59,7 +57,14 @@ func (r *Reader) ReadFile(location string) (*FileReader, error) {
 	return &rdr, nil
 }
 
-func (f *FileReader) Read(p []byte) (int, error) {
+//Close runs Close on the data reader and frees the fragmentdata
+func (f *fileReader) Close() error {
+	f.data.Close()
+	f.fragmentData = nil
+	return nil
+}
+
+func (f *fileReader) Read(p []byte) (int, error) {
 	if f.fragOnly {
 		n, err := bytes.NewBuffer(f.fragmentData[f.read:]).Read(p)
 		f.read += n
@@ -72,6 +77,9 @@ func (f *FileReader) Read(p []byte) (int, error) {
 	n, err := f.data.Read(p)
 	read += n
 	if f.fragged && err == io.EOF {
+		if f.fragmentData == nil {
+			f.fragmentData, err = f.r.getFragmentDataFromInode(f.in)
+		}
 		n, err = bytes.NewBuffer(f.fragmentData).Read(p[read:])
 		read += n
 		if err != nil {

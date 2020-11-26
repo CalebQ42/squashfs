@@ -11,6 +11,10 @@ type decompressor interface {
 	Decompress(io.Reader) ([]byte, error)
 }
 
+type compressor interface {
+	Compress(io.Reader) ([]byte, error)
+}
+
 //ZlibDecompressor is a decompressor for gzip type compression
 type zlibDecompressor struct{}
 
