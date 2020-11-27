@@ -59,7 +59,9 @@ func (r *Reader) newFileReader(in *inode.Inode) (*fileReader, error) {
 
 //Close runs Close on the data reader and frees the fragmentdata
 func (f *fileReader) Close() error {
-	f.data.Close()
+	if f.data != nil {
+		f.data.Close()
+	}
 	f.fragmentData = nil
 	return nil
 }

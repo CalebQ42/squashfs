@@ -32,6 +32,7 @@ type File struct {
 
 //get a File from a directory.entry
 func (r *Reader) newFileFromDirEntry(entry *directory.Entry) (fil *File, err error) {
+	fil = new(File)
 	fil.in, err = r.getInodeFromEntry(entry)
 	if err != nil {
 		return nil, err
@@ -39,12 +40,12 @@ func (r *Reader) newFileFromDirEntry(entry *directory.Entry) (fil *File, err err
 	fil.Name = entry.Name
 	fil.r = r
 	fil.filType = fil.in.Type
-
 	return
 }
 
 //GetChildren returns a *squashfs.File slice of every direct child of the directory. If the File is not a directory, will return ErrNotDirectory
 func (f *File) GetChildren() (children []*File, err error) {
+	children = make([]*File, 0)
 	if f.r == nil {
 		return nil, ErrNotReading
 	}
@@ -62,7 +63,9 @@ func (f *File) GetChildren() (children []*File, err error) {
 			return
 		}
 		fil.Parent = f
-		fil.Path = f.Path + "/" + f.Name
+		if f.Name != "" {
+			fil.Path = f.Path + "/" + f.Name
+		}
 		children = append(children, fil)
 	}
 	return
@@ -70,6 +73,7 @@ func (f *File) GetChildren() (children []*File, err error) {
 
 //GetChildrenRecursively returns ALL children. Goes down ALL folder paths.
 func (f *File) GetChildrenRecursively() (children []*File, err error) {
+	children = make([]*File, 0)
 	if f.r == nil {
 		return nil, ErrNotReading
 	}
@@ -104,7 +108,7 @@ func (f *File) IsDir() bool {
 }
 
 //Close frees up the memory held up by the underlying reader. Should NOT be called when writing.
-//When reading, Close is safe to use, as any subsequent Read calls reinitialize the reader.
+//When reading, Close is safe to use, but any subsequent Read calls resets to the beginning of the file.
 func (f *File) Close() error {
 	if f.IsDir() {
 		return ErrNotFile

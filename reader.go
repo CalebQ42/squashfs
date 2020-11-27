@@ -76,6 +76,7 @@ func NewSquashfsReader(r io.ReaderAt) (*Reader, error) {
 
 //GetRootFolder returns a squashfs.File that references the root directory of the squashfs archive.
 func (r *Reader) GetRootFolder() (root *File, err error) {
+	root = new(File)
 	mr, err := r.newMetadataReaderFromInodeRef(r.super.RootInodeRef)
 	if err != nil {
 		return nil, err
@@ -86,6 +87,7 @@ func (r *Reader) GetRootFolder() (root *File, err error) {
 	}
 	root.Path = "/"
 	root.filType = root.in.Type
+	root.r = r
 	return root, nil
 }
 
@@ -158,7 +160,7 @@ func (r *Reader) FindAll(query func(*File) bool) (all []*File) {
 
 //GetFileAtPath will return the file at the given path. If the file cannot be found, will return nil.
 func (r *Reader) GetFileAtPath(path string) *File {
-	path = "/" + strings.TrimSuffix(strings.TrimPrefix(path, "/"), "/")
+	path = strings.TrimSuffix(strings.TrimPrefix(path, "/"), "/")
 	pathDirs := strings.Split(path, "/")
 	dir, err := r.GetRootFolder()
 	if err != nil {
@@ -172,15 +174,19 @@ func (r *Reader) GetFileAtPath(path string) *File {
 		for _, child := range children {
 			if child.Name == folder {
 				dir = child
-				children, err = dir.GetChildren()
-				if err != nil {
-					return nil
+				if dir.IsDir() {
+					children, err = dir.GetChildren()
+					if err != nil {
+						return nil
+					}
+				} else {
+					children = make([]*File, 0)
 				}
 				break
 			}
 		}
 	}
-	if dir.Path+"/"+dir.Name == path {
+	if dir.Path+"/"+dir.Name == "/"+path {
 		return dir
 	}
 	return nil

@@ -1,9 +1,11 @@
 package squashfs
 
 import (
+	"fmt"
 	"io"
 	"net/http"
 	"os"
+	"strings"
 	"testing"
 
 	goappimage "github.com/CalebQ42/GoAppImage"
@@ -27,7 +29,7 @@ func TestMain(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-	} else {
+	} else if err != nil {
 		t.Fatal(err)
 	}
 	defer aiFil.Close()
@@ -37,22 +39,31 @@ func TestMain(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	extractionFil := "code-oss.desktop"
-	os.Remove(wd + "/testing/" + extractionFil)
-	desk, err := os.Create(wd + "/testing/" + extractionFil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	ext := rdr.FindFile(func(fil *File) bool {
-		return fil.Name == extractionFil
+	rdr.FindAll(func(fil *File) bool {
+		return strings.HasSuffix(fil.Name, ".desktop")
 	})
-	if ext == nil {
-		t.Fatal("Cannot find file")
-	}
-	_, err = io.Copy(desk, ext)
+	fils, err := rdr.GetAllFiles()
 	if err != nil {
 		t.Fatal(err)
 	}
+	for _, fil := range fils {
+		fmt.Println(fil.Path + "/" + fil.Name)
+	}
+	// extractionFil := "code-oss.desktop"
+	// os.Remove(wd + "/testing/" + extractionFil)
+	// desk, err := os.Create(wd + "/testing/" + extractionFil)
+	// if err != nil {
+	// 	t.Fatal(err)
+	// }
+	// ext := rdr.GetFileAtPath(extractionFil)
+	// if ext == nil {
+	// 	t.Fatal("Cannot find file")
+	// }
+	// defer ext.Close()
+	// _, err = io.Copy(desk, ext)
+	// if err != nil {
+	// 	t.Fatal(err)
+	// }
 	t.Fatal("No problems here!")
 }
 
