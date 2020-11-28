@@ -118,10 +118,19 @@ func (f *File) GetFileAtPath(path string) *File {
 		path = strings.TrimPrefix(path, "./")
 	}
 	split := strings.Split(path, "/")
+	if split[0] == ".." && f.Name == "" {
+		return nil
+	} else if split[0] == ".." {
+		if f.Parent != nil {
+			return f.Parent.GetFileAtPath(strings.Join(split[1:], "/"))
+		}
+		return nil
+	}
 	children, err := f.GetChildren()
 	if err != nil {
 		return nil
 	}
+
 	for _, child := range children {
 		if child.Name == split[0] {
 			return child.GetFileAtPath(strings.Join(split[1:], "/"))
