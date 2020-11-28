@@ -1,4 +1,4 @@
-# squashfs [![PkgGoDev](https://pkg.go.dev/badge/github.com/CalebQ42/GoSquashfs)](https://pkg.go.dev/github.com/CalebQ42/GoSquashfs)
+# squashfs [![PkgGoDev](https://pkg.go.dev/badge/github.com/CalebQ42/squashfs)](https://pkg.go.dev/github.com/CalebQ42/squashfs)
 
 A PURE Go library to read and write squashfs.
 
