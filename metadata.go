@@ -52,6 +52,17 @@ func (s *Reader) newMetadataReaderFromInodeRef(ref uint64) (*metadataReader, err
 	return br, nil
 }
 
+//ProcessInodeRef processes an inode reference and returns two values
+//
+//The first value is the inode table offset. AKA, it's where the metadata block of the inode STARTS relative to the inode table.
+//
+//The second value is the offset of the inode, INSIDE of the metadata.
+func processInodeRef(inodeRef uint64) (tableOffset uint64, metaOffset uint64) {
+	tableOffset = inodeRef >> 16
+	metaOffset = inodeRef &^ 0xFFFFFFFF0000
+	return
+}
+
 func (br *metadataReader) parseMetadata() error {
 	var raw uint16
 	err := binary.Read(io.NewSectionReader(br.s.r, br.offset, 2), binary.LittleEndian, &raw)

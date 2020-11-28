@@ -22,7 +22,7 @@ type fileReader struct {
 
 var (
 	//ErrPathIsNotFile returns when trying to read from a file, but the given path is NOT a file.
-	ErrPathIsNotFile = errors.New("The given path is not a file")
+	errPathIsNotFile = errors.New("The given path is not a file")
 )
 
 //ReadFile provides a squashfs.FileReader for the file at the given location.
@@ -30,7 +30,7 @@ func (r *Reader) newFileReader(in *inode.Inode) (*fileReader, error) {
 	var rdr fileReader
 	rdr.in = in
 	if in.Type != inode.BasicFileType && in.Type != inode.ExtFileType {
-		return nil, ErrPathIsNotFile
+		return nil, errPathIsNotFile
 	}
 	switch in.Type {
 	case inode.BasicFileType:

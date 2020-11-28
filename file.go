@@ -11,11 +11,11 @@ import (
 
 var (
 	//ErrNotDirectory is returned when you're trying to do directory things with a non-directory
-	ErrNotDirectory = errors.New("File is not a directory")
+	errNotDirectory = errors.New("File is not a directory")
 	//ErrNotFile is returned when you're trying to do file things with a directory
-	ErrNotFile = errors.New("File is not a file")
+	errNotFile = errors.New("File is not a file")
 	//ErrNotReading is returned when running functions that are only meant to be used when reading a squashfs
-	ErrNotReading = errors.New("Function only supported when reading a squashfs")
+	errNotReading = errors.New("Function only supported when reading a squashfs")
 )
 
 //File is the main way to interact with files within squashfs, or when putting files into a squashfs.
@@ -48,10 +48,10 @@ func (r *Reader) newFileFromDirEntry(entry *directory.Entry) (fil *File, err err
 func (f *File) GetChildren() (children []*File, err error) {
 	children = make([]*File, 0)
 	if f.r == nil {
-		return nil, ErrNotReading
+		return nil, errNotReading
 	}
 	if !f.IsDir() {
-		return nil, ErrNotDirectory
+		return nil, errNotDirectory
 	}
 	dir, err := f.r.readDirFromInode(f.in)
 	if err != nil {
@@ -76,10 +76,10 @@ func (f *File) GetChildren() (children []*File, err error) {
 func (f *File) GetChildrenRecursively() (children []*File, err error) {
 	children = make([]*File, 0)
 	if f.r == nil {
-		return nil, ErrNotReading
+		return nil, errNotReading
 	}
 	if !f.IsDir() {
-		return nil, ErrNotDirectory
+		return nil, errNotDirectory
 	}
 	chil, err := f.GetChildren()
 	if err != nil {
@@ -176,7 +176,7 @@ func (f *File) GetSymlinkFile() *File {
 //When reading, Close is safe to use, but any subsequent Read calls resets to the beginning of the file.
 func (f *File) Close() error {
 	if f.IsDir() {
-		return ErrNotFile
+		return errNotFile
 	}
 	if closer, is := f.Reader.(io.Closer); is {
 		closer.Close()
@@ -198,4 +198,54 @@ func (f *File) Read(p []byte) (int, error) {
 		}
 	}
 	return f.Reader.Read(p)
+}
+
+//ReadDirFromInode returns a fully populated directory.Directory from a given inode.Inode.
+//If the given inode is not a directory it returns an error.
+func (r *Reader) readDirFromInode(i *inode.Inode) (*directory.Directory, error) {
+	var offset uint32
+	var metaOffset uint16
+	var size uint16
+	switch i.Type {
+	case inode.BasicDirectoryType:
+		offset = i.Info.(inode.BasicDirectory).DirectoryIndex
+		metaOffset = i.Info.(inode.BasicDirectory).DirectoryOffset
+		size = i.Info.(inode.BasicDirectory).DirectorySize
+	case inode.ExtDirType:
+		offset = i.Info.(inode.ExtendedDirectory).Init.DirectoryIndex
+		metaOffset = i.Info.(inode.ExtendedDirectory).Init.DirectoryOffset
+		size = uint16(i.Info.(inode.ExtendedDirectory).Init.DirectorySize)
+	default:
+		return nil, errors.New("Not a directory inode")
+	}
+	br, err := r.newMetadataReader(int64(r.super.DirTableStart + uint64(offset)))
+	if err != nil {
+		return nil, err
+	}
+	_, err = br.Seek(int64(metaOffset), io.SeekStart)
+	if err != nil {
+		return nil, err
+	}
+	dir, err := directory.NewDirectory(br, size)
+	if err != nil {
+		return dir, err
+	}
+	return dir, nil
+}
+
+//GetInodeFromEntry returns the inode associated with a given directory.Entry
+func (r *Reader) getInodeFromEntry(en *directory.Entry) (*inode.Inode, error) {
+	br, err := r.newMetadataReader(int64(r.super.InodeTableStart + uint64(en.Header.InodeOffset)))
+	if err != nil {
+		return nil, err
+	}
+	_, err = br.Seek(int64(en.Init.Offset), io.SeekStart)
+	if err != nil {
+		return nil, err
+	}
+	i, err := inode.ProcessInode(br, r.super.BlockSize)
+	if err != nil {
+		return nil, err
+	}
+	return i, nil
 }

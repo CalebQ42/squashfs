@@ -6,6 +6,7 @@ import (
 	"io"
 	"math"
 
+	"github.com/CalebQ42/squashfs/internal/compression"
 	"github.com/CalebQ42/squashfs/internal/inode"
 )
 
@@ -15,11 +16,11 @@ const (
 
 var (
 	//ErrNoMagic is returned if the magic number in the superblock isn't correct.
-	ErrNoMagic = errors.New("Magic number doesn't match. Either isn't a squashfs or corrupted")
+	errNoMagic = errors.New("Magic number doesn't match. Either isn't a squashfs or corrupted")
 	//ErrIncompatibleCompression is returned if the compression type in the superblock doesn't work.
-	ErrIncompatibleCompression = errors.New("Compression type unsupported")
+	errIncompatibleCompression = errors.New("Compression type unsupported")
 	//ErrCompressorOptions is returned if compressor options is present. It's not currently supported.
-	ErrCompressorOptions = errors.New("Compressor options is not currently supported")
+	errCompressorOptions = errors.New("Compressor options is not currently supported")
 	//ErrFragmentTableIssues is returned if there's trouble reading the fragment table when creating a reader.
 	//When this is returned, the reader is still returned.
 	errFragmentTableIssues = errors.New("Trouble while reading the fragment table")
@@ -31,7 +32,7 @@ type Reader struct {
 	r            io.ReaderAt
 	super        superblock
 	flags        superblockFlags
-	decompressor decompressor
+	decompressor compression.Decompressor
 	fragOffsets  []uint64
 }
 
@@ -44,18 +45,18 @@ func NewSquashfsReader(r io.ReaderAt) (*Reader, error) {
 		return nil, err
 	}
 	if rdr.super.Magic != magic {
-		return nil, ErrNoMagic
+		return nil, errNoMagic
 	}
 	rdr.flags = rdr.super.GetFlags()
 	switch rdr.super.CompressionType {
 	case gzipCompression:
-		rdr.decompressor = &zlibDecompressor{}
+		rdr.decompressor = &compression.Zlib{}
 	default:
-		return nil, ErrIncompatibleCompression
+		return nil, errIncompatibleCompression
 	}
 	if rdr.flags.CompressorOptions {
 		//TODO: parse compressor options
-		return nil, ErrCompressorOptions
+		return nil, errCompressorOptions
 	}
 	fragBlocks := int(math.Ceil(float64(rdr.super.FragCount) / 512.0))
 	if fragBlocks > 0 {
