@@ -5,15 +5,14 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"strings"
 	"testing"
 
 	goappimage "github.com/CalebQ42/GoAppImage"
 )
 
 const (
-	downloadURL  = "https://github.com/zilti/code-oss.AppImage/releases/download/continuous/Code_OSS-x86_64.AppImage"
-	appImageName = "Code_OSS.AppImage"
+	downloadURL  = "https://github.com/Swordfish90/cool-retro-term/releases/download/1.1.1/Cool-Retro-Term-1.1.1-x86_64.AppImage"
+	appImageName = "Cool-Retro-Term.AppImage"
 )
 
 func TestMain(t *testing.T) {
@@ -39,31 +38,12 @@ func TestMain(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	rdr.FindAll(func(fil *File) bool {
-		return strings.HasSuffix(fil.Name, ".desktop")
-	})
-	fils, err := rdr.GetAllFiles()
-	if err != nil {
-		t.Fatal(err)
+	fil := rdr.GetFileAtPath("/usr/bin/cool-retro-term")
+	if fil != nil {
+		fmt.Println("Worked!", fil.Path+"/"+fil.Name)
+	} else {
+		t.Fatal("NOOOOOO!")
 	}
-	for _, fil := range fils {
-		fmt.Println(fil.Path + "/" + fil.Name)
-	}
-	// extractionFil := "code-oss.desktop"
-	// os.Remove(wd + "/testing/" + extractionFil)
-	// desk, err := os.Create(wd + "/testing/" + extractionFil)
-	// if err != nil {
-	// 	t.Fatal(err)
-	// }
-	// ext := rdr.GetFileAtPath(extractionFil)
-	// if ext == nil {
-	// 	t.Fatal("Cannot find file")
-	// }
-	// defer ext.Close()
-	// _, err = io.Copy(desk, ext)
-	// if err != nil {
-	// 	t.Fatal(err)
-	// }
 	t.Fatal("No problems here!")
 }
 

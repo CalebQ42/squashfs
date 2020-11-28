@@ -5,7 +5,6 @@ import (
 	"errors"
 	"io"
 	"math"
-	"strings"
 
 	"github.com/CalebQ42/squashfs/internal/inode"
 )
@@ -160,34 +159,9 @@ func (r *Reader) FindAll(query func(*File) bool) (all []*File) {
 
 //GetFileAtPath will return the file at the given path. If the file cannot be found, will return nil.
 func (r *Reader) GetFileAtPath(path string) *File {
-	path = strings.TrimSuffix(strings.TrimPrefix(path, "/"), "/")
-	pathDirs := strings.Split(path, "/")
 	dir, err := r.GetRootFolder()
 	if err != nil {
 		return nil
 	}
-	children, err := dir.GetChildren()
-	if err != nil {
-		return nil
-	}
-	for _, folder := range pathDirs {
-		for _, child := range children {
-			if child.Name == folder {
-				dir = child
-				if dir.IsDir() {
-					children, err = dir.GetChildren()
-					if err != nil {
-						return nil
-					}
-				} else {
-					children = make([]*File, 0)
-				}
-				break
-			}
-		}
-	}
-	if dir.Path+"/"+dir.Name == "/"+path {
-		return dir
-	}
-	return nil
+	return dir.GetFileAtPath(path)
 }

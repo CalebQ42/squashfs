@@ -181,6 +181,7 @@ type BasicSymlinkInit struct {
 type BasicSymlink struct {
 	Init       BasicSymlinkInit
 	targetPath []byte //len is TargetPathSize
+	Path       string
 }
 
 //NewBasicSymlink creates a new BasicSymlink
@@ -192,6 +193,10 @@ func NewBasicSymlink(rdr io.Reader) (BasicSymlink, error) {
 	}
 	inode.targetPath = make([]byte, inode.Init.TargetPathSize, inode.Init.TargetPathSize)
 	err = binary.Read(rdr, binary.LittleEndian, &inode.targetPath)
+	if err != nil {
+		return inode, err
+	}
+	inode.Path = string(inode.targetPath)
 	return inode, err
 }
 
@@ -204,7 +209,8 @@ type ExtendedSymlinkInit struct {
 //ExtendedSymlink is a symlink with extra information
 type ExtendedSymlink struct {
 	Init       ExtendedSymlinkInit
-	TargetPath []uint8
+	targetPath []uint8
+	Path       string
 	XattrIndex uint32
 }
 
@@ -215,7 +221,12 @@ func NewExtendedSymlink(rdr io.Reader) (ExtendedSymlink, error) {
 	if err != nil {
 		return inode, err
 	}
-	inode.TargetPath = make([]uint8, inode.Init.TargetPathSize, inode.Init.TargetPathSize)
+	inode.targetPath = make([]uint8, inode.Init.TargetPathSize, inode.Init.TargetPathSize)
+	err = binary.Read(rdr, binary.LittleEndian, &inode.targetPath)
+	if err != nil {
+		return inode, err
+	}
+	inode.Path = string(inode.targetPath)
 	err = binary.Read(rdr, binary.LittleEndian, &inode.XattrIndex)
 	return inode, err
 }

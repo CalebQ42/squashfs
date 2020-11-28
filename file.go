@@ -3,6 +3,7 @@ package squashfs
 import (
 	"errors"
 	"io"
+	"strings"
 
 	"github.com/CalebQ42/squashfs/internal/directory"
 	"github.com/CalebQ42/squashfs/internal/inode"
@@ -22,7 +23,7 @@ var (
 //When writing, this holds the information on WHERE the file will be placed inside the archive.
 type File struct {
 	Name    string       //The name of the file or folder. Root folder will not have a name ("")
-	Parent  *File        //The parent directory. If it's the root directory, will be nil
+	Parent  *File        //The parent directory. Should ALWAYS be a folder. If it's the root directory, will be nil
 	Reader  io.Reader    //Underlying reader. When writing, will probably be an os.File. When reading this is kept nil UNTIL reading to save memory.
 	Path    string       //The path to the folder the File is located in.
 	r       *Reader      //The squashfs.Reader where this file is contained.
@@ -102,9 +103,64 @@ func (f *File) GetChildrenRecursively() (children []*File, err error) {
 	return
 }
 
+//GetFileAtPath tries to return the File at the given path, relative to the file.
+//Returns nil if called on something other then a folder, OR if the path goes oustide the archive.
+func (f *File) GetFileAtPath(path string) *File {
+	if path == "" {
+		return f
+	}
+	path = strings.TrimSuffix(strings.TrimPrefix(path, "/"), "/")
+	if path != "" && !f.IsDir() {
+		return nil
+	}
+	for strings.HasSuffix(path, "./") {
+		//since you can TECHNICALLY have an infinite amount of ./ and it would still be valid.
+		path = strings.TrimPrefix(path, "./")
+	}
+	split := strings.Split(path, "/")
+	children, err := f.GetChildren()
+	if err != nil {
+		return nil
+	}
+	for _, child := range children {
+		if child.Name == split[0] {
+			return child.GetFileAtPath(strings.Join(split[1:], "/"))
+		}
+	}
+	return nil
+}
+
 //IsDir returns if the file is a directory.
 func (f *File) IsDir() bool {
 	return f.filType == inode.BasicDirectoryType || f.filType == inode.ExtDirType
+}
+
+//IsSymlink returns if the file is a symlink.
+func (f *File) IsSymlink() bool {
+	return f.filType == inode.BasicSymlinkType || f.filType == inode.ExtSymlinkType
+}
+
+//SymlinkPath returns the path the symlink is pointing to. If the file ISN'T a symlink, will return an empty string
+func (f *File) SymlinkPath() string {
+	switch f.filType {
+	case inode.BasicSymlinkType:
+		return f.in.Info.(inode.BasicSymlink).Path
+	case inode.ExtSymlinkType:
+		return f.in.Info.(inode.ExtendedSymlink).Path
+	default:
+		return ""
+	}
+}
+
+//GetSymlinkFile tries to return the squashfs.File associated with the symlink
+func (f *File) GetSymlinkFile() *File {
+	if !f.IsSymlink() {
+		return nil
+	}
+	if strings.HasSuffix(f.SymlinkPath(), "/") {
+		return nil
+	}
+	return f.r.GetFileAtPath(f.SymlinkPath())
 }
 
 //Close frees up the memory held up by the underlying reader. Should NOT be called when writing.
