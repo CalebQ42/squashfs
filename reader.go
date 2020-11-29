@@ -21,13 +21,9 @@ var (
 	errIncompatibleCompression = errors.New("Compression type unsupported")
 	//ErrCompressorOptions is returned if compressor options is present. It's not currently supported.
 	errCompressorOptions = errors.New("Compressor options is not currently supported")
-	//ErrFragmentTableIssues is returned if there's trouble reading the fragment table when creating a reader.
-	//When this is returned, the reader is still returned.
-	errFragmentTableIssues = errors.New("Trouble while reading the fragment table")
 )
 
 //Reader processes and reads a squashfs archive.
-//TODO: Give a way to actually read files :P
 type Reader struct {
 	r            io.ReaderAt
 	super        superblock

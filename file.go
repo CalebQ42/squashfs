@@ -149,7 +149,8 @@ func (f *File) IsSymlink() bool {
 	return f.filType == inode.BasicSymlinkType || f.filType == inode.ExtSymlinkType
 }
 
-//SymlinkPath returns the path the symlink is pointing to. If the file ISN'T a symlink, will return an empty string
+//SymlinkPath returns the path the symlink is pointing to. If the file ISN'T a symlink, will return an empty string.
+//If a path begins with "/" then the symlink is pointing to an absolute path (starting from root, and not a file inside the archive)
 func (f *File) SymlinkPath() string {
 	switch f.filType {
 	case inode.BasicSymlinkType:
