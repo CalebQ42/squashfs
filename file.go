@@ -3,6 +3,7 @@ package squashfs
 import (
 	"errors"
 	"io"
+	"os"
 	"strings"
 
 	"github.com/CalebQ42/squashfs/internal/directory"
@@ -171,6 +172,20 @@ func (f *File) GetSymlinkFile() *File {
 		return nil
 	}
 	return f.r.GetFileAtPath(f.SymlinkPath())
+}
+
+//Permission returns the os.FileMode of the File. Currently only has the permission bits (the last 9) populated.
+func (f *File) Permission() os.FileMode {
+	//TODO: possibly populate more os.FileMode bits
+	return os.FileMode(f.in.Header.Permissions)
+}
+
+func (f *File) ExtractTo(path string) error {
+	if f.IsDir() {
+		//TODO
+	} else if f.IsSymlink() {
+
+	}
 }
 
 //Close frees up the memory held up by the underlying reader. Should NOT be called when writing.

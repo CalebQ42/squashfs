@@ -71,3 +71,40 @@ func downloadTestAppImage(t *testing.T, dir string) {
 		t.Fatal(err)
 	}
 }
+
+func TestCreateSquashFromAppImage(t *testing.T) {
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = os.Mkdir(wd+"/testing", 0777)
+	if err != nil && !os.IsExist(err) {
+		t.Fatal(err)
+	}
+	_, err = os.Open(wd + "/testing/" + appImageName)
+	if os.IsNotExist(err) {
+		downloadTestAppImage(t, wd+"/testing")
+		_, err = os.Open(wd + "/testing/" + appImageName)
+		if err != nil {
+			t.Fatal(err)
+		}
+	} else if err != nil {
+		t.Fatal(err)
+	}
+	ai := goappimage.NewAppImage(wd + "/testing/" + appImageName)
+	aiFil, err := os.Open(wd + "/testing/" + appImageName)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer aiFil.Close()
+	aiFil.Seek(ai.Offset, 0)
+	os.Remove(wd + "/testing/" + appImageName + ".squashfs")
+	aiSquash, err := os.Create(wd + "/testing/" + appImageName + ".squashfs")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = io.Copy(aiSquash, aiFil)
+	if err != nil {
+		t.Fatal(err)
+	}
+}
