@@ -18,6 +18,8 @@ var (
 	errNotFile = errors.New("File is not a file")
 	//ErrNotReading is returned when running functions that are only meant to be used when reading a squashfs
 	errNotReading = errors.New("Function only supported when reading a squashfs")
+	//ErrBrokenSymlink is returned when using ExtractWithOptions with the unbreakSymlink set to true, but the symlink's file cannot be extracted.
+	ErrBrokenSymlink = errors.New("Extracted symlink is probably broken")
 )
 
 //File is the main way to interact with files within squashfs, or when putting files into a squashfs.
@@ -203,35 +205,86 @@ func (f *File) Permission() os.FileMode {
 	return mode
 }
 
-//ExtractTo extracts the file to the given path. This is the same as ExtractWithOptions(path, false, os.ModePerm).
+//ExtractTo extracts the file to the given path. This is the same as ExtractWithOptions(path, false, os.ModePerm, false).
 //Will NOT try to keep symlinks valid, folders extracted will have the permissions set by the squashfs, but the folder to make path will have full permissions (777).
 //
 //Will try it's best to extract all files, and if any errors come up, they will be appended to the error slice that's returned.
 func (f *File) ExtractTo(path string) []error {
-	return f.ExtractWithOptions(path, false, os.ModePerm)
+	return f.ExtractWithOptions(path, false, os.ModePerm, false)
 }
 
-//ExtractWithOptions will extract the file to the given path, while allowing customization on how it works. Usually just ExtractTo is good enough.
+//ExtractWithOptions will extract the file to the given path, while allowing customization on how it works. ExtractTo is the "default" options.
 //Will try it's best to extract all files, and if any errors come up, they will be appended to the error slice that's returned.
+//Should only return multiple errors if extracting a folder.
 //
 //If unbreakSymlink is set, it will also try to extract the symlink's associated file. WARNING: the symlink's file may have to go up the directory to work.
 //If unbreakSymlink is set and the file cannot be extracted, a ErrBrokenSymlink will be appended to the returned error slice.
 //
 //folderPerm only applies to the folders created to get to path. Folders from the archive are given the correct permissions defined by the archive.
-func (f *File) ExtractWithOptions(path string, unbreakSymlink bool, folderPerm os.FileMode) (errs []error) {
+func (f *File) ExtractWithOptions(path string, unbreakSymlink bool, folderPerm os.FileMode, verbose bool) (errs []error) {
+	errs = make([]error, 0)
 	err := os.MkdirAll(path, folderPerm)
 	if err != nil {
 		return []error{err}
 	}
 	switch {
 	case f.IsDir():
-		return []error{errors.New("Dir not supported yet")}
+		err = os.Mkdir(path+"/"+f.Name, f.Permission())
+		if err != nil {
+			if verbose {
+				fmt.Println("Error while making: "+path+"/"+f.Name, f.Permission())
+			}
+			errs = append(errs, err)
+			return
+		}
+		children, err := f.GetChildren()
+		if err != nil {
+			if verbose {
+				fmt.Println("Error while making: "+path+"/"+f.Name, f.Permission())
+			}
+			errs = append(errs, err)
+			return
+		}
+		finishChan := make(chan []error)
+		defer close(finishChan)
+		for _, child := range children {
+			go func(child *File) {
+				finishChan <- child.ExtractWithOptions(path, unbreakSymlink, folderPerm, verbose)
+			}(child)
+		}
+		for range children {
+			errs = append(errs, (<-finishChan)...)
+		}
+		return
 	case f.IsFile():
-
+		fil, err := os.Create(path + "/" + f.Name)
+		if err != nil {
+			if verbose {
+				fmt.Println("Error while making: "+path+"/"+f.Name, f.Permission())
+			}
+			errs = append(errs, err)
+			return
+		}
+		_, err = io.Copy(fil, f)
+		if err != nil {
+			if verbose {
+				fmt.Println("Error while Copying data to: "+path+"/"+f.Name, f.Permission())
+			}
+			errs = append(errs, err)
+			return
+		}
+		err = fil.Chmod(f.Permission())
+		if err != nil {
+			if verbose {
+				fmt.Println("Error while setting permissions for: "+path+"/"+f.Name, f.Permission())
+			}
+			errs = append(errs, err)
+		}
+		return
 	case f.IsSymlink():
-		return []error{errors.New("Symlink not supported yet")}
+		return []error{errors.New("Symlink not supported (yet)")}
 	}
-	return errs
+	return
 }
 
 //Close frees up the memory held up by the underlying reader. Should NOT be called when writing.
