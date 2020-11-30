@@ -2,7 +2,6 @@ package inode
 
 import (
 	"encoding/binary"
-	"fmt"
 	"io"
 )
 
@@ -66,15 +65,12 @@ func NewExtendedDirectory(rdr io.Reader) (ExtendedDirectory, error) {
 	if err != nil {
 		return inode, err
 	}
-	if inode.Init.IndexCount > 0 {
-		inode.Indexes = make([]DirectoryIndex, inode.Init.IndexCount)
-		for i := uint16(0); i < inode.Init.IndexCount; i++ {
-			inode.Indexes[i], err = NewDirectoryIndex(rdr)
-			if err != nil {
-				fmt.Println("Error while reading Directory Index ", i)
-				return inode, err
-			}
+	for i := uint16(0); i < inode.Init.IndexCount; i++ {
+		tmp, err := NewDirectoryIndex(rdr)
+		if err != nil {
+			return inode, err
 		}
+		inode.Indexes = append(inode.Indexes, tmp)
 	}
 	return inode, err
 }
@@ -89,7 +85,7 @@ type DirectoryIndexInit struct {
 //DirectoryIndex is a quick lookup provided by an ExtendedDirectory
 type DirectoryIndex struct {
 	Init DirectoryIndexInit
-	Name []byte
+	Name string
 }
 
 //NewDirectoryIndex return a new DirectoryIndex
@@ -99,9 +95,13 @@ func NewDirectoryIndex(rdr io.Reader) (DirectoryIndex, error) {
 	if err != nil {
 		return index, err
 	}
-	index.Name = make([]byte, index.Init.NameSize, index.Init.NameSize)
-	err = binary.Read(rdr, binary.LittleEndian, &index.Name)
-	return index, err
+	tmp := make([]byte, index.Init.NameSize+1, index.Init.NameSize+1)
+	err = binary.Read(rdr, binary.LittleEndian, &tmp)
+	if err != nil {
+		return index, err
+	}
+	index.Name = string(tmp)
+	return index, nil
 }
 
 //BasicFileInit is the information that can be directoy decoded

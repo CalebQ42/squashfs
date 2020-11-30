@@ -47,6 +47,8 @@ func NewSquashfsReader(r io.ReaderAt) (*Reader, error) {
 	switch rdr.super.CompressionType {
 	case gzipCompression:
 		rdr.decompressor = &compression.Zlib{}
+	case xzCompression:
+		rdr.decompressor = &compression.Xz{}
 	default:
 		return nil, errIncompatibleCompression
 	}
@@ -81,7 +83,7 @@ func (r *Reader) GetRootFolder() (root *File, err error) {
 	if err != nil {
 		return nil, err
 	}
-	root.Path = "/"
+	root.path = "/"
 	root.filType = root.in.Type
 	root.r = r
 	return root, nil

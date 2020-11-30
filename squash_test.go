@@ -8,14 +8,47 @@ import (
 	"testing"
 
 	goappimage "github.com/CalebQ42/GoAppImage"
+	"github.com/CalebQ42/squashfs/internal/inode"
 )
 
 const (
 	downloadURL  = "https://github.com/Swordfish90/cool-retro-term/releases/download/1.1.1/Cool-Retro-Term-1.1.1-x86_64.AppImage"
 	appImageName = "Cool-Retro-Term.AppImage"
+	squashfsName = "airootfs.sfs" //testing with a ArchLinux root fs from the live img
 )
 
-func TestMain(t *testing.T) {
+func TestSquashfs(t *testing.T) {
+	t.Parallel()
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	squashFil, err := os.Open(wd + "/testing/" + squashfsName)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rdr, err := NewSquashfsReader(squashFil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fils, err := rdr.GetAllFiles()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, fil := range fils {
+		if fil.filType != inode.BasicFileType && fil.filType != inode.BasicDirectoryType && fil.filType != inode.BasicSymlinkType {
+			fmt.Println("Found non-standard")
+			fmt.Println(fil.Path())
+			fmt.Println("type:", fil.filType)
+		} else if fil.IsSymlink() {
+			fmt.Println("Symlink!")
+			fmt.Println(fil.Path())
+			fmt.Println("symlink path:", fil.SymlinkPath())
+		}
+	}
+}
+
+func TestAppImage(t *testing.T) {
 	t.Parallel()
 	wd, err := os.Getwd()
 	if err != nil {
@@ -40,7 +73,7 @@ func TestMain(t *testing.T) {
 	}
 	fil := rdr.GetFileAtPath("/usr/bin/cool-retro-term")
 	if fil != nil {
-		fmt.Println("Worked!", fil.Path+"/"+fil.Name)
+		fmt.Println("Worked!", fil.Path())
 	} else {
 		t.Fatal("NOOOOOO!")
 	}

@@ -2,6 +2,7 @@ package squashfs
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"strings"
@@ -26,7 +27,7 @@ type File struct {
 	Name    string       //The name of the file or folder. Root folder will not have a name ("")
 	Parent  *File        //The parent directory. Should ALWAYS be a folder. If it's the root directory, will be nil
 	Reader  io.Reader    //Underlying reader. When writing, will probably be an os.File. When reading this is kept nil UNTIL reading to save memory.
-	Path    string       //The path to the folder the File is located in.
+	path    string       //The path to the folder the File is located in.
 	r       *Reader      //The squashfs.Reader where this file is contained.
 	in      *inode.Inode //Underlyting inode when reading.
 	filType int          //The file's type, using inode types.
@@ -56,6 +57,7 @@ func (f *File) GetChildren() (children []*File, err error) {
 	}
 	dir, err := f.r.readDirFromInode(f.in)
 	if err != nil {
+		fmt.Println("err reading dir")
 		return
 	}
 	var fil *File
@@ -66,7 +68,7 @@ func (f *File) GetChildren() (children []*File, err error) {
 		}
 		fil.Parent = f
 		if f.Name != "" {
-			fil.Path = f.Path + "/" + f.Name
+			fil.path = f.Path()
 		}
 		children = append(children, fil)
 	}
@@ -84,6 +86,7 @@ func (f *File) GetChildrenRecursively() (children []*File, err error) {
 	}
 	chil, err := f.GetChildren()
 	if err != nil {
+		fmt.Println("err here", f.Path())
 		return
 	}
 	var childFolders []*File
@@ -97,11 +100,20 @@ func (f *File) GetChildrenRecursively() (children []*File, err error) {
 		var childs []*File
 		childs, err = folds.GetChildrenRecursively()
 		if err != nil {
+			fmt.Println("err here Recursive", folds.Path())
 			return
 		}
 		children = append(children, childs...)
 	}
 	return
+}
+
+//Path returns the path of the file within the archive.
+func (f *File) Path() string {
+	if f.Name == "" {
+		return f.path
+	}
+	return f.path + "/" + f.Name
 }
 
 //GetFileAtPath tries to return the File at the given path, relative to the file.
@@ -150,6 +162,11 @@ func (f *File) IsSymlink() bool {
 	return f.filType == inode.BasicSymlinkType || f.filType == inode.ExtSymlinkType
 }
 
+//IsFile returns if the file is a file.
+func (f *File) IsFile() bool {
+	return f.filType == inode.BasicFileType || f.filType == inode.ExtFileType
+}
+
 //SymlinkPath returns the path the symlink is pointing to. If the file ISN'T a symlink, will return an empty string.
 //If a path begins with "/" then the symlink is pointing to an absolute path (starting from root, and not a file inside the archive)
 func (f *File) SymlinkPath() string {
@@ -174,18 +191,47 @@ func (f *File) GetSymlinkFile() *File {
 	return f.r.GetFileAtPath(f.SymlinkPath())
 }
 
-//Permission returns the os.FileMode of the File. Currently only has the permission bits (the last 9) populated.
+//Permission returns the os.FileMode of the File. Sets mode bits for directories and symlinks.
 func (f *File) Permission() os.FileMode {
-	//TODO: possibly populate more os.FileMode bits
-	return os.FileMode(f.in.Header.Permissions)
+	mode := os.FileMode(f.in.Header.Permissions)
+	switch {
+	case f.IsDir():
+		mode = mode | os.ModeDir
+	case f.IsSymlink():
+		mode = mode | os.ModeSymlink
+	}
+	return mode
 }
 
-func (f *File) ExtractTo(path string) error {
-	if f.IsDir() {
-		//TODO
-	} else if f.IsSymlink() {
+//ExtractTo extracts the file to the given path. This is the same as ExtractWithOptions(path, false, os.ModePerm).
+//Will NOT try to keep symlinks valid, folders extracted will have the permissions set by the squashfs, but the folder to make path will have full permissions (777).
+//
+//Will try it's best to extract all files, and if any errors come up, they will be appended to the error slice that's returned.
+func (f *File) ExtractTo(path string) []error {
+	return f.ExtractWithOptions(path, false, os.ModePerm)
+}
 
+//ExtractWithOptions will extract the file to the given path, while allowing customization on how it works. Usually just ExtractTo is good enough.
+//Will try it's best to extract all files, and if any errors come up, they will be appended to the error slice that's returned.
+//
+//If unbreakSymlink is set, it will also try to extract the symlink's associated file. WARNING: the symlink's file may have to go up the directory to work.
+//If unbreakSymlink is set and the file cannot be extracted, a ErrBrokenSymlink will be appended to the returned error slice.
+//
+//folderPerm only applies to the folders created to get to path. Folders from the archive are given the correct permissions defined by the archive.
+func (f *File) ExtractWithOptions(path string, unbreakSymlink bool, folderPerm os.FileMode) (errs []error) {
+	err := os.MkdirAll(path, folderPerm)
+	if err != nil {
+		return []error{err}
 	}
+	switch {
+	case f.IsDir():
+		return []error{errors.New("Dir not supported yet")}
+	case f.IsFile():
+
+	case f.IsSymlink():
+		return []error{errors.New("Symlink not supported yet")}
+	}
+	return errs
 }
 
 //Close frees up the memory held up by the underlying reader. Should NOT be called when writing.
