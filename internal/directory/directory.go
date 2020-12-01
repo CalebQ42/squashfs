@@ -52,7 +52,7 @@ type Directory struct {
 }
 
 //NewDirectory reads the directory from rdr
-func NewDirectory(base io.Reader, size uint16) (*Directory, error) {
+func NewDirectory(base io.Reader, size uint32) (*Directory, error) {
 	var dir Directory
 	var err error
 	tmp := make([]byte, size)

@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	goappimage "github.com/CalebQ42/GoAppImage"
-	"github.com/CalebQ42/squashfs/internal/inode"
 )
 
 const (
@@ -18,7 +17,7 @@ const (
 )
 
 func TestSquashfs(t *testing.T) {
-	t.Parallel()
+	fmt.Println("YOOO")
 	wd, err := os.Getwd()
 	if err != nil {
 		t.Fatal(err)
@@ -31,21 +30,13 @@ func TestSquashfs(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	fils, err := rdr.GetAllFiles()
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, fil := range fils {
-		if fil.filType != inode.BasicFileType && fil.filType != inode.BasicDirectoryType && fil.filType != inode.BasicSymlinkType {
-			fmt.Println("Found non-standard")
-			fmt.Println(fil.Path())
-			fmt.Println("type:", fil.filType)
-		} else if fil.IsSymlink() {
-			fmt.Println("Symlink!")
-			fmt.Println(fil.Path())
-			fmt.Println("symlink path:", fil.SymlinkPath())
-		}
-	}
+	os.RemoveAll(wd + "/testing/" + squashfsName + ".d")
+	fmt.Println("Whaaaa")
+	root, _ := rdr.GetRootFolder()
+	fmt.Println("WHYYYY")
+	errs := root.ExtractWithOptions(wd+"/testing/"+squashfsName+".d", false, os.ModePerm, true)
+	fmt.Println(errs)
+	t.Fatal("No prolems here!")
 }
 
 func TestAppImage(t *testing.T) {

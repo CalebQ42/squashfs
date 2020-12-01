@@ -59,7 +59,6 @@ func (f *File) GetChildren() (children []*File, err error) {
 	}
 	dir, err := f.r.readDirFromInode(f.in)
 	if err != nil {
-		fmt.Println("err reading dir")
 		return
 	}
 	var fil *File
@@ -86,26 +85,31 @@ func (f *File) GetChildrenRecursively() (children []*File, err error) {
 	if !f.IsDir() {
 		return nil, errNotDirectory
 	}
-	chil, err := f.GetChildren()
+	children, err = f.GetChildren()
 	if err != nil {
-		fmt.Println("err here", f.Path())
 		return
 	}
 	var childFolders []*File
-	for _, child := range chil {
-		children = append(children, child)
+	for _, child := range children {
 		if child.IsDir() {
 			childFolders = append(childFolders, child)
 		}
 	}
+	foldChil := make(chan []*File)
+	errChan := make(chan error)
 	for _, folds := range childFolders {
-		var childs []*File
-		childs, err = folds.GetChildrenRecursively()
+		go func(fil *File) {
+			childs, err := fil.GetChildrenRecursively()
+			errChan <- err
+			foldChil <- childs
+		}(folds)
+	}
+	for range childFolders {
+		err = <-errChan
 		if err != nil {
-			fmt.Println("err here Recursive", folds.Path())
 			return
 		}
-		children = append(children, childs...)
+		children = append(children, <-foldChil...)
 	}
 	return
 }
@@ -120,6 +124,7 @@ func (f *File) Path() string {
 
 //GetFileAtPath tries to return the File at the given path, relative to the file.
 //Returns nil if called on something other then a folder, OR if the path goes oustide the archive.
+//Allows * wildcards.
 func (f *File) GetFileAtPath(path string) *File {
 	if path == "" {
 		return f
@@ -145,9 +150,10 @@ func (f *File) GetFileAtPath(path string) *File {
 	if err != nil {
 		return nil
 	}
-
 	for _, child := range children {
-		if child.Name == split[0] {
+		if strings.Contains(split[0], "*") {
+			//TODO: wildcards
+		} else if child.Name == split[0] {
 			return child.GetFileAtPath(strings.Join(split[1:], "/"))
 		}
 	}
@@ -229,18 +235,37 @@ func (f *File) ExtractWithOptions(path string, unbreakSymlink bool, folderPerm o
 	}
 	switch {
 	case f.IsDir():
-		err = os.Mkdir(path+"/"+f.Name, f.Permission())
-		if err != nil {
-			if verbose {
-				fmt.Println("Error while making: "+path+"/"+f.Name, f.Permission())
+		if f.Name != "" {
+			//TODO: check if folder is present, and if so, try to set it's permission
+			err = os.Mkdir(path+"/"+f.Name, f.Permission())
+			if err != nil {
+				if verbose {
+					fmt.Println("Error while making: ", path+"/"+f.Name)
+				}
+				errs = append(errs, err)
+				return
 			}
-			errs = append(errs, err)
-			return
+			fil, err := os.Open(path + "/" + f.Name)
+			if err != nil {
+				if verbose {
+					fmt.Println("Error while opening:", path+"/"+f.Name)
+				}
+				errs = append(errs, err)
+				return
+			}
+			err = fil.Chown(int(f.r.idTable[f.in.Header.UID]), int(f.r.idTable[f.in.Header.GID]))
+			if err != nil {
+				if verbose {
+					fmt.Println("Error while changing owner:", path+"/"+f.Name)
+				}
+				errs = append(errs, err)
+				return
+			}
 		}
 		children, err := f.GetChildren()
 		if err != nil {
 			if verbose {
-				fmt.Println("Error while making: "+path+"/"+f.Name, f.Permission())
+				fmt.Println("Error getting children for:", f.Path())
 			}
 			errs = append(errs, err)
 			return
@@ -249,7 +274,11 @@ func (f *File) ExtractWithOptions(path string, unbreakSymlink bool, folderPerm o
 		defer close(finishChan)
 		for _, child := range children {
 			go func(child *File) {
-				finishChan <- child.ExtractWithOptions(path, unbreakSymlink, folderPerm, verbose)
+				if f.Name == "" {
+					finishChan <- child.ExtractWithOptions(path, unbreakSymlink, folderPerm, verbose)
+				} else {
+					finishChan <- child.ExtractWithOptions(path+"/"+f.Name, unbreakSymlink, folderPerm, verbose)
+				}
 			}(child)
 		}
 		for range children {
@@ -258,17 +287,43 @@ func (f *File) ExtractWithOptions(path string, unbreakSymlink bool, folderPerm o
 		return
 	case f.IsFile():
 		fil, err := os.Create(path + "/" + f.Name)
-		if err != nil {
+		if os.IsExist(err) {
+			err = os.Remove(path + "/" + f.Name)
+			if err != nil {
+				if verbose {
+					fmt.Println("Error while making:", path+"/"+f.Name)
+				}
+				errs = append(errs, err)
+				return
+			}
+			fil, err = os.Create(path + "/" + f.Name)
+			if err != nil {
+				if verbose {
+					fmt.Println("Error while making:", path+"/"+f.Name)
+				}
+				errs = append(errs, err)
+				return
+			}
+		} else if err != nil {
 			if verbose {
-				fmt.Println("Error while making: "+path+"/"+f.Name, f.Permission())
+				fmt.Println("Error while making:", path+"/"+f.Name)
 			}
 			errs = append(errs, err)
 			return
 		}
+		defer f.Close() //Since we will be reading from the file
 		_, err = io.Copy(fil, f)
 		if err != nil {
 			if verbose {
-				fmt.Println("Error while Copying data to: "+path+"/"+f.Name, f.Permission())
+				fmt.Println("Error while Copying data to:", path+"/"+f.Name)
+			}
+			errs = append(errs, err)
+			return
+		}
+		err = fil.Chown(int(f.r.idTable[f.in.Header.UID]), int(f.r.idTable[f.in.Header.GID]))
+		if err != nil {
+			if verbose {
+				fmt.Println("Error while changing owner:", path+"/"+f.Name)
 			}
 			errs = append(errs, err)
 			return
@@ -276,7 +331,7 @@ func (f *File) ExtractWithOptions(path string, unbreakSymlink bool, folderPerm o
 		err = fil.Chmod(f.Permission())
 		if err != nil {
 			if verbose {
-				fmt.Println("Error while setting permissions for: "+path+"/"+f.Name, f.Permission())
+				fmt.Println("Error while setting permissions for:", path+"/"+f.Name)
 			}
 			errs = append(errs, err)
 		}
@@ -293,10 +348,12 @@ func (f *File) Close() error {
 	if f.IsDir() {
 		return errNotFile
 	}
-	if closer, is := f.Reader.(io.Closer); is {
-		closer.Close()
+	if f.Reader != nil {
+		if closer, is := f.Reader.(io.Closer); is {
+			closer.Close()
+		}
+		f.Reader = nil
 	}
-	f.Reader = nil
 	return nil
 }
 
@@ -320,16 +377,16 @@ func (f *File) Read(p []byte) (int, error) {
 func (r *Reader) readDirFromInode(i *inode.Inode) (*directory.Directory, error) {
 	var offset uint32
 	var metaOffset uint16
-	var size uint16
+	var size uint32
 	switch i.Type {
 	case inode.BasicDirectoryType:
 		offset = i.Info.(inode.BasicDirectory).DirectoryIndex
 		metaOffset = i.Info.(inode.BasicDirectory).DirectoryOffset
-		size = i.Info.(inode.BasicDirectory).DirectorySize
+		size = uint32(i.Info.(inode.BasicDirectory).DirectorySize)
 	case inode.ExtDirType:
 		offset = i.Info.(inode.ExtendedDirectory).Init.DirectoryIndex
 		metaOffset = i.Info.(inode.ExtendedDirectory).Init.DirectoryOffset
-		size = uint16(i.Info.(inode.ExtendedDirectory).Init.DirectorySize)
+		size = i.Info.(inode.ExtendedDirectory).Init.DirectorySize
 	default:
 		return nil, errors.New("Not a directory inode")
 	}

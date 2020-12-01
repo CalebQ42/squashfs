@@ -3,6 +3,7 @@ package squashfs
 import (
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"io"
 	"math"
 
@@ -30,6 +31,7 @@ type Reader struct {
 	flags        superblockFlags
 	decompressor compression.Decompressor
 	fragOffsets  []uint64
+	idTable      []uint32
 }
 
 //NewSquashfsReader returns a new squashfs.Reader from an io.ReaderAt
@@ -50,13 +52,14 @@ func NewSquashfsReader(r io.ReaderAt) (*Reader, error) {
 	case xzCompression:
 		rdr.decompressor = &compression.Xz{}
 	default:
+		//TODO: all compression types.
 		return nil, errIncompatibleCompression
 	}
 	if rdr.flags.CompressorOptions {
 		//TODO: parse compressor options
 		return nil, errCompressorOptions
 	}
-	fragBlocks := int(math.Ceil(float64(rdr.super.FragCount) / 512.0))
+	fragBlocks := int(math.Ceil(float64(rdr.super.FragCount) / 512))
 	if fragBlocks > 0 {
 		offset := int64(rdr.super.FragTableStart)
 		for i := 0; i < fragBlocks; i++ {
@@ -67,6 +70,37 @@ func NewSquashfsReader(r io.ReaderAt) (*Reader, error) {
 			}
 			rdr.fragOffsets = append(rdr.fragOffsets, binary.LittleEndian.Uint64(tmp))
 			offset += 8
+		}
+	}
+	idBlocks := int(math.Ceil(float64(rdr.super.IDCount) / 2048))
+	fmt.Println("ID Blocks", idBlocks)
+	for idBlocks > 0 {
+		unread := rdr.super.IDCount
+		offset := int64(rdr.super.IDTableStart)
+		for i := 0; i < idBlocks; i++ {
+			tmp := make([]byte, 8)
+			_, err = r.ReadAt(tmp, offset)
+			if err != nil {
+				return nil, err
+			}
+			offset += 8
+			idRdr, err := rdr.newMetadataReader(int64(binary.LittleEndian.Uint64(tmp)))
+			if err != nil {
+				return nil, err
+			}
+			for j := 0; j < int(math.Min(float64(unread), 2048)); j++ {
+				var id uint32
+				err = binary.Read(idRdr, binary.LittleEndian, &id)
+				if err != nil {
+					return nil, err
+				}
+				rdr.idTable = append(rdr.idTable, id)
+			}
+			if unread > 2048 {
+				unread -= 2048
+			} else {
+				unread = 0
+			}
 		}
 	}
 	return &rdr, nil
