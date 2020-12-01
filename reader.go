@@ -3,7 +3,6 @@ package squashfs
 import (
 	"encoding/binary"
 	"errors"
-	"fmt"
 	"io"
 	"math"
 
@@ -55,10 +54,10 @@ func NewSquashfsReader(r io.ReaderAt) (*Reader, error) {
 		//TODO: all compression types.
 		return nil, errIncompatibleCompression
 	}
-	if rdr.flags.CompressorOptions {
-		//TODO: parse compressor options
-		return nil, errCompressorOptions
-	}
+	// if rdr.flags.CompressorOptions {
+	// 	//TODO: parse compressor options
+	// 	return nil, errCompressorOptions
+	// }
 	fragBlocks := int(math.Ceil(float64(rdr.super.FragCount) / 512))
 	if fragBlocks > 0 {
 		offset := int64(rdr.super.FragTableStart)
@@ -72,36 +71,28 @@ func NewSquashfsReader(r io.ReaderAt) (*Reader, error) {
 			offset += 8
 		}
 	}
-	idBlocks := int(math.Ceil(float64(rdr.super.IDCount) / 2048))
-	fmt.Println("ID Blocks", idBlocks)
-	for idBlocks > 0 {
-		unread := rdr.super.IDCount
-		offset := int64(rdr.super.IDTableStart)
-		for i := 0; i < idBlocks; i++ {
-			tmp := make([]byte, 8)
-			_, err = r.ReadAt(tmp, offset)
-			if err != nil {
-				return nil, err
-			}
-			offset += 8
-			idRdr, err := rdr.newMetadataReader(int64(binary.LittleEndian.Uint64(tmp)))
-			if err != nil {
-				return nil, err
-			}
-			for j := 0; j < int(math.Min(float64(unread), 2048)); j++ {
-				var id uint32
-				err = binary.Read(idRdr, binary.LittleEndian, &id)
-				if err != nil {
-					return nil, err
-				}
-				rdr.idTable = append(rdr.idTable, id)
-			}
-			if unread > 2048 {
-				unread -= 2048
-			} else {
-				unread = 0
-			}
+	unread := rdr.super.IDCount
+	blockOffsets := make([]uint64, int(math.Ceil(float64(rdr.super.IDCount)/2048)))
+	for i := range blockOffsets {
+		secRdr := io.NewSectionReader(r, int64(rdr.super.IDTableStart)+8*int64(i), 8)
+		err = binary.Read(secRdr, binary.LittleEndian, &blockOffsets[i])
+		if err != nil {
+			return nil, err
 		}
+		idRdr, err := rdr.newMetadataReader(int64(blockOffsets[i]))
+		if err != nil {
+			return nil, err
+		}
+		read := uint16(math.Min(float64(unread), 2048))
+		for i := uint16(0); i < read; i++ {
+			var tmp uint32
+			err = binary.Read(idRdr, binary.LittleEndian, &tmp)
+			if err != nil {
+				return nil, err
+			}
+			rdr.idTable = append(rdr.idTable, tmp)
+		}
+		unread -= read
 	}
 	return &rdr, nil
 }

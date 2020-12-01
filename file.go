@@ -237,10 +237,11 @@ func (f *File) ExtractWithOptions(path string, unbreakSymlink bool, folderPerm o
 	case f.IsDir():
 		if f.Name != "" {
 			//TODO: check if folder is present, and if so, try to set it's permission
-			err = os.Mkdir(path+"/"+f.Name, f.Permission())
+			err = os.Mkdir(path+"/"+f.Name, os.ModePerm)
 			if err != nil {
 				if verbose {
 					fmt.Println("Error while making: ", path+"/"+f.Name)
+					fmt.Println(err)
 				}
 				errs = append(errs, err)
 				return
@@ -249,6 +250,7 @@ func (f *File) ExtractWithOptions(path string, unbreakSymlink bool, folderPerm o
 			if err != nil {
 				if verbose {
 					fmt.Println("Error while opening:", path+"/"+f.Name)
+					fmt.Println(err)
 				}
 				errs = append(errs, err)
 				return
@@ -257,15 +259,24 @@ func (f *File) ExtractWithOptions(path string, unbreakSymlink bool, folderPerm o
 			if err != nil {
 				if verbose {
 					fmt.Println("Error while changing owner:", path+"/"+f.Name)
+					fmt.Println(err)
 				}
 				errs = append(errs, err)
-				return
+			}
+			err = fil.Chmod(f.Permission())
+			if err != nil {
+				if verbose {
+					fmt.Println("Error while changing owner:", path+"/"+f.Name)
+					fmt.Println(err)
+				}
+				errs = append(errs, err)
 			}
 		}
 		children, err := f.GetChildren()
 		if err != nil {
 			if verbose {
 				fmt.Println("Error getting children for:", f.Path())
+				fmt.Println(err)
 			}
 			errs = append(errs, err)
 			return
@@ -292,6 +303,7 @@ func (f *File) ExtractWithOptions(path string, unbreakSymlink bool, folderPerm o
 			if err != nil {
 				if verbose {
 					fmt.Println("Error while making:", path+"/"+f.Name)
+					fmt.Println(err)
 				}
 				errs = append(errs, err)
 				return
@@ -300,6 +312,7 @@ func (f *File) ExtractWithOptions(path string, unbreakSymlink bool, folderPerm o
 			if err != nil {
 				if verbose {
 					fmt.Println("Error while making:", path+"/"+f.Name)
+					fmt.Println(err)
 				}
 				errs = append(errs, err)
 				return
@@ -307,15 +320,17 @@ func (f *File) ExtractWithOptions(path string, unbreakSymlink bool, folderPerm o
 		} else if err != nil {
 			if verbose {
 				fmt.Println("Error while making:", path+"/"+f.Name)
+				fmt.Println(err)
 			}
 			errs = append(errs, err)
 			return
 		}
-		defer f.Close() //Since we will be reading from the file
+		// defer f.Close() //Since we will be reading from the file
 		_, err = io.Copy(fil, f)
 		if err != nil {
 			if verbose {
 				fmt.Println("Error while Copying data to:", path+"/"+f.Name)
+				fmt.Println(err)
 			}
 			errs = append(errs, err)
 			return
@@ -324,6 +339,7 @@ func (f *File) ExtractWithOptions(path string, unbreakSymlink bool, folderPerm o
 		if err != nil {
 			if verbose {
 				fmt.Println("Error while changing owner:", path+"/"+f.Name)
+				fmt.Println(err)
 			}
 			errs = append(errs, err)
 			return
@@ -332,12 +348,14 @@ func (f *File) ExtractWithOptions(path string, unbreakSymlink bool, folderPerm o
 		if err != nil {
 			if verbose {
 				fmt.Println("Error while setting permissions for:", path+"/"+f.Name)
+				fmt.Println(err)
 			}
 			errs = append(errs, err)
 		}
 		return
 	case f.IsSymlink():
-		return []error{errors.New("Symlink not supported (yet)")}
+		//just a temp thing real quick
+		os.Symlink(f.SymlinkPath(), path+"/"+f.Name)
 	}
 	return
 }
