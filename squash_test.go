@@ -1,7 +1,6 @@
 package squashfs
 
 import (
-	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -17,7 +16,6 @@ const (
 )
 
 func TestSquashfs(t *testing.T) {
-	fmt.Println("YOOO")
 	wd, err := os.Getwd()
 	if err != nil {
 		t.Fatal(err)
@@ -31,12 +29,9 @@ func TestSquashfs(t *testing.T) {
 		t.Fatal(err)
 	}
 	os.RemoveAll(wd + "/testing/" + squashfsName + ".d")
-	fmt.Println("Whaaaa")
 	root, _ := rdr.GetRootFolder()
-	fmt.Println("WHYYYY")
 	errs := root.ExtractWithOptions(wd+"/testing/"+squashfsName+".d", false, os.ModePerm, true)
-	fmt.Println(errs)
-	t.Fatal("No prolems here!")
+	t.Fatal(errs)
 }
 
 func TestAppImage(t *testing.T) {
@@ -62,13 +57,10 @@ func TestAppImage(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	fil := rdr.GetFileAtPath("/usr/bin/cool-retro-term")
-	if fil != nil {
-		fmt.Println("Worked!", fil.Path())
-	} else {
-		t.Fatal("NOOOOOO!")
-	}
-	t.Fatal("No problems here!")
+	os.RemoveAll(wd + "/testing/" + appImageName + ".d")
+	root, _ := rdr.GetRootFolder()
+	errs := root.ExtractWithOptions(wd+"/testing/"+appImageName+".d", true, os.ModePerm, true)
+	t.Fatal(errs)
 }
 
 func downloadTestAppImage(t *testing.T, dir string) {

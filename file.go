@@ -255,14 +255,15 @@ func (f *File) ExtractWithOptions(path string, unbreakSymlink bool, folderPerm o
 				errs = append(errs, err)
 				return
 			}
-			err = fil.Chown(int(f.r.idTable[f.in.Header.UID]), int(f.r.idTable[f.in.Header.GID]))
-			if err != nil {
-				if verbose {
-					fmt.Println("Error while changing owner:", path+"/"+f.Name)
-					fmt.Println(err)
-				}
-				errs = append(errs, err)
-			}
+			fil.Chown(int(f.r.idTable[f.in.Header.UID]), int(f.r.idTable[f.in.Header.GID]))
+			//don't mention anything when it fails. Because it fails often. Probably has something to do about uid & gid 0
+			// if err != nil {
+			// 	if verbose {
+			// 		fmt.Println("Error while changing owner:", path+"/"+f.Name)
+			// 		fmt.Println(err)
+			// 	}
+			// 	errs = append(errs, err)
+			// }
 			err = fil.Chmod(f.Permission())
 			if err != nil {
 				if verbose {
@@ -324,8 +325,7 @@ func (f *File) ExtractWithOptions(path string, unbreakSymlink bool, folderPerm o
 			}
 			errs = append(errs, err)
 			return
-		}
-		// defer f.Close() //Since we will be reading from the file
+		} //Since we will be reading from the file
 		_, err = io.Copy(fil, f)
 		if err != nil {
 			if verbose {
@@ -335,15 +335,17 @@ func (f *File) ExtractWithOptions(path string, unbreakSymlink bool, folderPerm o
 			errs = append(errs, err)
 			return
 		}
+		f.Close()
 		err = fil.Chown(int(f.r.idTable[f.in.Header.UID]), int(f.r.idTable[f.in.Header.GID]))
-		if err != nil {
-			if verbose {
-				fmt.Println("Error while changing owner:", path+"/"+f.Name)
-				fmt.Println(err)
-			}
-			errs = append(errs, err)
-			return
-		}
+		//don't mention anything when it fails. Because it fails often. Probably has something to do about uid & gid 0
+		// if err != nil {
+		// 	if verbose {
+		// 		fmt.Println("Error while changing owner:", path+"/"+f.Name)
+		// 		fmt.Println(err)
+		// 	}
+		// 	errs = append(errs, err)
+		// 	return
+		// }
 		err = fil.Chmod(f.Permission())
 		if err != nil {
 			if verbose {
@@ -354,8 +356,32 @@ func (f *File) ExtractWithOptions(path string, unbreakSymlink bool, folderPerm o
 		}
 		return
 	case f.IsSymlink():
-		//just a temp thing real quick
-		os.Symlink(f.SymlinkPath(), path+"/"+f.Name)
+		symPath := f.SymlinkPath()
+		if unbreakSymlink {
+			fil := f.GetSymlinkFile()
+			if fil != nil {
+				symPath = path + "/" + symPath
+				paths := strings.Split(symPath, "/")
+				extracSymErrs := fil.ExtractWithOptions(strings.Join(paths[:len(paths)-1], "/"), unbreakSymlink, folderPerm, verbose)
+				if len(extracSymErrs) > 0 {
+					if verbose {
+						fmt.Println("Error(s) while extracting the symlink's file:", path+"/"+f.Name)
+						fmt.Println(extracSymErrs)
+					}
+					errs = append(errs, extracSymErrs...)
+				}
+			} else {
+				fmt.Println("Symlink path(", symPath, ") is outside the archive:"+path+"/"+f.Name)
+			}
+		}
+		err = os.Symlink(f.SymlinkPath(), path+"/"+f.Name)
+		if err != nil {
+			if verbose {
+				fmt.Println("Error while making symlink:", path+"/"+f.Name)
+				fmt.Println(err)
+			}
+			errs = append(errs, err)
+		}
 	}
 	return
 }

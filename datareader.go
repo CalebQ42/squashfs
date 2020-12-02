@@ -153,9 +153,12 @@ func (d *dataReader) Close() error {
 
 func (d *dataReader) Read(p []byte) (int, error) {
 	if d.curData == nil {
-		d.readCurBlock()
+		err := d.readCurBlock()
+		if err != nil {
+			return 0, err
+		}
 	}
-	if d.curReadOffset+len(p) < len(d.curData) {
+	if d.curReadOffset+len(p) <= len(d.curData) {
 		for i := 0; i < len(p); i++ {
 			p[i] = d.curData[d.curReadOffset+i]
 		}

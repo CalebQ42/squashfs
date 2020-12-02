@@ -3,6 +3,7 @@ package squashfs
 import (
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"io"
 	"math"
 
@@ -44,6 +45,9 @@ func NewSquashfsReader(r io.ReaderAt) (*Reader, error) {
 	if rdr.super.Magic != magic {
 		return nil, errNoMagic
 	}
+	// if rdr.super.BlockLog == uint16(math.Log2(float64(rdr.super.BlockSize))) {
+	// 	return nil, errors.New("BlockSize and BlockLog doesn't match. The archive is probably corrupt")
+	// }
 	rdr.flags = rdr.super.GetFlags()
 	switch rdr.super.CompressionType {
 	case gzipCompression:
@@ -54,10 +58,11 @@ func NewSquashfsReader(r io.ReaderAt) (*Reader, error) {
 		//TODO: all compression types.
 		return nil, errIncompatibleCompression
 	}
-	// if rdr.flags.CompressorOptions {
-	// 	//TODO: parse compressor options
-	// 	return nil, errCompressorOptions
-	// }
+	if rdr.flags.CompressorOptions {
+		fmt.Println("has options")
+		//TODO: parse compressor options
+		return nil, errCompressorOptions
+	}
 	fragBlocks := int(math.Ceil(float64(rdr.super.FragCount) / 512))
 	if fragBlocks > 0 {
 		offset := int64(rdr.super.FragTableStart)
@@ -74,7 +79,7 @@ func NewSquashfsReader(r io.ReaderAt) (*Reader, error) {
 	unread := rdr.super.IDCount
 	blockOffsets := make([]uint64, int(math.Ceil(float64(rdr.super.IDCount)/2048)))
 	for i := range blockOffsets {
-		secRdr := io.NewSectionReader(r, int64(rdr.super.IDTableStart)+8*int64(i), 8)
+		secRdr := io.NewSectionReader(r, int64(rdr.super.IDTableStart)+(8*int64(i)), 8)
 		err = binary.Read(secRdr, binary.LittleEndian, &blockOffsets[i])
 		if err != nil {
 			return nil, err

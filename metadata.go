@@ -104,7 +104,7 @@ func (br *metadataReader) readNextDataBlock() error {
 
 //Read reads bytes into the given byte slice. Returns the amount of data read.
 func (br *metadataReader) Read(p []byte) (int, error) {
-	if br.readOffset+len(p) < len(br.data) {
+	if br.readOffset+len(p) <= len(br.data) {
 		for i := 0; i < len(p); i++ {
 			p[i] = br.data[br.readOffset+i]
 		}
