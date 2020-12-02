@@ -15,6 +15,7 @@ const (
 	squashfsName = "airootfs.sfs" //testing with a ArchLinux root fs from the live img
 )
 
+//Right now, don't use. Arch linux sfs uses XZ compression and when tested, most files just completely fail to extract.
 func TestSquashfs(t *testing.T) {
 	wd, err := os.Getwd()
 	if err != nil {

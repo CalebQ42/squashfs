@@ -3,7 +3,6 @@ package squashfs
 import (
 	"encoding/binary"
 	"errors"
-	"fmt"
 	"io"
 	"math"
 
@@ -49,19 +48,29 @@ func NewSquashfsReader(r io.ReaderAt) (*Reader, error) {
 	// 	return nil, errors.New("BlockSize and BlockLog doesn't match. The archive is probably corrupt")
 	// }
 	rdr.flags = rdr.super.GetFlags()
-	switch rdr.super.CompressionType {
-	case gzipCompression:
-		rdr.decompressor = &compression.Zlib{}
-	case xzCompression:
-		rdr.decompressor = &compression.Xz{}
-	default:
-		//TODO: all compression types.
-		return nil, errIncompatibleCompression
-	}
 	if rdr.flags.CompressorOptions {
-		fmt.Println("has options")
-		//TODO: parse compressor options
-		return nil, errCompressorOptions
+		switch rdr.super.CompressionType {
+		//Xzcompression isn't working right now.
+		// case xzCompression:
+		// 	xz, err := compression.NewXzWithOptions(io.NewSectionReader(rdr.r, int64(binary.Size(rdr.super)), 1000)) //1000 is technically too much, but it's just an easy way to do it.
+		// 	if err != nil {
+		// 		return nil, err
+		// 	}
+		// 	rdr.decompressor = xz
+		default:
+			return nil, errCompressorOptions
+		}
+	} else {
+		switch rdr.super.CompressionType {
+		case gzipCompression:
+			rdr.decompressor = &compression.Zlib{}
+			//Xzcompression isn't working right now.
+		// case xzCompression:
+		// 	rdr.decompressor = &compression.Xz{}
+		default:
+			//TODO: all compression types.
+			return nil, errIncompatibleCompression
+		}
 	}
 	fragBlocks := int(math.Ceil(float64(rdr.super.FragCount) / 512))
 	if fragBlocks > 0 {
