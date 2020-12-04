@@ -50,23 +50,26 @@ func NewSquashfsReader(r io.ReaderAt) (*Reader, error) {
 	rdr.flags = rdr.super.GetFlags()
 	if rdr.flags.CompressorOptions {
 		switch rdr.super.CompressionType {
-		//Xzcompression isn't working right now.
-		// case xzCompression:
-		// 	xz, err := compression.NewXzWithOptions(io.NewSectionReader(rdr.r, int64(binary.Size(rdr.super)), 1000)) //1000 is technically too much, but it's just an easy way to do it.
-		// 	if err != nil {
-		// 		return nil, err
-		// 	}
-		// 	rdr.decompressor = xz
+		case xzCompression:
+			xz, err := compression.NewXzCompressorWithOptions(io.NewSectionReader(rdr.r, int64(binary.Size(rdr.super)), 1000)) //1000 is technically too much, but it's just an easy way to do it.
+			if err != nil {
+				return nil, err
+			}
+			if xz.HasFilters {
+				return nil, errors.New("XZ compression options has filters. These are not yet supported")
+			}
+			rdr.decompressor = xz
 		default:
 			return nil, errCompressorOptions
 		}
 	} else {
 		switch rdr.super.CompressionType {
 		case gzipCompression:
-			rdr.decompressor = &compression.Zlib{}
-			//Xzcompression isn't working right now.
-		// case xzCompression:
-		// 	rdr.decompressor = &compression.Xz{}
+			rdr.decompressor = &compression.Gzip{}
+		case lzmaCompression:
+			rdr.decompressor = &compression.Lzma{}
+		case xzCompression:
+			rdr.decompressor = &compression.Xz{}
 		default:
 			//TODO: all compression types.
 			return nil, errIncompatibleCompression

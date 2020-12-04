@@ -6,11 +6,11 @@ import (
 	"io"
 )
 
-//Zlib is a decompressor for gzip type compression
-type Zlib struct{}
+//Gzip is a decompressor for gzip type compression. Uses zlib for compression and decompression
+type Gzip struct{}
 
 //Decompress reads the entirety of the given reader and returns it uncompressed as a byte slice.
-func (z *Zlib) Decompress(r io.Reader) ([]byte, error) {
+func (g *Gzip) Decompress(r io.Reader) ([]byte, error) {
 	rdr, err := zlib.NewReader(r)
 	if err != nil {
 		return nil, err
@@ -24,7 +24,7 @@ func (z *Zlib) Decompress(r io.Reader) ([]byte, error) {
 }
 
 //Compress compresses the given data (as a byte array) and returns the compressed data.
-func (z *Zlib) Compress(data []byte) ([]byte, error) {
+func (g *Gzip) Compress(data []byte) ([]byte, error) {
 	var buf bytes.Buffer
 	wrt := zlib.NewWriter(&buf)
 	defer wrt.Close()
