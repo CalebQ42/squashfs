@@ -150,9 +150,17 @@ func (f *File) GetFileAtPath(path string) *File {
 	if err != nil {
 		return nil
 	}
+outer:
 	for _, child := range children {
 		if strings.Contains(split[0], "*") {
-			//TODO: wildcards
+			wilds := strings.Split(split[0], "*")
+			curIndex := 0
+			for i, section := range wilds {
+				ind := strings.Index(child.Name, section)
+				if ind == -1 {
+					continue outer
+				}
+			}
 		} else if child.Name == split[0] {
 			return child.GetFileAtPath(strings.Join(split[1:], "/"))
 		}
@@ -336,7 +344,7 @@ func (f *File) ExtractWithOptions(path string, unbreakSymlink bool, folderPerm o
 			return
 		}
 		f.Close()
-		err = fil.Chown(int(f.r.idTable[f.in.Header.UID]), int(f.r.idTable[f.in.Header.GID]))
+		fil.Chown(int(f.r.idTable[f.in.Header.UID]), int(f.r.idTable[f.in.Header.GID]))
 		//don't mention anything when it fails. Because it fails often. Probably has something to do about uid & gid 0
 		// if err != nil {
 		// 	if verbose {
@@ -370,7 +378,7 @@ func (f *File) ExtractWithOptions(path string, unbreakSymlink bool, folderPerm o
 					}
 					errs = append(errs, extracSymErrs...)
 				}
-			} else {
+			} else if verbose {
 				fmt.Println("Symlink path(", symPath, ") is outside the archive:"+path+"/"+f.Name)
 			}
 		}
@@ -416,7 +424,7 @@ func (f *File) Read(p []byte) (int, error) {
 	return f.Reader.Read(p)
 }
 
-//ReadDirFromInode returns a fully populated directory.Directory from a given inode.Inode.
+//ReadDirFromInode returns a fully populated Directory from a given Inode.
 //If the given inode is not a directory it returns an error.
 func (r *Reader) readDirFromInode(i *inode.Inode) (*directory.Directory, error) {
 	var offset uint32

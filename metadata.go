@@ -70,7 +70,7 @@ func (br *metadataReader) parseMetadata() error {
 		return err
 	}
 	br.offset += 2
-	compressed := !(raw&0x8000 == 0x8000)
+	compressed := raw&0x8000 != 0x8000
 	size := raw &^ 0x8000
 	br.headers = append(br.headers, &metadata{
 		raw:        raw,
