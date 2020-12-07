@@ -1,6 +1,7 @@
 package squashfs
 
 import (
+	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -58,10 +59,16 @@ func TestAppImage(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	os.RemoveAll(wd + "/testing/" + appImageName + ".d")
-	root, _ := rdr.GetRootFolder()
-	errs := root.ExtractWithOptions(wd+"/testing/"+appImageName+".d", true, os.ModePerm, true)
-	t.Fatal(errs)
+	fil := rdr.GetFileAtPath("usr/q*/QtQ*k/Extras/Priv*/q*")
+	if fil == nil {
+		t.Fatal("Can't find desktop file")
+	}
+	fmt.Println("Fount:", fil.Path())
+	// os.RemoveAll(wd + "/testing/" + appImageName + ".d")
+	// root, _ := rdr.GetRootFolder()
+	// errs := root.ExtractWithOptions(wd+"/testing/"+appImageName+".d", true, os.ModePerm, true)
+	// t.Fatal(errs)
+	t.Fatal("No problemo!")
 }
 
 func downloadTestAppImage(t *testing.T, dir string) {

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path"
 	"strings"
 
 	"github.com/CalebQ42/squashfs/internal/directory"
@@ -124,20 +125,20 @@ func (f *File) Path() string {
 
 //GetFileAtPath tries to return the File at the given path, relative to the file.
 //Returns nil if called on something other then a folder, OR if the path goes oustide the archive.
-//Allows * wildcards.
-func (f *File) GetFileAtPath(path string) *File {
-	if path == "" {
+//Allows wildcards supported by path.Match (namely * and ?).
+func (f *File) GetFileAtPath(dirPath string) *File {
+	if dirPath == "" {
 		return f
 	}
-	path = strings.TrimSuffix(strings.TrimPrefix(path, "/"), "/")
-	if path != "" && !f.IsDir() {
+	dirPath = strings.TrimSuffix(strings.TrimPrefix(dirPath, "/"), "/")
+	if dirPath != "" && !f.IsDir() {
 		return nil
 	}
-	for strings.HasSuffix(path, "./") {
+	for strings.HasSuffix(dirPath, "./") {
 		//since you can TECHNICALLY have an infinite amount of ./ and it would still be valid.
-		path = strings.TrimPrefix(path, "./")
+		dirPath = strings.TrimPrefix(dirPath, "./")
 	}
-	split := strings.Split(path, "/")
+	split := strings.Split(dirPath, "/")
 	if split[0] == ".." && f.Name == "" {
 		return nil
 	} else if split[0] == ".." {
@@ -150,18 +151,9 @@ func (f *File) GetFileAtPath(path string) *File {
 	if err != nil {
 		return nil
 	}
-outer:
 	for _, child := range children {
-		if strings.Contains(split[0], "*") {
-			wilds := strings.Split(split[0], "*")
-			curIndex := 0
-			for i, section := range wilds {
-				ind := strings.Index(child.Name, section)
-				if ind == -1 {
-					continue outer
-				}
-			}
-		} else if child.Name == split[0] {
+		eq, _ := path.Match(split[0], child.Name)
+		if eq {
 			return child.GetFileAtPath(strings.Join(split[1:], "/"))
 		}
 	}
