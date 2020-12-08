@@ -1,7 +1,6 @@
 package squashfs
 
 import (
-	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -32,7 +31,7 @@ func TestSquashfs(t *testing.T) {
 	}
 	os.RemoveAll(wd + "/testing/" + squashfsName + ".d")
 	root, _ := rdr.GetRootFolder()
-	errs := root.ExtractWithOptions(wd+"/testing/"+squashfsName+".d", false, os.ModePerm, true)
+	errs := root.ExtractWithOptions(wd+"/testing/"+squashfsName+".d", false, false, os.ModePerm, true)
 	t.Fatal(errs)
 }
 
@@ -59,11 +58,14 @@ func TestAppImage(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	fil := rdr.GetFileAtPath("usr/q*/QtQ*k/Extras/Priv*/q*")
+	fil := rdr.GetFileAtPath(".DirIcon")
 	if fil == nil {
 		t.Fatal("Can't find desktop file")
 	}
-	fmt.Println("Fount:", fil.Path())
+	errs := fil.ExtractSymlink(wd + "/testing/")
+	if len(errs) > 0 {
+		t.Fatal(errs)
+	}
 	// os.RemoveAll(wd + "/testing/" + appImageName + ".d")
 	// root, _ := rdr.GetRootFolder()
 	// errs := root.ExtractWithOptions(wd+"/testing/"+appImageName+".d", true, os.ModePerm, true)

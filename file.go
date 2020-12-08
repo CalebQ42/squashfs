@@ -211,23 +211,32 @@ func (f *File) Permission() os.FileMode {
 	return mode
 }
 
-//ExtractTo extracts the file to the given path. This is the same as ExtractWithOptions(path, false, os.ModePerm, false).
+//ExtractTo extracts the file to the given path. This is the same as ExtractWithOptions(path, false, false, os.ModePerm, false).
 //Will NOT try to keep symlinks valid, folders extracted will have the permissions set by the squashfs, but the folder to make path will have full permissions (777).
 //
 //Will try it's best to extract all files, and if any errors come up, they will be appended to the error slice that's returned.
 func (f *File) ExtractTo(path string) []error {
-	return f.ExtractWithOptions(path, false, os.ModePerm, false)
+	return f.ExtractWithOptions(path, false, false, os.ModePerm, false)
+}
+
+//ExtractSymlink is similar to ExtractTo, but when it extracts a symlink, it instead extracts the file associated with the symlink in it's place.
+//This is the same as ExtractWithOptions(path, true, false, os.ModePerm, false)
+func (f *File) ExtractSymlink(path string) []error {
+	return f.ExtractWithOptions(path, true, false, os.ModePerm, false)
 }
 
 //ExtractWithOptions will extract the file to the given path, while allowing customization on how it works. ExtractTo is the "default" options.
 //Will try it's best to extract all files, and if any errors come up, they will be appended to the error slice that's returned.
 //Should only return multiple errors if extracting a folder.
 //
+//If dereferenceSymlink is set, instead of extracting a symlink, it will extract the file the symlink is pointed to in it's place.
+//If both dereferenceSymlink and unbreakSymlink is set, dereferenceSymlink takes precendence.
+//
 //If unbreakSymlink is set, it will also try to extract the symlink's associated file. WARNING: the symlink's file may have to go up the directory to work.
 //If unbreakSymlink is set and the file cannot be extracted, a ErrBrokenSymlink will be appended to the returned error slice.
 //
 //folderPerm only applies to the folders created to get to path. Folders from the archive are given the correct permissions defined by the archive.
-func (f *File) ExtractWithOptions(path string, unbreakSymlink bool, folderPerm os.FileMode, verbose bool) (errs []error) {
+func (f *File) ExtractWithOptions(path string, dereferenceSymlink, unbreakSymlink bool, folderPerm os.FileMode, verbose bool) (errs []error) {
 	errs = make([]error, 0)
 	err := os.MkdirAll(path, folderPerm)
 	if err != nil {
@@ -287,9 +296,9 @@ func (f *File) ExtractWithOptions(path string, unbreakSymlink bool, folderPerm o
 		for _, child := range children {
 			go func(child *File) {
 				if f.Name == "" {
-					finishChan <- child.ExtractWithOptions(path, unbreakSymlink, folderPerm, verbose)
+					finishChan <- child.ExtractWithOptions(path, dereferenceSymlink, unbreakSymlink, folderPerm, verbose)
 				} else {
-					finishChan <- child.ExtractWithOptions(path+"/"+f.Name, unbreakSymlink, folderPerm, verbose)
+					finishChan <- child.ExtractWithOptions(path+"/"+f.Name, dereferenceSymlink, unbreakSymlink, folderPerm, verbose)
 				}
 			}(child)
 		}
@@ -357,12 +366,30 @@ func (f *File) ExtractWithOptions(path string, unbreakSymlink bool, folderPerm o
 		return
 	case f.IsSymlink():
 		symPath := f.SymlinkPath()
-		if unbreakSymlink {
+		if dereferenceSymlink {
+			fil := f.GetSymlinkFile()
+			if fil == nil {
+				if verbose {
+					fmt.Println("Symlink path(", symPath, ") is outside the archive:"+path+"/"+f.Name)
+				}
+				return
+			}
+			fil.Name = f.Name
+			extracSymErrs := fil.ExtractWithOptions(path, dereferenceSymlink, unbreakSymlink, folderPerm, verbose)
+			if len(extracSymErrs) > 0 {
+				if verbose {
+					fmt.Println("Error(s) while extracting the symlink's file:", path+"/"+f.Name)
+					fmt.Println(extracSymErrs)
+				}
+				errs = append(errs, extracSymErrs...)
+			}
+			return
+		} else if unbreakSymlink {
 			fil := f.GetSymlinkFile()
 			if fil != nil {
 				symPath = path + "/" + symPath
 				paths := strings.Split(symPath, "/")
-				extracSymErrs := fil.ExtractWithOptions(strings.Join(paths[:len(paths)-1], "/"), unbreakSymlink, folderPerm, verbose)
+				extracSymErrs := fil.ExtractWithOptions(strings.Join(paths[:len(paths)-1], "/"), dereferenceSymlink, unbreakSymlink, folderPerm, verbose)
 				if len(extracSymErrs) > 0 {
 					if verbose {
 						fmt.Println("Error(s) while extracting the symlink's file:", path+"/"+f.Name)
@@ -370,8 +397,11 @@ func (f *File) ExtractWithOptions(path string, unbreakSymlink bool, folderPerm o
 					}
 					errs = append(errs, extracSymErrs...)
 				}
-			} else if verbose {
-				fmt.Println("Symlink path(", symPath, ") is outside the archive:"+path+"/"+f.Name)
+			} else {
+				if verbose {
+					fmt.Println("Symlink path(", symPath, ") is outside the archive:"+path+"/"+f.Name)
+				}
+				return
 			}
 		}
 		err = os.Symlink(f.SymlinkPath(), path+"/"+f.Name)
