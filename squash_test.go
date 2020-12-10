@@ -58,11 +58,7 @@ func TestAppImage(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	fil := rdr.GetFileAtPath(".DirIcon")
-	if fil == nil {
-		t.Fatal("Can't find desktop file")
-	}
-	errs := fil.ExtractSymlink(wd + "/testing/")
+	errs := rdr.ExtractTo(wd + "/testing/cool-retro")
 	if len(errs) > 0 {
 		t.Fatal(errs)
 	}

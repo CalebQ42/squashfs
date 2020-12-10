@@ -114,6 +114,15 @@ func NewSquashfsReader(r io.ReaderAt) (*Reader, error) {
 	return &rdr, nil
 }
 
+//ExtractTo tries to extract ALL files to the given path. This is the same as getting the root folder and extracting that.
+func (r *Reader) ExtractTo(path string) []error {
+	root, err := r.GetRootFolder()
+	if err != nil {
+		return []error{err}
+	}
+	return root.ExtractTo(path)
+}
+
 //GetRootFolder returns a squashfs.File that references the root directory of the squashfs archive.
 func (r *Reader) GetRootFolder() (root *File, err error) {
 	root = new(File)
