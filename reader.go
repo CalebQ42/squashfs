@@ -21,6 +21,8 @@ var (
 	errIncompatibleCompression = errors.New("Compression type unsupported")
 	//ErrCompressorOptions is returned if compressor options is present. It's not currently supported.
 	errCompressorOptions = errors.New("Compressor options is not currently supported")
+	//ErrOptions is returned when compression options that I haven't tested is set. When this is returned, the Reader is also returned.
+	ErrOptions = errors.New("Possibly incompatible compressor options")
 )
 
 //Reader processes and reads a squashfs archive.
@@ -35,6 +37,7 @@ type Reader struct {
 
 //NewSquashfsReader returns a new squashfs.Reader from an io.ReaderAt
 func NewSquashfsReader(r io.ReaderAt) (*Reader, error) {
+	hasUnsupportedOptions := false
 	var rdr Reader
 	rdr.r = r
 	err := binary.Read(io.NewSectionReader(rdr.r, 0, int64(binary.Size(rdr.super))), binary.LittleEndian, &rdr.super)
@@ -50,8 +53,17 @@ func NewSquashfsReader(r io.ReaderAt) (*Reader, error) {
 	rdr.flags = rdr.super.GetFlags()
 	if rdr.flags.CompressorOptions {
 		switch rdr.super.CompressionType {
+		case gzipCompression:
+			gzip, err := compression.NewGzipCompressorWithOptions(io.NewSectionReader(rdr.r, int64(binary.Size(rdr.super)), 8))
+			if err != nil {
+				return nil, err
+			}
+			if gzip.HasCustomWindow || gzip.HasStrategies {
+				hasUnsupportedOptions = true
+			}
+			rdr.decompressor = gzip
 		case xzCompression:
-			xz, err := compression.NewXzCompressorWithOptions(io.NewSectionReader(rdr.r, int64(binary.Size(rdr.super)), 1000)) //1000 is technically too much, but it's just an easy way to do it.
+			xz, err := compression.NewXzCompressorWithOptions(io.NewSectionReader(rdr.r, int64(binary.Size(rdr.super)), 8))
 			if err != nil {
 				return nil, err
 			}
@@ -59,6 +71,21 @@ func NewSquashfsReader(r io.ReaderAt) (*Reader, error) {
 				return nil, errors.New("XZ compression options has filters. These are not yet supported")
 			}
 			rdr.decompressor = xz
+		case lz4Compression:
+			lz4, err := compression.NewLz4CompressorWithOptions(io.NewSectionReader(rdr.r, int64(binary.Size(rdr.super)), 8))
+			if err != nil {
+				return nil, err
+			}
+			if lz4.HC {
+				hasUnsupportedOptions = true
+			}
+			rdr.decompressor = lz4
+		case zstdCompression:
+			zstd, err := compression.NewZstdCompressorWithOptions(io.NewSectionReader(rdr.r, int64(binary.Size(rdr.super)), 4))
+			if err != nil {
+				return nil, err
+			}
+			rdr.decompressor = zstd
 		default:
 			return nil, errCompressorOptions
 		}
@@ -70,6 +97,10 @@ func NewSquashfsReader(r io.ReaderAt) (*Reader, error) {
 			rdr.decompressor = &compression.Lzma{}
 		case xzCompression:
 			rdr.decompressor = &compression.Xz{}
+		case lz4Compression:
+			rdr.decompressor = &compression.Lz4{}
+		case zstdCompression:
+			rdr.decompressor = &compression.Zstd{}
 		default:
 			//TODO: all compression types.
 			return nil, errIncompatibleCompression
@@ -110,6 +141,9 @@ func NewSquashfsReader(r io.ReaderAt) (*Reader, error) {
 			rdr.idTable = append(rdr.idTable, tmp)
 		}
 		unread -= read
+	}
+	if hasUnsupportedOptions {
+		return &rdr, ErrOptions
 	}
 	return &rdr, nil
 }
