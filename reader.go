@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"math"
+	"time"
 
 	"github.com/CalebQ42/squashfs/internal/compression"
 	"github.com/CalebQ42/squashfs/internal/inode"
@@ -146,6 +147,11 @@ func NewSquashfsReader(r io.ReaderAt) (*Reader, error) {
 		return &rdr, ErrOptions
 	}
 	return &rdr, nil
+}
+
+//ModTime is the last time the file was modified/created.
+func (r *Reader) ModTime() time.Time {
+	return time.Unix(int64(r.super.CreationTime), 0)
 }
 
 //ExtractTo tries to extract ALL files to the given path. This is the same as getting the root folder and extracting that.
