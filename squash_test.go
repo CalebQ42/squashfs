@@ -15,7 +15,7 @@ const (
 	squashfsName = "airootfs.sfs" //testing with a ArchLinux root fs from the live img
 )
 
-//Right now, don't use. Arch linux sfs uses XZ compression and when tested, most files just completely fail to extract.
+//Right now, don't use. Arch linux sfs uses XZ compression with filters, which isn't supported
 func TestSquashfs(t *testing.T) {
 	wd, err := os.Getwd()
 	if err != nil {
@@ -70,8 +70,8 @@ func TestAppImage(t *testing.T) {
 }
 
 func downloadTestAppImage(t *testing.T, dir string) {
-	//seems to time out on slow connections. Might fix that at some point... or not
-	os.Mkdir(dir, 0777)
+	//seems to time out on slow connections. Might fix that at some point... or not. It's just a test...
+	os.Mkdir(dir, os.ModePerm)
 	appImage, err := os.Create(dir + "/" + appImageName)
 	if err != nil {
 		t.Fatal(err)

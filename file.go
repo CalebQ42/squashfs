@@ -7,6 +7,7 @@ import (
 	"os"
 	"path"
 	"strings"
+	"time"
 
 	"github.com/CalebQ42/squashfs/internal/directory"
 	"github.com/CalebQ42/squashfs/internal/inode"
@@ -26,10 +27,12 @@ var (
 //File is the main way to interact with files within squashfs, or when putting files into a squashfs.
 //File can be either a file or folder. When reading from a squashfs, it reads from the datablocks.
 //When writing, this holds the information on WHERE the file will be placed inside the archive.
+//
+//Implements os.FileInfo and io.ReadCloser
 type File struct {
-	Name    string       //The name of the file or folder. Root folder will not have a name ("")
 	Parent  *File        //The parent directory. Should ALWAYS be a folder. If it's the root directory, will be nil
 	Reader  io.Reader    //Underlying reader. When writing, will probably be an os.File. When reading this is kept nil UNTIL reading to save memory.
+	name    string       //The name of the file or folder. Root folder will not have a name ("")
 	path    string       //The path to the folder the File is located in.
 	r       *Reader      //The squashfs.Reader where this file is contained.
 	in      *inode.Inode //Underlyting inode when reading.
@@ -43,10 +46,48 @@ func (r *Reader) newFileFromDirEntry(entry *directory.Entry) (fil *File, err err
 	if err != nil {
 		return nil, err
 	}
-	fil.Name = entry.Name
+	fil.name = entry.Name
 	fil.r = r
 	fil.filType = fil.in.Type
 	return
+}
+
+//Name is the file's name
+func (f *File) Name() string {
+	return f.name
+}
+
+//Size is the complete size of the file. Zero if it's not a file.
+func (f *File) Size() int64 {
+	switch f.filType {
+	case inode.BasicFileType:
+		return int64(f.in.Info.(inode.BasicFile).Init.Size)
+	case inode.ExtFileType:
+		return int64(f.in.Info.(inode.ExtendedFile).Init.Size)
+	default:
+		return 0
+	}
+}
+
+//ModTime is the time of last modification.
+func (f *File) ModTime() time.Time {
+	return time.Unix(int64(f.in.Header.ModifiedTime), 0)
+}
+
+//Sys returns the underlying reader, file.Reader. If the reader isn't initialized, it will initialize it.
+//If called on something other then a file, returns nil.
+func (f *File) Sys() interface{} {
+	if f.IsFile() {
+		if f.Reader == nil && f.r != nil {
+			var err error
+			f.Reader, err = f.r.newFileReader(f.in)
+			if err != nil {
+				return nil
+			}
+		}
+		return f.Reader
+	}
+	return nil
 }
 
 //GetChildren returns a *squashfs.File slice of every direct child of the directory. If the File is not a directory, will return ErrNotDirectory
@@ -69,7 +110,7 @@ func (f *File) GetChildren() (children []*File, err error) {
 			return
 		}
 		fil.Parent = f
-		if f.Name != "" {
+		if f.name != "" {
 			fil.path = f.Path()
 		}
 		children = append(children, fil)
@@ -117,10 +158,10 @@ func (f *File) GetChildrenRecursively() (children []*File, err error) {
 
 //Path returns the path of the file within the archive.
 func (f *File) Path() string {
-	if f.Name == "" {
+	if f.name == "" {
 		return f.path
 	}
-	return f.path + "/" + f.Name
+	return f.path + "/" + f.name
 }
 
 //GetFileAtPath tries to return the File at the given path, relative to the file.
@@ -139,7 +180,7 @@ func (f *File) GetFileAtPath(dirPath string) *File {
 		dirPath = strings.TrimPrefix(dirPath, "./")
 	}
 	split := strings.Split(dirPath, "/")
-	if split[0] == ".." && f.Name == "" {
+	if split[0] == ".." && f.name == "" {
 		return nil
 	} else if split[0] == ".." {
 		if f.Parent != nil {
@@ -152,7 +193,7 @@ func (f *File) GetFileAtPath(dirPath string) *File {
 		return nil
 	}
 	for _, child := range children {
-		eq, _ := path.Match(split[0], child.Name)
+		eq, _ := path.Match(split[0], child.name)
 		if eq {
 			return child.GetFileAtPath(strings.Join(split[1:], "/"))
 		}
@@ -199,8 +240,8 @@ func (f *File) GetSymlinkFile() *File {
 	return f.r.GetFileAtPath(f.SymlinkPath())
 }
 
-//Permission returns the os.FileMode of the File. Sets mode bits for directories and symlinks.
-func (f *File) Permission() os.FileMode {
+//Mode returns the os.FileMode of the File. Sets mode bits for directories and symlinks.
+func (f *File) Mode() os.FileMode {
 	mode := os.FileMode(f.in.Header.Permissions)
 	switch {
 	case f.IsDir():
@@ -244,21 +285,21 @@ func (f *File) ExtractWithOptions(path string, dereferenceSymlink, unbreakSymlin
 	}
 	switch {
 	case f.IsDir():
-		if f.Name != "" {
+		if f.name != "" {
 			//TODO: check if folder is present, and if so, try to set it's permission
-			err = os.Mkdir(path+"/"+f.Name, os.ModePerm)
+			err = os.Mkdir(path+"/"+f.name, os.ModePerm)
 			if err != nil {
 				if verbose {
-					fmt.Println("Error while making: ", path+"/"+f.Name)
+					fmt.Println("Error while making: ", path+"/"+f.name)
 					fmt.Println(err)
 				}
 				errs = append(errs, err)
 				return
 			}
-			fil, err := os.Open(path + "/" + f.Name)
+			fil, err := os.Open(path + "/" + f.name)
 			if err != nil {
 				if verbose {
-					fmt.Println("Error while opening:", path+"/"+f.Name)
+					fmt.Println("Error while opening:", path+"/"+f.name)
 					fmt.Println(err)
 				}
 				errs = append(errs, err)
@@ -273,10 +314,10 @@ func (f *File) ExtractWithOptions(path string, dereferenceSymlink, unbreakSymlin
 			// 	}
 			// 	errs = append(errs, err)
 			// }
-			err = fil.Chmod(f.Permission())
+			err = fil.Chmod(f.Mode())
 			if err != nil {
 				if verbose {
-					fmt.Println("Error while changing owner:", path+"/"+f.Name)
+					fmt.Println("Error while changing owner:", path+"/"+f.name)
 					fmt.Println(err)
 				}
 				errs = append(errs, err)
@@ -295,10 +336,10 @@ func (f *File) ExtractWithOptions(path string, dereferenceSymlink, unbreakSymlin
 		defer close(finishChan)
 		for _, child := range children {
 			go func(child *File) {
-				if f.Name == "" {
+				if f.name == "" {
 					finishChan <- child.ExtractWithOptions(path, dereferenceSymlink, unbreakSymlink, folderPerm, verbose)
 				} else {
-					finishChan <- child.ExtractWithOptions(path+"/"+f.Name, dereferenceSymlink, unbreakSymlink, folderPerm, verbose)
+					finishChan <- child.ExtractWithOptions(path+"/"+f.name, dereferenceSymlink, unbreakSymlink, folderPerm, verbose)
 				}
 			}(child)
 		}
@@ -307,21 +348,21 @@ func (f *File) ExtractWithOptions(path string, dereferenceSymlink, unbreakSymlin
 		}
 		return
 	case f.IsFile():
-		fil, err := os.Create(path + "/" + f.Name)
+		fil, err := os.Create(path + "/" + f.name)
 		if os.IsExist(err) {
-			err = os.Remove(path + "/" + f.Name)
+			err = os.Remove(path + "/" + f.name)
 			if err != nil {
 				if verbose {
-					fmt.Println("Error while making:", path+"/"+f.Name)
+					fmt.Println("Error while making:", path+"/"+f.name)
 					fmt.Println(err)
 				}
 				errs = append(errs, err)
 				return
 			}
-			fil, err = os.Create(path + "/" + f.Name)
+			fil, err = os.Create(path + "/" + f.name)
 			if err != nil {
 				if verbose {
-					fmt.Println("Error while making:", path+"/"+f.Name)
+					fmt.Println("Error while making:", path+"/"+f.name)
 					fmt.Println(err)
 				}
 				errs = append(errs, err)
@@ -329,7 +370,7 @@ func (f *File) ExtractWithOptions(path string, dereferenceSymlink, unbreakSymlin
 			}
 		} else if err != nil {
 			if verbose {
-				fmt.Println("Error while making:", path+"/"+f.Name)
+				fmt.Println("Error while making:", path+"/"+f.name)
 				fmt.Println(err)
 			}
 			errs = append(errs, err)
@@ -338,7 +379,7 @@ func (f *File) ExtractWithOptions(path string, dereferenceSymlink, unbreakSymlin
 		_, err = io.Copy(fil, f)
 		if err != nil {
 			if verbose {
-				fmt.Println("Error while Copying data to:", path+"/"+f.Name)
+				fmt.Println("Error while Copying data to:", path+"/"+f.name)
 				fmt.Println(err)
 			}
 			errs = append(errs, err)
@@ -355,10 +396,10 @@ func (f *File) ExtractWithOptions(path string, dereferenceSymlink, unbreakSymlin
 		// 	errs = append(errs, err)
 		// 	return
 		// }
-		err = fil.Chmod(f.Permission())
+		err = fil.Chmod(f.Mode())
 		if err != nil {
 			if verbose {
-				fmt.Println("Error while setting permissions for:", path+"/"+f.Name)
+				fmt.Println("Error while setting permissions for:", path+"/"+f.name)
 				fmt.Println(err)
 			}
 			errs = append(errs, err)
@@ -370,15 +411,15 @@ func (f *File) ExtractWithOptions(path string, dereferenceSymlink, unbreakSymlin
 			fil := f.GetSymlinkFile()
 			if fil == nil {
 				if verbose {
-					fmt.Println("Symlink path(", symPath, ") is outside the archive:"+path+"/"+f.Name)
+					fmt.Println("Symlink path(", symPath, ") is outside the archive:"+path+"/"+f.name)
 				}
 				return
 			}
-			fil.Name = f.Name
+			fil.name = f.name
 			extracSymErrs := fil.ExtractWithOptions(path, dereferenceSymlink, unbreakSymlink, folderPerm, verbose)
 			if len(extracSymErrs) > 0 {
 				if verbose {
-					fmt.Println("Error(s) while extracting the symlink's file:", path+"/"+f.Name)
+					fmt.Println("Error(s) while extracting the symlink's file:", path+"/"+f.name)
 					fmt.Println(extracSymErrs)
 				}
 				errs = append(errs, extracSymErrs...)
@@ -392,22 +433,22 @@ func (f *File) ExtractWithOptions(path string, dereferenceSymlink, unbreakSymlin
 				extracSymErrs := fil.ExtractWithOptions(strings.Join(paths[:len(paths)-1], "/"), dereferenceSymlink, unbreakSymlink, folderPerm, verbose)
 				if len(extracSymErrs) > 0 {
 					if verbose {
-						fmt.Println("Error(s) while extracting the symlink's file:", path+"/"+f.Name)
+						fmt.Println("Error(s) while extracting the symlink's file:", path+"/"+f.name)
 						fmt.Println(extracSymErrs)
 					}
 					errs = append(errs, extracSymErrs...)
 				}
 			} else {
 				if verbose {
-					fmt.Println("Symlink path(", symPath, ") is outside the archive:"+path+"/"+f.Name)
+					fmt.Println("Symlink path(", symPath, ") is outside the archive:"+path+"/"+f.name)
 				}
 				return
 			}
 		}
-		err = os.Symlink(f.SymlinkPath(), path+"/"+f.Name)
+		err = os.Symlink(f.SymlinkPath(), path+"/"+f.name)
 		if err != nil {
 			if verbose {
-				fmt.Println("Error while making symlink:", path+"/"+f.Name)
+				fmt.Println("Error while making symlink:", path+"/"+f.name)
 				fmt.Println(err)
 			}
 			errs = append(errs, err)
