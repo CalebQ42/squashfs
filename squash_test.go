@@ -78,7 +78,7 @@ func downloadTestAppImage(t *testing.T, dir string) {
 	}
 	defer appImage.Close()
 	check := http.Client{
-		CheckRedirect: func(r *http.Request, via []*http.Request) error {
+		CheckRedirect: func(r *http.Request, _ []*http.Request) error {
 			r.URL.Opaque = r.URL.Path
 			return nil
 		},

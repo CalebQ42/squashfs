@@ -229,7 +229,8 @@ func (f *File) SymlinkPath() string {
 	}
 }
 
-//GetSymlinkFile tries to return the squashfs.File associated with the symlink
+//GetSymlinkFile tries to return the squashfs.File associated with the symlink. If the file isn't a symlink
+//or the symlink points to a location outside the archive, nil is returned.
 func (f *File) GetSymlinkFile() *File {
 	if !f.IsSymlink() {
 		return nil
@@ -237,7 +238,28 @@ func (f *File) GetSymlinkFile() *File {
 	if strings.HasSuffix(f.SymlinkPath(), "/") {
 		return nil
 	}
-	return f.r.GetFileAtPath(f.SymlinkPath())
+	return f.Parent.GetFileAtPath(f.SymlinkPath())
+}
+
+//GetSymlinkFileRecursive tries to return the squasfs.File associated with the symlink. It will recursively
+//try to get the symlink's file. This will return either a non-symlink File, or nil.
+func (f *File) GetSymlinkFileRecursive() *File {
+	if !f.IsSymlink() {
+		return nil
+	}
+	if strings.HasSuffix(f.SymlinkPath(), "/") {
+		return nil
+	}
+	sym := f
+	for {
+		sym = sym.GetSymlinkFile()
+		if sym == nil {
+			return nil
+		}
+		if !sym.IsSymlink() {
+			return sym
+		}
+	}
 }
 
 //Mode returns the os.FileMode of the File. Sets mode bits for directories and symlinks.
