@@ -18,11 +18,11 @@ var (
 //DataReader reads data from data blocks.
 type dataReader struct {
 	r             *Reader
-	offset        int64 //offset relative to the beginning of the squash file
 	blocks        []dataBlock
-	curBlock      int //Which block in sizes is currently cached
 	curData       []byte
-	curReadOffset int //offset relative to the currently cached data
+	offset        int64 //offset relative to the beginning of the squash file
+	curBlock      int   //Which block in sizes is currently cached
+	curReadOffset int   //offset relative to the currently cached data
 }
 
 //DataBlock holds info about a given data block from it's size

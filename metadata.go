@@ -16,9 +16,9 @@ type metadata struct {
 //MetadataReader is a block reader for metadata. It will automatically read the next block, when it reaches the end of a block.
 type metadataReader struct {
 	s          *Reader
-	offset     int64
 	headers    []*metadata
 	data       []byte
+	offset     int64
 	readOffset int
 }
 

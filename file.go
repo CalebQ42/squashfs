@@ -30,13 +30,14 @@ var (
 //
 //Implements os.FileInfo and io.ReadCloser
 type File struct {
-	Parent  *File        //The parent directory. Should ALWAYS be a folder. If it's the root directory, will be nil
-	Reader  io.Reader    //Underlying reader. When writing, will probably be an os.File. When reading this is kept nil UNTIL reading to save memory.
-	name    string       //The name of the file or folder. Root folder will not have a name ("")
-	path    string       //The path to the folder the File is located in.
-	r       *Reader      //The squashfs.Reader where this file is contained.
-	in      *inode.Inode //Underlyting inode when reading.
-	filType int          //The file's type, using inode types.
+	Reader  io.Reader
+	Parent  *File
+	r       *Reader //Underlying reader. When writing, will probably be an os.File. When reading this is kept nil UNTIL reading to save memory.
+	in      *inode.Inode
+	name    string
+	path    string
+	filType int //The file's type, using inode types.
+
 }
 
 //get a File from a directory.entry

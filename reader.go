@@ -29,11 +29,11 @@ var (
 //Reader processes and reads a squashfs archive.
 type Reader struct {
 	r            io.ReaderAt
-	super        superblock
-	flags        superblockFlags
 	decompressor compression.Decompressor
 	fragOffsets  []uint64
 	idTable      []uint32
+	super        superblock
+	flags        superblockFlags
 }
 
 //NewSquashfsReader returns a new squashfs.Reader from an io.ReaderAt
