@@ -1,6 +1,7 @@
 package squashfs
 
 import (
+	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -12,10 +13,9 @@ import (
 const (
 	downloadURL  = "https://github.com/Swordfish90/cool-retro-term/releases/download/1.1.1/Cool-Retro-Term-1.1.1-x86_64.AppImage"
 	appImageName = "Cool-Retro-Term.AppImage"
-	squashfsName = "airootfs.sfs" //testing with a ArchLinux root fs from the live img
+	squashfsName = "balenaEtcher-1.5.113-x64.AppImage.sfs" //testing with a ArchLinux root fs from the live img
 )
 
-//Right now, don't use. Arch linux sfs uses XZ compression with filters, which isn't supported
 func TestSquashfs(t *testing.T) {
 	wd, err := os.Getwd()
 	if err != nil {
@@ -29,10 +29,20 @@ func TestSquashfs(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	os.RemoveAll(wd + "/testing/" + squashfsName + ".d")
-	root, _ := rdr.GetRootFolder()
-	errs := root.ExtractWithOptions(wd+"/testing/"+squashfsName+".d", false, false, os.ModePerm, true)
-	t.Fatal(errs)
+	fmt.Println("stuff", rdr.super.CompressionType)
+	fil := rdr.GetFileAtPath("*.desktop")
+	if fil == nil {
+		t.Fatal("Can't find desktop fil")
+	}
+	errs := fil.ExtractTo(wd + "/testing")
+	if len(errs) > 0 {
+		t.Fatal(errs)
+	}
+	errs = rdr.ExtractTo(wd + "/testing/" + squashfsName + ".d")
+	if len(errs) > 0 {
+		t.Fatal(errs)
+	}
+	t.Fatal("No Problems")
 }
 
 func TestAppImage(t *testing.T) {

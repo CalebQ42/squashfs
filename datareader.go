@@ -175,12 +175,12 @@ func (d *dataReader) Read(p []byte) (int, error) {
 			d.curReadOffset = 0
 		}
 		for ; read < len(p); read++ {
-			d.curReadOffset++
 			if d.curReadOffset < len(d.curData) {
 				p[read] = d.curData[d.curReadOffset]
 			} else {
 				break
 			}
+			d.curReadOffset++
 		}
 	}
 	if read != len(p) {
