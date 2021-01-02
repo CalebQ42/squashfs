@@ -54,7 +54,7 @@ func NewSquashfsReader(r io.ReaderAt) (*Reader, error) {
 	rdr.flags = rdr.super.GetFlags()
 	if rdr.flags.CompressorOptions {
 		switch rdr.super.CompressionType {
-		case gzipCompression:
+		case GzipCompression:
 			gzip, err := compression.NewGzipCompressorWithOptions(io.NewSectionReader(rdr.r, int64(binary.Size(rdr.super)), 8))
 			if err != nil {
 				return nil, err
@@ -63,7 +63,7 @@ func NewSquashfsReader(r io.ReaderAt) (*Reader, error) {
 				hasUnsupportedOptions = true
 			}
 			rdr.decompressor = gzip
-		case xzCompression:
+		case XzCompression:
 			xz, err := compression.NewXzCompressorWithOptions(io.NewSectionReader(rdr.r, int64(binary.Size(rdr.super)), 8))
 			if err != nil {
 				return nil, err
@@ -72,7 +72,7 @@ func NewSquashfsReader(r io.ReaderAt) (*Reader, error) {
 				return nil, errors.New("XZ compression options has filters. These are not yet supported")
 			}
 			rdr.decompressor = xz
-		case lz4Compression:
+		case Lz4Compression:
 			lz4, err := compression.NewLz4CompressorWithOptions(io.NewSectionReader(rdr.r, int64(binary.Size(rdr.super)), 8))
 			if err != nil {
 				return nil, err
@@ -81,26 +81,26 @@ func NewSquashfsReader(r io.ReaderAt) (*Reader, error) {
 				hasUnsupportedOptions = true
 			}
 			rdr.decompressor = lz4
-		case zstdCompression:
+		case ZstdCompression:
 			zstd, err := compression.NewZstdCompressorWithOptions(io.NewSectionReader(rdr.r, int64(binary.Size(rdr.super)), 4))
 			if err != nil {
 				return nil, err
 			}
 			rdr.decompressor = zstd
 		default:
-			return nil, errCompressorOptions
+			return nil, errIncompatibleCompression
 		}
 	} else {
 		switch rdr.super.CompressionType {
-		case gzipCompression:
+		case GzipCompression:
 			rdr.decompressor = &compression.Gzip{}
-		case lzmaCompression:
+		case LzmaCompression:
 			rdr.decompressor = &compression.Lzma{}
-		case xzCompression:
+		case XzCompression:
 			rdr.decompressor = &compression.Xz{}
-		case lz4Compression:
+		case Lz4Compression:
 			rdr.decompressor = &compression.Lz4{}
-		case zstdCompression:
+		case ZstdCompression:
 			rdr.decompressor = &compression.Zstd{}
 		default:
 			//TODO: all compression types.

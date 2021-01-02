@@ -1,12 +1,13 @@
 package squashfs
 
+//The types of compression supported by squashfs.
 const (
-	gzipCompression = 1 + iota
-	lzmaCompression
-	lzoCompression
-	xzCompression
-	lz4Compression
-	zstdCompression
+	GzipCompression = 1 + iota
+	LzmaCompression
+	LzoCompression
+	XzCompression
+	Lz4Compression
+	ZstdCompression
 )
 
 //Superblock contains important information about a squashfs file. Located at the very front of the archive.

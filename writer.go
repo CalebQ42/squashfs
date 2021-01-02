@@ -3,36 +3,67 @@ package squashfs
 import (
 	"errors"
 	"os"
-
-	"github.com/CalebQ42/squashfs/internal/inode"
+	"path"
 )
 
 //Writer is an interface to write a squashfs. Doesn't write until you call Write (TODO: maybe not do Write...)
 type Writer struct {
-	files       map[string]*File
-	directories []string
+	files           map[string][]*File
+	directories     []string
+	resolveSymlinks bool
+	compression     int
+	temp            []*File
 }
 
-func convertFile(file *os.File) (*File, error) {
+//NewWriter creates a new squashfs.Writer with the default settings (gzip compression and autoresolving symlinks)
+func NewWriter() (*Writer, error) {
+	return NewWriterWithOptions(true, GzipCompression)
+}
+
+//NewWriterWithOptions creates a new squashfs.Writer with the given options.
+//ResolveSymlinks tries to make sure symlinks aren't broken, and if they would be
+func NewWriterWithOptions(resolveSymlinks bool, compressionType int) (*Writer, error) {
+	if compressionType < 0 || compressionType > 6 || compressionType == 3 {
+		return nil, errors.New("Incompatible compression type")
+	}
+	return &Writer{
+		files: map[string][]*File{
+			"/": make([]*File, 0),
+		},
+		directories:     []string{"/"},
+		resolveSymlinks: resolveSymlinks,
+		compression:     compressionType,
+	}, nil
+}
+
+func (w *Writer) convertFile(squashfsPath string, file *os.File) error {
+	var fil File
+	fil.Reader = file
+	fil.name = path.Base(file.Name())
+	fil.path = squashfsPath
 	stat, err := file.Stat()
 	if err != nil {
-		return nil, err
+		return err
 	}
-	var filType int
+	defer func() { w.temp = append(w.temp, &fil) }()
 	if stat.IsDir() {
-		//TODO
-	} else if stat.Mode().IsRegular() {
-		filType = inode.BasicFileType
-		return &File{
-			Reader:  file,
-			name:    file.Name(),
-			filType: filType,
-		}, nil
-	} else if stat.Mode()&os.ModeSymlink == os.ModeSymlink {
-		//TODO: implement symlink support
-		return nil, errors.New("No symlink support. No support at all actually...")
+		dirs, err := file.Readdirnames(-1)
+		if err != nil {
+			return err
+		}
+		for _, dir := range dirs {
+			subFil, err := os.Open(file.Name() + dir)
+			if err != nil {
+				return err
+			}
+			err = w.convertFile(fil.Path(), subFil)
+			if err != nil {
+				return err
+			}
+		}
 	}
-	return nil, errors.New("File type is NOT supported")
+	//TODO: reg files & symlinks
+	return nil
 }
 
 //AddFilesToPath adds the give os.Files to the given path within the squashfs archive.
