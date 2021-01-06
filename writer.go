@@ -14,12 +14,12 @@ import (
 //If AllowErrors is true, when errors are encountered, it just prints to the log instead of failing.
 type Writer struct {
 	files           map[string][]*File
-	directories     []string
-	symlinkTable    map[string]string //symlinkTable holds info about symlink'd to files that had to be moved from their original position. [originalpath]newpath
+	symlinkTable    map[string]string //[oldpath]newpath
 	symTableTemp    map[string]string
+	directories     []string
+	compression     int
 	ResolveSymlinks bool
 	AllowErrors     bool
-	compression     int
 }
 
 //NewWriter creates a new squashfs.Writer with the default settings (gzip compression, autoresolving symlinks, and allowErrors)
@@ -51,8 +51,8 @@ func NewWriterWithOptions(resolveSymlinks, allowErrors bool, compressionType int
 }
 
 type fileError struct {
-	files []*File
 	err   error
+	files []*File
 }
 
 //convertFile converts the given os.File to a squashfs.File. Returns the errors and converted file to the channels.
@@ -163,6 +163,7 @@ func (w *Writer) AddFilesToPath(squashfsPath string, files ...*os.File) error {
 	for _, fil := range files {
 		go w.convertFile(squashfsPath, fil, false, fileErrChan)
 	}
+	return errors.New("Not yet ready")
 }
 
 //AddFiles adds all files given to the root directory

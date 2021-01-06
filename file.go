@@ -356,7 +356,6 @@ func (f *File) ExtractWithOptions(path string, dereferenceSymlink, unbreakSymlin
 			return
 		}
 		finishChan := make(chan []error)
-		defer close(finishChan)
 		for _, child := range children {
 			go func(child *File) {
 				if f.name == "" {
@@ -408,7 +407,6 @@ func (f *File) ExtractWithOptions(path string, dereferenceSymlink, unbreakSymlin
 			errs = append(errs, err)
 			return
 		}
-		f.Close()
 		fil.Chown(int(f.r.idTable[f.in.Header.UID]), int(f.r.idTable[f.in.Header.GID]))
 		//don't mention anything when it fails. Because it fails often. Probably has something to do about uid & gid 0
 		// if err != nil {
@@ -478,21 +476,6 @@ func (f *File) ExtractWithOptions(path string, dereferenceSymlink, unbreakSymlin
 		}
 	}
 	return
-}
-
-//Close frees up the memory held up by the underlying reader. Should NOT be called when writing.
-//When reading, Close is safe to use, but any subsequent Read calls resets to the beginning of the file.
-func (f *File) Close() error {
-	if f.IsDir() {
-		return errNotFile
-	}
-	if f.Reader != nil {
-		if closer, is := f.Reader.(io.Closer); is {
-			closer.Close()
-		}
-		f.Reader = nil
-	}
-	return nil
 }
 
 //Read from the file. Doesn't do anything fancy, just pases it to the underlying io.Reader. If a directory, return io.EOF.

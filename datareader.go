@@ -145,12 +145,6 @@ func (d *dataReader) readCurBlock() error {
 	return err
 }
 
-//Close frees up the curData from memory
-func (d *dataReader) Close() error {
-	d.curData = nil
-	return nil
-}
-
 func (d *dataReader) Read(p []byte) (int, error) {
 	if d.curData == nil {
 		err := d.readCurBlock()

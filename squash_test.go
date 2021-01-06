@@ -11,8 +11,8 @@ import (
 )
 
 const (
-	downloadURL  = "https://github.com/Swordfish90/cool-retro-term/releases/download/1.1.1/Cool-Retro-Term-1.1.1-x86_64.AppImage"
-	appImageName = "Cool-Retro-Term.AppImage"
+	downloadURL  = "https://github.com/srevinsaju/Firefox-Appimage/releases/download/firefox-v84.0.r20201221152838/firefox-84.0.r20201221152838-x86_64.AppImage"
+	appImageName = "firefox-84.0.r20201221152838-x86_64.AppImage"
 	squashfsName = "balenaEtcher-1.5.113-x64.AppImage.sfs" //testing with a ArchLinux root fs from the live img
 )
 
@@ -68,7 +68,8 @@ func TestAppImage(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	errs := rdr.ExtractTo(wd + "/testing/cool-retro")
+	os.RemoveAll(wd + "testing/firefox")
+	errs := rdr.ExtractTo(wd + "/testing/firefox")
 	if len(errs) > 0 {
 		t.Fatal(errs)
 	}
