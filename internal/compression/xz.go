@@ -53,3 +53,23 @@ func (x *Xz) Decompress(rdr io.Reader) ([]byte, error) {
 	}
 	return buf.Bytes(), nil
 }
+
+//Compress implements compression.Compress
+func (x *Xz) Compress(data []byte) ([]byte, error) {
+	var buf bytes.Buffer
+	w, err := xz.NewWriter(&buf)
+	if err != nil {
+		return nil, err
+	}
+	w.DictCap = int(x.DictionarySize)
+	err = w.Verify()
+	if err != nil {
+		return nil, err
+	}
+	_, err = w.Write(data)
+	if err != nil {
+		return nil, err
+	}
+	w.Close()
+	return buf.Bytes(), nil
+}

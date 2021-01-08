@@ -23,3 +23,18 @@ func (l *Lzma) Decompress(rdr io.Reader) ([]byte, error) {
 	}
 	return buf.Bytes(), nil
 }
+
+//Compress implements compression.Compress
+func (l *Lzma) Compress(data []byte) ([]byte, error) {
+	var buf bytes.Buffer
+	w, err := lzma.NewWriter(&buf)
+	if err != nil {
+		return nil, err
+	}
+	_, err = w.Write(data)
+	if err != nil {
+		return nil, err
+	}
+	w.Close()
+	return buf.Bytes(), nil
+}

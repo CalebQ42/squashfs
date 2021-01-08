@@ -15,23 +15,21 @@ type gzipInit struct {
 
 //Gzip is a decompressor for gzip type compression. Uses zlib for compression and decompression
 type Gzip struct {
-	CompressionLevel int32
-	HasCustomWindow  bool
-	HasStrategies    bool
+	gzipInit
+	HasCustomWindow bool
+	HasStrategies   bool
 }
 
 //NewGzipCompressorWithOptions creates a new gzip compressor/decompressor with options read from the given reader.
 func NewGzipCompressorWithOptions(r io.Reader) (*Gzip, error) {
 	var gzip Gzip
-	var init gzipInit
-	err := binary.Read(r, binary.LittleEndian, &init)
+	err := binary.Read(r, binary.LittleEndian, &gzip.gzipInit)
 	if err != nil {
 		return nil, err
 	}
-	gzip.CompressionLevel = init.CompressionLevel
 	//TODO: proper support for window size and strategies
-	gzip.HasCustomWindow = init.WindowSize != 15
-	gzip.HasStrategies = init.Strategies != 0 && init.Strategies != 1
+	gzip.HasCustomWindow = gzip.WindowSize != 15
+	gzip.HasStrategies = gzip.Strategies != 0 && gzip.Strategies != 1
 	return &gzip, nil
 }
 
@@ -58,9 +56,6 @@ func (g *Gzip) Compress(data []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	err = wrt.Flush()
-	if err != nil {
-		return nil, err
-	}
+	wrt.Close()
 	return buf.Bytes(), nil
 }

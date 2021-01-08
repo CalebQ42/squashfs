@@ -34,3 +34,18 @@ func (z *Zstd) Decompress(r io.Reader) ([]byte, error) {
 	_, err = io.Copy(&buf, rdr)
 	return buf.Bytes(), err
 }
+
+//Compress impelements compression.Compress
+func (z *Zstd) Compress(data []byte) ([]byte, error) {
+	var buf bytes.Buffer
+	w, err := zstd.NewWriter(&buf, zstd.WithEncoderLevel(zstd.EncoderLevel(z.CompressionLevel)))
+	if err != nil {
+		return nil, err
+	}
+	_, err = w.Write(data)
+	if err != nil {
+		return nil, err
+	}
+	w.Close()
+	return buf.Bytes(), nil
+}

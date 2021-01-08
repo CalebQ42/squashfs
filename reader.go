@@ -77,9 +77,6 @@ func NewSquashfsReader(r io.ReaderAt) (*Reader, error) {
 			if err != nil {
 				return nil, err
 			}
-			if lz4.HC {
-				hasUnsupportedOptions = true
-			}
 			rdr.decompressor = lz4
 		case ZstdCompression:
 			zstd, err := compression.NewZstdCompressorWithOptions(io.NewSectionReader(rdr.r, int64(binary.Size(rdr.super)), 4))

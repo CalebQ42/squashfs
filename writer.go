@@ -7,6 +7,8 @@ import (
 	"os"
 	"path"
 	"strings"
+
+	"github.com/CalebQ42/squashfs/internal/compression"
 )
 
 type fileHolder struct {
@@ -14,6 +16,8 @@ type fileHolder struct {
 	path        string
 	name        string
 	symLocation string
+	UID         int
+	GUID        int
 	folder      bool
 	symlink     bool
 }
@@ -21,19 +25,37 @@ type fileHolder struct {
 //Writer is used to creaste squashfs archives. Currently unusable
 //TODO: Make usable
 type Writer struct {
+	compressor      compression.Compressor
 	structure       map[string][]*fileHolder
 	symlinkTable    map[string]string //[oldpath]newpath
+	superblock      superblock
 	compressionType int
-	allowErrors     bool //AllowErrors allows errors when adding folders and their children.
+	allowErrors     bool
 }
 
-//NewWriter creates a new
+//NewWriter creates a new with the default options (Gzip compression and allow errors)
 func NewWriter() (*Writer, error) {
 	return NewWriterWithOptions(GzipCompression, true)
 }
 
+//NewWriterWithOptions creates a new squashfs.Writer with the given options.
+//compressionType can be of any types, except LZO (which this library doesn't have support for yet)
+//allowErrors determines if, when adding folders, it allows errors encountered with it's sub-directories and instead logs the errors.
 func NewWriterWithOptions(compressionType int, allowErrors bool) (*Writer, error) {
-
+	if compressionType < 0 || compressionType > 6 {
+		return nil, errors.New("Incorrect compression type")
+	}
+	if compressionType == 3 {
+		return nil, errors.New("LZO compression is not (currently) supported")
+	}
+	return &Writer{
+		structure: map[string][]*fileHolder{
+			"/": make([]*fileHolder, 0),
+		},
+		symlinkTable:    make(map[string]string),
+		compressionType: compressionType,
+		allowErrors:     allowErrors,
+	}, nil
 }
 
 //AddFile attempts to add an os.File to the archive at it's root.
@@ -83,7 +105,7 @@ func (w *Writer) AddFileTo(filepath string, file *os.File) error {
 				return err
 			}
 			err = w.AddFileToFolder(holder.path+"/"+holder.name, fil)
-			if err != nil && !w.AllowErrors {
+			if err != nil && !w.allowErrors {
 				for _, dir := range dirsAdded {
 					w.Remove(dir)
 				}
@@ -92,7 +114,7 @@ func (w *Writer) AddFileTo(filepath string, file *os.File) error {
 				log.Println("Error while adding", fil.Name())
 				log.Println(err)
 			}
-			if !w.AllowErrors {
+			if !w.allowErrors {
 				dirsAdded = append(dirsAdded, holder.path+"/"+holder.name)
 			}
 		}
@@ -149,6 +171,7 @@ func (w *Writer) Remove(filepath string) bool {
 //
 //If this is not run before writing, you may end up with broken symlinks.
 func (w *Writer) FixSymlinks() error {
+	//TODO
 	return errors.New("DON'T")
 }
 
@@ -164,5 +187,6 @@ func (w *Writer) WriteToFilename(filepath string) error {
 
 //WriteTo attempts to write the archive to the given io.Writer.
 func (w *Writer) WriteTo(write io.Writer) (int64, error) {
+	//TODO
 	return 0, errors.New("I SAID DON'T")
 }
