@@ -5,7 +5,10 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"os/exec"
+	"strconv"
 	"testing"
+	"time"
 
 	goappimage "github.com/CalebQ42/GoAppImage"
 )
@@ -68,7 +71,8 @@ func TestAppImage(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	os.RemoveAll(wd + "testing/firefox")
+	start := time.Now()
+	// os.RemoveAll(wd + "testing/firefox")
 	errs := rdr.ExtractTo(wd + "/testing/firefox")
 	if len(errs) > 0 {
 		t.Fatal(errs)
@@ -77,7 +81,36 @@ func TestAppImage(t *testing.T) {
 	// root, _ := rdr.GetRootFolder()
 	// errs := root.ExtractWithOptions(wd+"/testing/"+appImageName+".d", true, os.ModePerm, true)
 	// t.Fatal(errs)
+	fmt.Println(time.Since(start))
 	t.Fatal("No problemo!")
+}
+
+func TestUnsquashfs(t *testing.T) {
+	t.Parallel()
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	aiFil, err := os.Open(wd + "/testing/" + appImageName)
+	if os.IsNotExist(err) {
+		downloadTestAppImage(t, wd+"/testing")
+		aiFil, err = os.Open(wd + "/testing/" + appImageName)
+		if err != nil {
+			t.Fatal(err)
+		}
+	} else if err != nil {
+		t.Fatal(err)
+	}
+	ai := goappimage.NewAppImage(wd + "/testing/" + appImageName)
+	fmt.Println("Command:", "unsquashfs", "-d", wd+"/testing/unsquashFirefox", "-o", strconv.Itoa(int(ai.Offset)), aiFil.Name())
+	cmd := exec.Command("unsquashfs", "-d", wd+"/testing/unsquashFirefox", "-o", strconv.Itoa(int(ai.Offset)), aiFil.Name())
+	start := time.Now()
+	err = cmd.Run()
+	if err != nil {
+		t.Fatal(err)
+	}
+	fmt.Println(time.Since(start))
+	t.Fatal("HI")
 }
 
 func downloadTestAppImage(t *testing.T, dir string) {
