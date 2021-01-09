@@ -6,7 +6,9 @@ import (
 	"log"
 	"os"
 	"path"
+	"sort"
 	"strings"
+	"syscall"
 
 	"github.com/CalebQ42/squashfs/internal/compression"
 )
@@ -18,6 +20,7 @@ type fileHolder struct {
 	symLocation string
 	UID         int
 	GUID        int
+	perm        int
 	folder      bool
 	symlink     bool
 }
@@ -28,7 +31,7 @@ type Writer struct {
 	compressor      compression.Compressor
 	structure       map[string][]*fileHolder
 	symlinkTable    map[string]string //[oldpath]newpath
-	superblock      superblock
+	uidGUIDTable    []int
 	compressionType int
 	allowErrors     bool
 }
@@ -87,6 +90,20 @@ func (w *Writer) AddFileTo(filepath string, file *os.File) error {
 	}
 	holder.folder = stat.IsDir()
 	holder.symlink = (stat.Mode()&os.ModeSymlink == os.ModeSymlink)
+	holder.perm = int(stat.Mode().Perm())
+	//Thanks to https://stackoverflow.com/questions/58179647/getting-uid-and-gid-of-a-file for uid and guid getting
+	if stat, ok := stat.Sys().(*syscall.Stat_t); ok {
+		holder.UID = int(stat.Uid)
+		holder.GUID = int(stat.Gid)
+	}
+	if sort.SearchInts(w.uidGUIDTable, holder.UID) == len(w.uidGUIDTable) {
+		w.uidGUIDTable = append(w.uidGUIDTable, holder.UID)
+		sort.Ints(w.uidGUIDTable)
+	}
+	if sort.SearchInts(w.uidGUIDTable, holder.GUID) == len(w.uidGUIDTable) {
+		w.uidGUIDTable = append(w.uidGUIDTable, holder.GUID)
+		sort.Ints(w.uidGUIDTable)
+	}
 	if holder.symlink {
 		target, err := os.Readlink(file.Name())
 		if err != nil {

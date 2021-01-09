@@ -50,9 +50,11 @@ func (g *Gzip) Decompress(r io.Reader) ([]byte, error) {
 //Compress compresses the given data (as a byte array) and returns the compressed data.
 func (g *Gzip) Compress(data []byte) ([]byte, error) {
 	var buf bytes.Buffer
-	wrt := zlib.NewWriter(&buf)
-	defer wrt.Close()
-	_, err := wrt.Write(data)
+	wrt, err := zlib.NewWriterLevel(&buf, int(g.CompressionLevel))
+	if err != nil {
+		return nil, err
+	}
+	_, err = wrt.Write(data)
 	if err != nil {
 		return nil, err
 	}
