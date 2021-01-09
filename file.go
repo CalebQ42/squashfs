@@ -61,10 +61,10 @@ func (f *File) Name() string {
 //Size is the complete size of the file. Zero if it's not a file.
 func (f *File) Size() int64 {
 	switch f.filType {
-	case inode.BasicFileType:
-		return int64(f.in.Info.(inode.BasicFile).Init.Size)
+	case inode.FileType:
+		return int64(f.in.Info.(inode.File).Size)
 	case inode.ExtFileType:
-		return int64(f.in.Info.(inode.ExtendedFile).Init.Size)
+		return int64(f.in.Info.(inode.ExtFile).Size)
 	default:
 		return 0
 	}
@@ -204,27 +204,27 @@ func (f *File) GetFileAtPath(dirPath string) *File {
 
 //IsDir returns if the file is a directory.
 func (f *File) IsDir() bool {
-	return f.filType == inode.BasicDirectoryType || f.filType == inode.ExtDirType
+	return f.filType == inode.DirType || f.filType == inode.ExtDirType
 }
 
 //IsSymlink returns if the file is a symlink.
 func (f *File) IsSymlink() bool {
-	return f.filType == inode.BasicSymlinkType || f.filType == inode.ExtSymlinkType
+	return f.filType == inode.SymType || f.filType == inode.ExtSymlinkType
 }
 
 //IsFile returns if the file is a file.
 func (f *File) IsFile() bool {
-	return f.filType == inode.BasicFileType || f.filType == inode.ExtFileType
+	return f.filType == inode.FileType || f.filType == inode.ExtFileType
 }
 
 //SymlinkPath returns the path the symlink is pointing to. If the file ISN'T a symlink, will return an empty string.
 //If a path begins with "/" then the symlink is pointing to an absolute path (starting from root, and not a file inside the archive)
 func (f *File) SymlinkPath() string {
 	switch f.filType {
-	case inode.BasicSymlinkType:
-		return f.in.Info.(inode.BasicSymlink).Path
+	case inode.SymType:
+		return f.in.Info.(inode.Sym).Path
 	case inode.ExtSymlinkType:
-		return f.in.Info.(inode.ExtendedSymlink).Path
+		return f.in.Info.(inode.Sym).Path
 	default:
 		return ""
 	}
@@ -500,14 +500,14 @@ func (r *Reader) readDirFromInode(i *inode.Inode) (*directory.Directory, error) 
 	var metaOffset uint16
 	var size uint32
 	switch i.Type {
-	case inode.BasicDirectoryType:
-		offset = i.Info.(inode.BasicDirectory).DirectoryIndex
-		metaOffset = i.Info.(inode.BasicDirectory).DirectoryOffset
-		size = uint32(i.Info.(inode.BasicDirectory).DirectorySize)
+	case inode.DirType:
+		offset = i.Info.(inode.Dir).DirectoryIndex
+		metaOffset = i.Info.(inode.Dir).DirectoryOffset
+		size = uint32(i.Info.(inode.Dir).DirectorySize)
 	case inode.ExtDirType:
-		offset = i.Info.(inode.ExtendedDirectory).Init.DirectoryIndex
-		metaOffset = i.Info.(inode.ExtendedDirectory).Init.DirectoryOffset
-		size = i.Info.(inode.ExtendedDirectory).Init.DirectorySize
+		offset = i.Info.(inode.ExtDir).DirectoryIndex
+		metaOffset = i.Info.(inode.ExtDir).DirectoryOffset
+		size = i.Info.(inode.ExtDir).DirectorySize
 	default:
 		return nil, errors.New("Not a directory inode")
 	}
@@ -532,7 +532,7 @@ func (r *Reader) getInodeFromEntry(en *directory.Entry) (*inode.Inode, error) {
 	if err != nil {
 		return nil, err
 	}
-	_, err = br.Seek(int64(en.Init.Offset), io.SeekStart)
+	_, err = br.Seek(int64(en.Offset), io.SeekStart)
 	if err != nil {
 		return nil, err
 	}

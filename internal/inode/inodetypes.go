@@ -5,14 +5,15 @@ import (
 	"io"
 )
 
+//The different types of inodes as defined by inodetype
 const (
-	BasicDirectoryType = iota + 1
-	BasicFileType
-	BasicSymlinkType
-	BasicBlockDeviceType
-	BasicCharDeviceType
-	BasicFifoType
-	BasicSocketType
+	DirType = iota + 1
+	FileType
+	SymType
+	BlockDevType
+	CharDevType
+	FifoType
+	SocketType
 	ExtDirType
 	ExtFileType
 	ExtSymlinkType
@@ -32,8 +33,8 @@ type Header struct {
 	Number       uint32
 }
 
-//BasicDirectory is self explainatory
-type BasicDirectory struct {
+//Dir is self explainatory
+type Dir struct {
 	DirectoryIndex    uint32
 	HardLinks         uint32
 	DirectorySize     uint16
@@ -41,8 +42,8 @@ type BasicDirectory struct {
 	ParentInodeNumber uint32
 }
 
-//ExtendedDirectoryInit is the information that can be directoy decoded
-type ExtendedDirectoryInit struct {
+//ExtDirInit is the information that can be directoy decoded
+type ExtDirInit struct {
 	HardLinks         uint32
 	DirectorySize     uint32
 	DirectoryIndex    uint32
@@ -52,20 +53,20 @@ type ExtendedDirectoryInit struct {
 	XattrIndex        uint32
 }
 
-//ExtendedDirectory is a directory with extra info
-type ExtendedDirectory struct {
-	Init    ExtendedDirectoryInit
-	Indexes []DirectoryIndex
+//ExtDir is a directory with extra info
+type ExtDir struct {
+	Indexes []DirIndex
+	ExtDirInit
 }
 
 //NewExtendedDirectory creates a new ExtendedDirectory
-func NewExtendedDirectory(rdr io.Reader) (ExtendedDirectory, error) {
-	var inode ExtendedDirectory
-	err := binary.Read(rdr, binary.LittleEndian, &inode.Init)
+func NewExtendedDirectory(rdr io.Reader) (ExtDir, error) {
+	var inode ExtDir
+	err := binary.Read(rdr, binary.LittleEndian, &inode.ExtDirInit)
 	if err != nil {
 		return inode, err
 	}
-	for i := uint16(0); i < inode.Init.IndexCount; i++ {
+	for i := uint16(0); i < inode.IndexCount; i++ {
 		tmp, err := NewDirectoryIndex(rdr)
 		if err != nil {
 			return inode, err
@@ -75,27 +76,27 @@ func NewExtendedDirectory(rdr io.Reader) (ExtendedDirectory, error) {
 	return inode, err
 }
 
-//DirectoryIndexInit holds the values that can be easily decoded
-type DirectoryIndexInit struct {
+//DirIndexInit holds the values that can be easily decoded
+type DirIndexInit struct {
 	Offset         uint32
 	DirTableOffset uint32
 	NameSize       uint32
 }
 
-//DirectoryIndex is a quick lookup provided by an ExtendedDirectory
-type DirectoryIndex struct {
-	Init DirectoryIndexInit
+//DirIndex is a quick lookup provided by an ExtendedDirectory
+type DirIndex struct {
 	Name string
+	DirIndexInit
 }
 
 //NewDirectoryIndex return a new DirectoryIndex
-func NewDirectoryIndex(rdr io.Reader) (DirectoryIndex, error) {
-	var index DirectoryIndex
-	err := binary.Read(rdr, binary.LittleEndian, &index.Init)
+func NewDirectoryIndex(rdr io.Reader) (DirIndex, error) {
+	var index DirIndex
+	err := binary.Read(rdr, binary.LittleEndian, &index.DirIndexInit)
 	if err != nil {
 		return index, err
 	}
-	tmp := make([]byte, index.Init.NameSize+1, index.Init.NameSize+1)
+	tmp := make([]byte, index.NameSize+1, index.NameSize+1)
 	err = binary.Read(rdr, binary.LittleEndian, &tmp)
 	if err != nil {
 		return index, err
@@ -104,31 +105,31 @@ func NewDirectoryIndex(rdr io.Reader) (DirectoryIndex, error) {
 	return index, nil
 }
 
-//BasicFileInit is the information that can be directoy decoded
-type BasicFileInit struct {
+//FileInit is the information that can be directly decoded
+type FileInit struct {
 	BlockStart     uint32
 	FragmentIndex  uint32
 	FragmentOffset uint32
 	Size           uint32
 }
 
-//BasicFile is self explainatory
-type BasicFile struct {
-	Init       BasicFileInit
+//File is self explainatory
+type File struct {
 	BlockSizes []uint32
 	Fragmented bool
+	FileInit
 }
 
-//NewBasicFile creates a new BasicFile
-func NewBasicFile(rdr io.Reader, blockSize uint32) (BasicFile, error) {
-	var inode BasicFile
-	err := binary.Read(rdr, binary.LittleEndian, &inode.Init)
+//NewFile creates a new File
+func NewFile(rdr io.Reader, blockSize uint32) (File, error) {
+	var inode File
+	err := binary.Read(rdr, binary.LittleEndian, &inode.FileInit)
 	if err != nil {
 		return inode, err
 	}
-	inode.Fragmented = inode.Init.FragmentIndex != 0xFFFFFFFF
-	blocks := inode.Init.Size / blockSize
-	if inode.Init.Size%blockSize > 0 {
+	inode.Fragmented = inode.FragmentIndex != 0xFFFFFFFF
+	blocks := inode.Size / blockSize
+	if inode.Size%blockSize > 0 {
 		blocks++
 	}
 	inode.BlockSizes = make([]uint32, blocks, blocks)
@@ -136,8 +137,8 @@ func NewBasicFile(rdr io.Reader, blockSize uint32) (BasicFile, error) {
 	return inode, err
 }
 
-//ExtendedFileInit is the information that can be directly decoded
-type ExtendedFileInit struct {
+//ExtFileInit is the information that can be directly decoded
+type ExtFileInit struct {
 	BlockStart     uint32
 	Size           uint32
 	Sparse         uint64
@@ -147,23 +148,23 @@ type ExtendedFileInit struct {
 	XattrIndex     uint32
 }
 
-//ExtendedFile is a file with more information
-type ExtendedFile struct {
-	Init       ExtendedFileInit
+//ExtFile is a file with more information
+type ExtFile struct {
 	BlockSizes []uint32
 	Fragmented bool
+	ExtFileInit
 }
 
 //NewExtendedFile creates a new ExtendedFile
-func NewExtendedFile(rdr io.Reader, blockSize uint32) (ExtendedFile, error) {
-	var inode ExtendedFile
-	err := binary.Read(rdr, binary.LittleEndian, &inode.Init)
+func NewExtendedFile(rdr io.Reader, blockSize uint32) (ExtFile, error) {
+	var inode ExtFile
+	err := binary.Read(rdr, binary.LittleEndian, &inode.ExtFileInit)
 	if err != nil {
 		return inode, err
 	}
-	inode.Fragmented = inode.Init.FragmentIndex != 0xFFFFFFFF
-	blocks := inode.Init.Size / blockSize
-	if inode.Init.Size%blockSize > 0 {
+	inode.Fragmented = inode.FragmentIndex != 0xFFFFFFFF
+	blocks := inode.Size / blockSize
+	if inode.Size%blockSize > 0 {
 		blocks++
 	}
 	inode.BlockSizes = make([]uint32, blocks, blocks)
@@ -171,27 +172,27 @@ func NewExtendedFile(rdr io.Reader, blockSize uint32) (ExtendedFile, error) {
 	return inode, err
 }
 
-//BasicSymlinkInit is all the values that can be directly decoded
-type BasicSymlinkInit struct {
+//SymInit is all the values that can be directly decoded
+type SymInit struct {
 	HardLinks      uint32
 	TargetPathSize uint32
 }
 
-//BasicSymlink is a symlink
-type BasicSymlink struct {
-	Init       BasicSymlinkInit
-	targetPath []byte //len is TargetPathSize
+//Sym is a symlink
+type Sym struct {
 	Path       string
+	targetPath []byte //len is TargetPathSize
+	SymInit
 }
 
-//NewBasicSymlink creates a new BasicSymlink
-func NewBasicSymlink(rdr io.Reader) (BasicSymlink, error) {
-	var inode BasicSymlink
-	err := binary.Read(rdr, binary.LittleEndian, &inode.Init)
+//NewSymlink creates a new Symlink
+func NewSymlink(rdr io.Reader) (Sym, error) {
+	var inode Sym
+	err := binary.Read(rdr, binary.LittleEndian, &inode.SymInit)
 	if err != nil {
 		return inode, err
 	}
-	inode.targetPath = make([]byte, inode.Init.TargetPathSize, inode.Init.TargetPathSize)
+	inode.targetPath = make([]byte, inode.TargetPathSize, inode.TargetPathSize)
 	err = binary.Read(rdr, binary.LittleEndian, &inode.targetPath)
 	if err != nil {
 		return inode, err
@@ -200,28 +201,28 @@ func NewBasicSymlink(rdr io.Reader) (BasicSymlink, error) {
 	return inode, err
 }
 
-//ExtendedSymlinkInit is all the values that can be directly decoded
-type ExtendedSymlinkInit struct {
+//ExtSymInit is all the values that can be directly decoded
+type ExtSymInit struct {
 	HardLinks      uint32
 	TargetPathSize uint32
 }
 
-//ExtendedSymlink is a symlink with extra information
-type ExtendedSymlink struct {
-	Init       ExtendedSymlinkInit
-	targetPath []uint8
+//ExtSym is a symlink with extra information
+type ExtSym struct {
 	Path       string
+	targetPath []uint8
+	ExtSymInit
 	XattrIndex uint32
 }
 
 //NewExtendedSymlink creates a new ExtendedSymlink
-func NewExtendedSymlink(rdr io.Reader) (ExtendedSymlink, error) {
-	var inode ExtendedSymlink
-	err := binary.Read(rdr, binary.LittleEndian, &inode.Init)
+func NewExtendedSymlink(rdr io.Reader) (ExtSym, error) {
+	var inode ExtSym
+	err := binary.Read(rdr, binary.LittleEndian, &inode.ExtSymInit)
 	if err != nil {
 		return inode, err
 	}
-	inode.targetPath = make([]uint8, inode.Init.TargetPathSize, inode.Init.TargetPathSize)
+	inode.targetPath = make([]uint8, inode.TargetPathSize, inode.TargetPathSize)
 	err = binary.Read(rdr, binary.LittleEndian, &inode.targetPath)
 	if err != nil {
 		return inode, err
@@ -231,25 +232,25 @@ func NewExtendedSymlink(rdr io.Reader) (ExtendedSymlink, error) {
 	return inode, err
 }
 
-//BasicDevice is a device
-type BasicDevice struct {
+//Device is a device
+type Device struct {
 	HardLinks uint32
 	Device    uint32
 }
 
-//ExtendedDevice is a device with more info
-type ExtendedDevice struct {
-	BasicDevice
+//ExtDevice is a device with more info
+type ExtDevice struct {
+	Device
 	XattrIndex uint32
 }
 
-//BasicIPC is a Fifo or Socket device
-type BasicIPC struct {
+//IPC is a Fifo or Socket device
+type IPC struct {
 	HardLink uint32
 }
 
-//ExtendedIPC is a IPC device with extra info
-type ExtendedIPC struct {
-	BasicIPC
+//ExtIPC is a IPC device with extra info
+type ExtIPC struct {
+	IPC
 	XattrIndex uint32
 }

@@ -29,20 +29,20 @@ var (
 func (r *Reader) newFileReader(in *inode.Inode) (*fileReader, error) {
 	var rdr fileReader
 	rdr.in = in
-	if in.Type != inode.BasicFileType && in.Type != inode.ExtFileType {
+	if in.Type != inode.FileType && in.Type != inode.ExtFileType {
 		return nil, errPathIsNotFile
 	}
 	switch in.Type {
-	case inode.BasicFileType:
-		fil := in.Info.(inode.BasicFile)
+	case inode.FileType:
+		fil := in.Info.(inode.File)
 		rdr.fragged = fil.Fragmented
-		rdr.fragOnly = fil.Init.BlockStart == 0
-		rdr.FileSize = int(fil.Init.Size)
+		rdr.fragOnly = fil.BlockStart == 0
+		rdr.FileSize = int(fil.Size)
 	case inode.ExtFileType:
-		fil := in.Info.(inode.ExtendedFile)
+		fil := in.Info.(inode.ExtFile)
 		rdr.fragged = fil.Fragmented
-		rdr.fragOnly = fil.Init.BlockStart == 0
-		rdr.FileSize = int(fil.Init.Size)
+		rdr.fragOnly = fil.BlockStart == 0
+		rdr.FileSize = int(fil.Size)
 	}
 	var err error
 	if rdr.fragged {

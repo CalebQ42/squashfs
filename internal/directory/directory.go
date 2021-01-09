@@ -13,8 +13,8 @@ type Header struct {
 	InodeNumber uint32
 }
 
-//EntryInit is the values that can be easily decoded
-type EntryInit struct {
+//EntryRaw is the values that can be easily decoded
+type EntryRaw struct {
 	Offset      uint16
 	InodeOffset int16
 	Type        uint16
@@ -23,19 +23,19 @@ type EntryInit struct {
 
 //Entry is an entry in a directory.
 type Entry struct {
-	Init   EntryInit
-	Name   string
-	Header *Header
+	*Header
+	Name string
+	EntryRaw
 }
 
 //NewEntry creates a new directory entry
 func NewEntry(rdr io.Reader) (Entry, error) {
 	var entry Entry
-	err := binary.Read(rdr, binary.LittleEndian, &entry.Init)
+	err := binary.Read(rdr, binary.LittleEndian, &entry.EntryRaw)
 	if err != nil {
 		return Entry{}, err
 	}
-	tmp := make([]byte, entry.Init.NameSize+1)
+	tmp := make([]byte, entry.EntryRaw.NameSize+1)
 	err = binary.Read(rdr, binary.LittleEndian, &tmp)
 	if err != nil {
 		return Entry{}, err

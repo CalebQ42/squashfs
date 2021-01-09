@@ -63,12 +63,12 @@ func (r *Reader) newDataReaderFromInode(i *inode.Inode) (*dataReader, error) {
 	var rdr dataReader
 	rdr.r = r
 	switch i.Type {
-	case inode.BasicFileType:
-		fil := i.Info.(inode.BasicFile)
-		if fil.Init.BlockStart == 0 {
+	case inode.FileType:
+		fil := i.Info.(inode.File)
+		if fil.BlockStart == 0 {
 			return nil, errInodeOnlyFragment
 		}
-		rdr.offset = int64(fil.Init.BlockStart)
+		rdr.offset = int64(fil.BlockStart)
 		for _, sizes := range fil.BlockSizes {
 			rdr.blocks = append(rdr.blocks, newDataBlock(sizes))
 		}
@@ -76,11 +76,11 @@ func (r *Reader) newDataReaderFromInode(i *inode.Inode) (*dataReader, error) {
 			rdr.blocks = rdr.blocks[:len(rdr.blocks)-1]
 		}
 	case inode.ExtFileType:
-		fil := i.Info.(inode.ExtendedFile)
-		if fil.Init.BlockStart == 0 {
+		fil := i.Info.(inode.ExtFile)
+		if fil.BlockStart == 0 {
 			return nil, errInodeOnlyFragment
 		}
-		rdr.offset = int64(fil.Init.BlockStart)
+		rdr.offset = int64(fil.BlockStart)
 		for _, sizes := range fil.BlockSizes {
 			rdr.blocks = append(rdr.blocks, newDataBlock(sizes))
 		}

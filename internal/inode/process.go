@@ -9,9 +9,9 @@ import (
 //
 //Info holds the actual Inode. Due to each inode type being a different type, it's store as an interface{}
 type Inode struct {
-	Header Header
-	Type   int         //Type the inode type defined in the header. Here so it's easy to access
-	Info   interface{} //Info is the parsed specific data. It's type is defined by Type.
+	Info interface{} //Info is the parsed specific data. It's type is defined by Type.
+	Type int         //Type the inode type defined in the header. Here so it's easy to access
+	Header
 }
 
 //ProcessInode tries to read an inode from the BlockReader
@@ -23,48 +23,48 @@ func ProcessInode(br io.Reader, blockSize uint32) (*Inode, error) {
 	}
 	var info interface{}
 	switch head.InodeType {
-	case BasicDirectoryType:
-		var inode BasicDirectory
+	case DirType:
+		var inode Dir
 		err = binary.Read(br, binary.LittleEndian, &inode)
 		if err != nil {
 			return nil, err
 		}
 		info = inode
-	case BasicFileType:
-		inode, err := NewBasicFile(br, blockSize)
+	case FileType:
+		inode, err := NewFile(br, blockSize)
 		if err != nil {
 			return nil, err
 		}
 		info = inode
-	case BasicSymlinkType:
-		inode, err := NewBasicSymlink(br)
+	case SymType:
+		inode, err := NewSymlink(br)
 		if err != nil {
 			return nil, err
 		}
 		info = inode
-	case BasicBlockDeviceType:
-		var inode BasicDevice
+	case BlockDevType:
+		var inode Device
 		err = binary.Read(br, binary.LittleEndian, &inode)
 		if err != nil {
 			return nil, err
 		}
 		info = inode
-	case BasicCharDeviceType:
-		var inode BasicDevice
+	case CharDevType:
+		var inode Device
 		err = binary.Read(br, binary.LittleEndian, &inode)
 		if err != nil {
 			return nil, err
 		}
 		info = inode
-	case BasicFifoType:
-		var inode BasicIPC
+	case FifoType:
+		var inode IPC
 		err = binary.Read(br, binary.LittleEndian, &inode)
 		if err != nil {
 			return nil, err
 		}
 		info = inode
-	case BasicSocketType:
-		var inode BasicIPC
+	case SocketType:
+		var inode IPC
 		err = binary.Read(br, binary.LittleEndian, &inode)
 		if err != nil {
 			return nil, err
@@ -89,28 +89,28 @@ func ProcessInode(br io.Reader, blockSize uint32) (*Inode, error) {
 		}
 		info = inode
 	case ExtBlockDeviceType:
-		var inode ExtendedDevice
+		var inode ExtDevice
 		err = binary.Read(br, binary.LittleEndian, &inode)
 		if err != nil {
 			return nil, err
 		}
 		info = inode
 	case ExtCharDeviceType:
-		var inode ExtendedDevice
+		var inode ExtDevice
 		err = binary.Read(br, binary.LittleEndian, &inode)
 		if err != nil {
 			return nil, err
 		}
 		info = inode
 	case ExtFifoType:
-		var inode ExtendedIPC
+		var inode ExtIPC
 		err = binary.Read(br, binary.LittleEndian, &inode)
 		if err != nil {
 			return nil, err
 		}
 		info = inode
 	case ExtSocketType:
-		var inode ExtendedIPC
+		var inode ExtIPC
 		err = binary.Read(br, binary.LittleEndian, &inode)
 		if err != nil {
 			return nil, err

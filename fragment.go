@@ -21,30 +21,30 @@ func (r *Reader) getFragmentDataFromInode(in *inode.Inode) ([]byte, error) {
 	var size uint32
 	var fragIndex uint32
 	var fragOffset uint32
-	if in.Type == inode.BasicFileType {
-		bf := in.Info.(inode.BasicFile)
+	if in.Type == inode.FileType {
+		bf := in.Info.(inode.File)
 		if !bf.Fragmented {
 			return make([]byte, 0), nil
 		}
-		if bf.Init.BlockStart == 0 {
-			size = bf.Init.Size
+		if bf.BlockStart == 0 {
+			size = bf.Size
 		} else {
 			size = bf.BlockSizes[len(bf.BlockSizes)-1]
 		}
-		fragIndex = bf.Init.FragmentIndex
-		fragOffset = bf.Init.FragmentOffset
+		fragIndex = bf.FragmentIndex
+		fragOffset = bf.FragmentOffset
 	} else if in.Type == inode.ExtFileType {
-		bf := in.Info.(inode.ExtendedFile)
+		bf := in.Info.(inode.ExtFile)
 		if !bf.Fragmented {
 			return make([]byte, 0), nil
 		}
-		if bf.Init.BlockStart == 0 {
-			size = bf.Init.Size
+		if bf.BlockStart == 0 {
+			size = bf.Size
 		} else {
 			size = bf.BlockSizes[len(bf.BlockSizes)-1]
 		}
-		fragIndex = bf.Init.FragmentIndex
-		fragOffset = bf.Init.FragmentOffset
+		fragIndex = bf.FragmentIndex
+		fragOffset = bf.FragmentOffset
 	} else {
 		return nil, errors.New("Inode type not supported")
 	}
