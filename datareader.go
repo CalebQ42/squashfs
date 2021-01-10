@@ -239,9 +239,9 @@ mainLoop:
 			if err != nil {
 				return totalWrite, err
 			}
+			curIndex++
 		} else {
 			backlog = append(backlog, cache)
 		}
-		curIndex++
 	}
 }
