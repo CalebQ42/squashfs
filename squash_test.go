@@ -56,7 +56,10 @@ func TestAppImage(t *testing.T) {
 	}
 	aiFil, err := os.Open(wd + "/testing/" + appImageName)
 	if os.IsNotExist(err) {
-		downloadTestAppImage(t, wd+"/testing")
+		err = downloadTestAppImage(wd + "/testing")
+		if err != nil {
+			t.Fatal(err)
+		}
 		aiFil, err = os.Open(wd + "/testing/" + appImageName)
 		if err != nil {
 			t.Fatal(err)
@@ -66,13 +69,13 @@ func TestAppImage(t *testing.T) {
 	}
 	defer aiFil.Close()
 	stat, _ := aiFil.Stat()
+	os.RemoveAll(wd + "/testing/firefox")
 	ai := goappimage.NewAppImage(wd + "/testing/" + appImageName)
+	start := time.Now()
 	rdr, err := NewSquashfsReader(io.NewSectionReader(aiFil, ai.Offset, stat.Size()-ai.Offset))
 	if err != nil {
 		t.Fatal(err)
 	}
-	start := time.Now()
-	// os.RemoveAll(wd + "testing/firefox")
 	errs := rdr.ExtractTo(wd + "/testing/firefox")
 	if len(errs) > 0 {
 		t.Fatal(errs)
@@ -93,7 +96,10 @@ func TestUnsquashfs(t *testing.T) {
 	}
 	aiFil, err := os.Open(wd + "/testing/" + appImageName)
 	if os.IsNotExist(err) {
-		downloadTestAppImage(t, wd+"/testing")
+		err = downloadTestAppImage(wd + "/testing")
+		if err != nil {
+			t.Fatal(err)
+		}
 		aiFil, err = os.Open(wd + "/testing/" + appImageName)
 		if err != nil {
 			t.Fatal(err)
@@ -101,6 +107,8 @@ func TestUnsquashfs(t *testing.T) {
 	} else if err != nil {
 		t.Fatal(err)
 	}
+	os.RemoveAll(wd + "/testing/unsquashFirefox")
+	os.RemoveAll(wd + "/testing/firefox")
 	ai := goappimage.NewAppImage(wd + "/testing/" + appImageName)
 	fmt.Println("Command:", "unsquashfs", "-d", wd+"/testing/unsquashFirefox", "-o", strconv.Itoa(int(ai.Offset)), aiFil.Name())
 	cmd := exec.Command("unsquashfs", "-d", wd+"/testing/unsquashFirefox", "-o", strconv.Itoa(int(ai.Offset)), aiFil.Name())
@@ -113,12 +121,56 @@ func TestUnsquashfs(t *testing.T) {
 	t.Fatal("HI")
 }
 
-func downloadTestAppImage(t *testing.T, dir string) {
+func BenchmarkDragRace(b *testing.B) {
+	wd, err := os.Getwd()
+	if err != nil {
+		b.Fatal(err)
+	}
+	aiFil, err := os.Open(wd + "/testing/" + appImageName)
+	if os.IsNotExist(err) {
+		err = downloadTestAppImage(wd + "/testing")
+		if err != nil {
+			b.Fatal(err)
+		}
+		aiFil, err = os.Open(wd + "/testing/" + appImageName)
+		if err != nil {
+			b.Fatal(err)
+		}
+	} else if err != nil {
+		b.Fatal(err)
+	}
+	stat, _ := aiFil.Stat()
+	ai := goappimage.NewAppImage(wd + "/testing/" + appImageName)
+	os.RemoveAll(wd + "/testing/unsquashFirefox")
+	os.RemoveAll(wd + "/testing/firefox")
+	cmd := exec.Command("unsquashfs", "-d", wd+"/testing/unsquashFirefox", "-o", strconv.Itoa(int(ai.Offset)), aiFil.Name())
+	start := time.Now()
+	err = cmd.Run()
+	if err != nil {
+		b.Fatal(err)
+	}
+	unsquashTime := time.Since(start)
+	start = time.Now()
+	rdr, err := NewSquashfsReader(io.NewSectionReader(aiFil, ai.Offset, stat.Size()-ai.Offset))
+	if err != nil {
+		b.Fatal(err)
+	}
+	errs := rdr.ExtractTo(wd + "/testing/firefox")
+	if len(errs) > 0 {
+		b.Fatal(errs)
+	}
+	libTime := time.Since(start)
+	b.Log("Unsqushfs:", unsquashTime.Round(time.Millisecond))
+	b.Log("Library:", libTime.Round(time.Millisecond))
+	b.Log("unsquashfs is " + strconv.FormatFloat(float64(libTime.Milliseconds())/float64(unsquashTime.Milliseconds()), 'f', 2, 64) + "x faster")
+}
+
+func downloadTestAppImage(dir string) error {
 	//seems to time out on slow connections. Might fix that at some point... or not. It's just a test...
 	os.Mkdir(dir, os.ModePerm)
 	appImage, err := os.Create(dir + "/" + appImageName)
 	if err != nil {
-		t.Fatal(err)
+		return err
 	}
 	defer appImage.Close()
 	check := http.Client{
@@ -129,13 +181,14 @@ func downloadTestAppImage(t *testing.T, dir string) {
 	}
 	resp, err := check.Get(downloadURL)
 	if err != nil {
-		t.Fatal(err)
+		return err
 	}
 	defer resp.Body.Close()
 	_, err = io.Copy(appImage, resp.Body)
 	if err != nil {
-		t.Fatal(err)
+		return err
 	}
+	return nil
 }
 
 func TestCreateSquashFromAppImage(t *testing.T) {
@@ -149,7 +202,10 @@ func TestCreateSquashFromAppImage(t *testing.T) {
 	}
 	_, err = os.Open(wd + "/testing/" + appImageName)
 	if os.IsNotExist(err) {
-		downloadTestAppImage(t, wd+"/testing")
+		err = downloadTestAppImage(wd + "/testing")
+		if err != nil {
+			t.Fatal(err)
+		}
 		_, err = os.Open(wd + "/testing/" + appImageName)
 		if err != nil {
 			t.Fatal(err)

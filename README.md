@@ -11,4 +11,8 @@ The only major thing missing from squashfs reading is Xattr parsing.
 Special thanks to <https://dr-emann.github.io/squashfs/> for some VERY important information in an easy to understand format.
 Thanks also to [distri's squashfs library](https://github.com/distr1/distri/tree/master/internal/squashfs) as I referenced it to figure some things out (and double check others).
 
+## Performane
+
+This library, decompressing the firefox AppImage and using go tests, takes about twice as long as `unsquashfs` on my quad core laptop. (~1 second with the libarary and about half a second with `unsquashfs`)
+
 ## [TODO](https://github.com/CalebQ42/squashfs/projects/1?fullscreen=true)

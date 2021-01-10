@@ -398,7 +398,18 @@ func (f *File) ExtractWithOptions(path string, dereferenceSymlink, unbreakSymlin
 			errs = append(errs, err)
 			return
 		} //Since we will be reading from the file
-		_, err = io.Copy(fil, f)
+		if f.Reader == nil && f.r != nil {
+			f.Reader, err = f.r.newFileReader(f.in)
+			if err != nil {
+				if verbose {
+					fmt.Println("Error while Copying data to:", path+"/"+f.name)
+					fmt.Println(err)
+				}
+				errs = append(errs, err)
+				return
+			}
+		}
+		_, err = io.Copy(fil, f.Reader)
 		if err != nil {
 			if verbose {
 				fmt.Println("Error while Copying data to:", path+"/"+f.name)
@@ -480,7 +491,7 @@ func (f *File) ExtractWithOptions(path string, dereferenceSymlink, unbreakSymlin
 
 //Read from the file. Doesn't do anything fancy, just pases it to the underlying io.Reader. If a directory, return io.EOF.
 func (f *File) Read(p []byte) (int, error) {
-	if f.IsDir() {
+	if !f.IsFile() {
 		return 0, io.EOF
 	}
 	var err error

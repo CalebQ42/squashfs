@@ -15,6 +15,7 @@ type gzipInit struct {
 
 //Gzip is a decompressor for gzip type compression. Uses zlib for compression and decompression
 type Gzip struct {
+	wrt *zlib.Writer
 	gzipInit
 	HasCustomWindow bool
 	HasStrategies   bool
@@ -50,6 +51,17 @@ func (g *Gzip) Decompress(r io.Reader) ([]byte, error) {
 //Compress compresses the given data (as a byte array) and returns the compressed data.
 func (g *Gzip) Compress(data []byte) ([]byte, error) {
 	var buf bytes.Buffer
+	var err error
+	if g.wrt == nil {
+		if g.CompressionLevel == 0 {
+			g.wrt = zlib.NewWriter(&buf)
+		} else {
+			g.wrt, err = zlib.NewWriterLevel(&buf, int(g.CompressionLevel))
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
 	wrt, err := zlib.NewWriterLevel(&buf, int(g.CompressionLevel))
 	if err != nil {
 		return nil, err

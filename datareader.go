@@ -18,29 +18,11 @@ var (
 //DataReader reads data from data blocks.
 type dataReader struct {
 	r             *Reader
-	blocks        []dataBlock
 	curData       []byte
+	sizes         []uint32
 	offset        int64 //offset relative to the beginning of the squash file
 	curBlock      int   //Which block in sizes is currently cached
 	curReadOffset int   //offset relative to the currently cached data
-}
-
-//DataBlock holds info about a given data block from it's size
-type dataBlock struct {
-	begOffset        int64 //The offset relative to the beginning of the squash file. Makes it easier to seek to it.
-	size             uint32
-	compressed       bool
-	uncompressedSize uint32
-}
-
-//NewDataBlock creates a new squashfs.datablock from a given size.
-func newDataBlock(raw uint32) (dbs dataBlock) {
-	dbs.compressed = raw&(1<<24) != (1 << 24)
-	dbs.size = raw &^ (1 << 24)
-	if !dbs.compressed {
-		dbs.uncompressedSize = dbs.size
-	}
-	return
 }
 
 //NewDataReader creates a new data reader at the given offset, with the blocks defined by sizes
@@ -48,9 +30,7 @@ func (r *Reader) newDataReader(offset int64, sizes []uint32) (*dataReader, error
 	var dr dataReader
 	dr.r = r
 	dr.offset = offset
-	for _, size := range sizes {
-		dr.blocks = append(dr.blocks, newDataBlock(size))
-	}
+	dr.sizes = sizes
 	err := dr.readCurBlock()
 	if err != nil {
 		return nil, err
@@ -70,10 +50,10 @@ func (r *Reader) newDataReaderFromInode(i *inode.Inode) (*dataReader, error) {
 		}
 		rdr.offset = int64(fil.BlockStart)
 		for _, sizes := range fil.BlockSizes {
-			rdr.blocks = append(rdr.blocks, newDataBlock(sizes))
+			rdr.sizes = append(rdr.sizes, sizes)
 		}
 		if fil.Fragmented {
-			rdr.blocks = rdr.blocks[:len(rdr.blocks)-1]
+			rdr.sizes = rdr.sizes[:len(rdr.sizes)-1]
 		}
 	case inode.ExtFileType:
 		fil := i.Info.(inode.ExtFile)
@@ -82,10 +62,10 @@ func (r *Reader) newDataReaderFromInode(i *inode.Inode) (*dataReader, error) {
 		}
 		rdr.offset = int64(fil.BlockStart)
 		for _, sizes := range fil.BlockSizes {
-			rdr.blocks = append(rdr.blocks, newDataBlock(sizes))
+			rdr.sizes = append(rdr.sizes, sizes)
 		}
 		if fil.Fragmented {
-			rdr.blocks = rdr.blocks[:len(rdr.blocks)-1]
+			rdr.sizes = rdr.sizes[:len(rdr.sizes)-1]
 		}
 	default:
 		return nil, errInodeNotFile
@@ -97,9 +77,14 @@ func (r *Reader) newDataReaderFromInode(i *inode.Inode) (*dataReader, error) {
 	return &rdr, nil
 }
 
+//removed the compression bit from a data block size
+func actualDataSize(size uint32) uint32 {
+	return size &^ (1 << 24)
+}
+
 func (d *dataReader) readNextBlock() error {
 	d.curBlock++
-	if d.curBlock >= len(d.blocks) {
+	if d.curBlock >= len(d.sizes) {
 		d.curBlock--
 		return io.EOF
 	}
@@ -112,37 +97,47 @@ func (d *dataReader) readNextBlock() error {
 	return nil
 }
 
-func (d *dataReader) readCurBlock() error {
-	if d.curBlock >= len(d.blocks) {
-		return io.EOF
+func (d *dataReader) readBlockAt(offset int64, size uint32) ([]byte, error) {
+	compressed := size&(1<<24) != (1 << 24)
+	size = size &^ (1 << 24)
+	if d.sizes[d.curBlock] == 0 {
+		return make([]byte, d.r.super.BlockSize), nil
 	}
-	if d.blocks[d.curBlock].size == 0 {
-		d.curData = make([]byte, d.r.super.BlockSize)
-		d.blocks[d.curBlock].uncompressedSize = d.r.super.BlockSize
-		d.blocks[d.curBlock].begOffset = d.offset
-		return nil
-	}
-	sec := io.NewSectionReader(d.r.r, d.offset, int64(d.blocks[d.curBlock].size))
-	if d.blocks[d.curBlock].compressed {
+	sec := io.NewSectionReader(d.r.r, offset, int64(size))
+	if compressed {
 		btys, err := d.r.decompressor.Decompress(sec)
 		if err != nil {
-			return err
+			return nil, err
 		}
-		d.blocks[d.curBlock].uncompressedSize = uint32(len(btys))
-		d.curData = btys
-		d.blocks[d.curBlock].begOffset = d.offset
-		d.offset += int64(d.blocks[d.curBlock].size)
-		return nil
+		return btys, nil
 	}
 	var buf bytes.Buffer
 	_, err := io.Copy(&buf, sec)
 	if err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
+}
+
+func (d *dataReader) offsetForBlock(index int) int64 {
+	out := d.offset
+	for i := 0; i < index; i++ {
+		out += int64(actualDataSize(d.sizes[i]))
+	}
+	return out
+}
+
+func (d *dataReader) readCurBlock() error {
+	if d.curBlock >= len(d.sizes) {
+		return io.EOF
+	}
+	offset := d.offsetForBlock(d.curBlock)
+	data, err := d.readBlockAt(offset, d.sizes[d.curBlock])
+	if err != nil {
 		return err
 	}
-	d.curData = buf.Bytes()
-	d.blocks[d.curBlock].begOffset = d.offset
-	d.offset += int64(d.blocks[d.curBlock].size)
-	return err
+	d.curData = data
+	return nil
 }
 
 func (d *dataReader) Read(p []byte) (int, error) {
@@ -181,4 +176,72 @@ func (d *dataReader) Read(p []byte) (int, error) {
 		return read, errors.New("Didn't read enough data")
 	}
 	return read, nil
+}
+
+// WriteTo writes all the data in the datablock to the writer. MUST BE USED ON A FRESH DATA READER.
+func (d *dataReader) WriteTo(w io.Writer) (int64, error) {
+	type dataCache struct {
+		err   error
+		data  []byte
+		index int
+	}
+	dataChan := make(chan *dataCache)
+	for i := range d.sizes {
+		go func(index int, c chan *dataCache) {
+			var cache dataCache
+			cache.index = index
+			defer func() {
+				c <- &cache
+			}()
+			data, err := d.readBlockAt(d.offsetForBlock(index), d.sizes[index])
+			if err != nil {
+				cache.err = err
+				return
+			}
+			cache.data = data
+			return
+		}(i, dataChan)
+	}
+	curIndex := 0
+	totalWrite := int64(0)
+	var backlog []*dataCache
+mainLoop:
+	for {
+		if curIndex == len(d.sizes) {
+			return totalWrite, nil
+		}
+		if len(backlog) > 0 {
+			for i, cache := range backlog {
+				if cache.index == curIndex {
+					writen, err := w.Write(cache.data)
+					totalWrite += int64(writen)
+					if err != nil {
+						return totalWrite, err
+					}
+					if len(backlog) > 0 {
+						backlog[i] = backlog[len(backlog)-1]
+						backlog = backlog[:len(backlog)-1]
+					} else {
+						backlog = nil
+					}
+					curIndex++
+					continue mainLoop
+				}
+			}
+		}
+		cache := <-dataChan
+		if cache.err != nil {
+			return totalWrite, cache.err
+		}
+		if cache.index == curIndex {
+			writen, err := w.Write(cache.data)
+			totalWrite += int64(writen)
+			if err != nil {
+				return totalWrite, err
+			}
+		} else {
+			backlog = append(backlog, cache)
+		}
+		curIndex++
+	}
 }

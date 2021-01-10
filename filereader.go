@@ -83,3 +83,19 @@ func (f *fileReader) Read(p []byte) (int, error) {
 	}
 	return read, nil
 }
+
+func (f *fileReader) WriteTo(w io.Writer) (int64, error) {
+	if f.fragOnly {
+		n, err := w.Write(f.fragmentData)
+		return int64(n), err
+	}
+	if !f.fragged {
+		return f.data.WriteTo(w)
+	}
+	n, err := f.data.WriteTo(w)
+	if err != nil {
+		return int64(n), err
+	}
+	nn, err := w.Write(f.fragmentData)
+	return int64(nn) + n, err
+}
