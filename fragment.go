@@ -10,9 +10,9 @@ import (
 
 //FragmentEntry is an entry in the fragment table
 type fragmentEntry struct {
-	Start  uint64
-	Size   uint32
-	Unused uint32
+	Start uint64
+	Size  uint32
+	// Unused uint32
 }
 
 //GetFragmentDataFromInode returns the fragment data for a given inode.

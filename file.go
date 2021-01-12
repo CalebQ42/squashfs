@@ -28,14 +28,18 @@ var (
 //File can be either a file or folder. When reading from a squashfs, it reads from the datablocks.
 //When writing, this holds the information on WHERE the file will be placed inside the archive.
 //
-//Implements os.FileInfo and io.ReadCloser
+//If copying data from a squashfs, the returned reader from io.Sys() implements io.WriterTo which
+//will be significantly faster then calling Read directly.
+//Ex: use io.Sys().(io.Reader) for io.Copy instead of using the File directly.
+//
+//Implements os.FileInfo and io.Reader
 type File struct {
-	Reader  io.Reader
+	reader  io.Reader
 	Parent  *File
 	r       *Reader //Underlying reader. When writing, will probably be an os.File. When reading this is kept nil UNTIL reading to save memory.
 	in      *inode.Inode
 	name    string
-	path    string
+	dir     string
 	filType int //The file's type, using inode types.
 
 }
@@ -75,20 +79,20 @@ func (f *File) ModTime() time.Time {
 	return time.Unix(int64(f.in.Header.ModifiedTime), 0)
 }
 
-//Sys returns the underlying reader, file.Reader. If the reader isn't initialized, it will initialize it.
+//Sys returns the underlying reader. If the reader isn't initialized, it will initialize it.
 //If called on something other then a file, returns nil.
 func (f *File) Sys() interface{} {
-	if f.IsFile() {
-		if f.Reader == nil && f.r != nil {
-			var err error
-			f.Reader, err = f.r.newFileReader(f.in)
-			if err != nil {
-				return nil
-			}
-		}
-		return f.Reader
+	if !f.IsFile() {
+		return nil
 	}
-	return nil
+	if f.reader == nil && f.r != nil {
+		var err error
+		f.reader, err = f.r.newFileReader(f.in)
+		if err != nil {
+			return nil
+		}
+	}
+	return f.reader
 }
 
 //GetChildren returns a *squashfs.File slice of every direct child of the directory. If the File is not a directory, will return ErrNotDirectory
@@ -112,7 +116,7 @@ func (f *File) GetChildren() (children []*File, err error) {
 		}
 		fil.Parent = f
 		if f.name != "" {
-			fil.path = f.Path()
+			fil.dir = f.Path()
 		}
 		children = append(children, fil)
 	}
@@ -160,25 +164,22 @@ func (f *File) GetChildrenRecursively() (children []*File, err error) {
 //Path returns the path of the file within the archive.
 func (f *File) Path() string {
 	if f.name == "" {
-		return f.path
+		return f.dir
 	}
-	return f.path + "/" + f.name
+	return f.dir + "/" + f.name
 }
 
 //GetFileAtPath tries to return the File at the given path, relative to the file.
 //Returns nil if called on something other then a folder, OR if the path goes oustide the archive.
-//Allows wildcards supported by path.Match (namely * and ?).
+//Allows wildcards supported by path.Match (namely * and ?) and will return the FIRST file that matches.
 func (f *File) GetFileAtPath(dirPath string) *File {
 	if dirPath == "" {
 		return f
 	}
-	dirPath = strings.TrimSuffix(strings.TrimPrefix(dirPath, "/"), "/")
-	if dirPath != "" && !f.IsDir() {
+	dirPath = path.Clean(dirPath)
+	dirPath = strings.TrimPrefix(dirPath, "/")
+	if dirPath != "." && !f.IsDir() {
 		return nil
-	}
-	for strings.HasSuffix(dirPath, "./") {
-		//since you can TECHNICALLY have an infinite amount of ./ and it would still be valid.
-		dirPath = strings.TrimPrefix(dirPath, "./")
 	}
 	split := strings.Split(dirPath, "/")
 	if split[0] == ".." && f.name == "" {
@@ -398,18 +399,7 @@ func (f *File) ExtractWithOptions(path string, dereferenceSymlink, unbreakSymlin
 			errs = append(errs, err)
 			return
 		} //Since we will be reading from the file
-		if f.Reader == nil && f.r != nil {
-			f.Reader, err = f.r.newFileReader(f.in)
-			if err != nil {
-				if verbose {
-					fmt.Println("Error while Copying data to:", path+"/"+f.name)
-					fmt.Println(err)
-				}
-				errs = append(errs, err)
-				return
-			}
-		}
-		_, err = io.Copy(fil, f.Reader)
+		_, err = io.Copy(fil, f.Sys().(io.Reader))
 		if err != nil {
 			if verbose {
 				fmt.Println("Error while Copying data to:", path+"/"+f.name)
@@ -495,13 +485,13 @@ func (f *File) Read(p []byte) (int, error) {
 		return 0, io.EOF
 	}
 	var err error
-	if f.Reader == nil && f.r != nil {
-		f.Reader, err = f.r.newFileReader(f.in)
+	if f.reader == nil && f.r != nil {
+		f.reader, err = f.r.newFileReader(f.in)
 		if err != nil {
 			return 0, err
 		}
 	}
-	return f.Reader.Read(p)
+	return f.reader.Read(p)
 }
 
 //ReadDirFromInode returns a fully populated Directory from a given Inode.

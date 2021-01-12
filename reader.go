@@ -30,6 +30,7 @@ var (
 type Reader struct {
 	r            io.ReaderAt
 	decompressor compression.Decompressor
+	root         *File
 	fragOffsets  []uint64
 	idTable      []uint32
 	super        superblock
@@ -153,15 +154,21 @@ func (r *Reader) ModTime() time.Time {
 
 //ExtractTo tries to extract ALL files to the given path. This is the same as getting the root folder and extracting that.
 func (r *Reader) ExtractTo(path string) []error {
-	root, err := r.GetRootFolder()
-	if err != nil {
-		return []error{err}
+	if r.root == nil {
+		root, err := r.GetRootFolder()
+		if err != nil {
+			return []error{err}
+		}
+		r.root = root
 	}
-	return root.ExtractTo(path)
+	return r.root.ExtractTo(path)
 }
 
 //GetRootFolder returns a squashfs.File that references the root directory of the squashfs archive.
 func (r *Reader) GetRootFolder() (root *File, err error) {
+	if r.root != nil {
+		return r.root, nil
+	}
 	root = new(File)
 	mr, err := r.newMetadataReaderFromInodeRef(r.super.RootInodeRef)
 	if err != nil {
@@ -171,7 +178,7 @@ func (r *Reader) GetRootFolder() (root *File, err error) {
 	if err != nil {
 		return nil, err
 	}
-	root.path = "/"
+	root.dir = "/"
 	root.filType = root.in.Type
 	root.r = r
 	return root, nil
@@ -179,20 +186,24 @@ func (r *Reader) GetRootFolder() (root *File, err error) {
 
 //GetAllFiles returns a slice of ALL files and folders contained in the squashfs.
 func (r *Reader) GetAllFiles() (fils []*File, err error) {
-	root, err := r.GetRootFolder()
-	if err != nil {
-		return nil, err
+	if r.root == nil {
+		_, err := r.GetRootFolder()
+		if err != nil {
+			return nil, err
+		}
 	}
-	return root.GetChildrenRecursively()
+	return r.root.GetChildrenRecursively()
 }
 
 //FindFile returns the first file (in the same order as Reader.GetAllFiles) that the given function returns true for. Returns nil if nothing is found.
 func (r *Reader) FindFile(query func(*File) bool) *File {
-	root, err := r.GetRootFolder()
-	if err != nil {
-		return nil
+	if r.root == nil {
+		_, err := r.GetRootFolder()
+		if err != nil {
+			return nil
+		}
 	}
-	fils, err := root.GetChildren()
+	fils, err := r.root.GetChildren()
 	if err != nil {
 		return nil
 	}
