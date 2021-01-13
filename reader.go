@@ -56,7 +56,8 @@ func NewSquashfsReader(r io.ReaderAt) (*Reader, error) {
 	if rdr.flags.CompressorOptions {
 		switch rdr.super.CompressionType {
 		case GzipCompression:
-			gzip, err := compression.NewGzipCompressorWithOptions(io.NewSectionReader(rdr.r, int64(binary.Size(rdr.super)), 8))
+			var gzip *compression.Gzip
+			gzip, err = compression.NewGzipCompressorWithOptions(io.NewSectionReader(rdr.r, int64(binary.Size(rdr.super)), 8))
 			if err != nil {
 				return nil, err
 			}
@@ -65,7 +66,8 @@ func NewSquashfsReader(r io.ReaderAt) (*Reader, error) {
 			}
 			rdr.decompressor = gzip
 		case XzCompression:
-			xz, err := compression.NewXzCompressorWithOptions(io.NewSectionReader(rdr.r, int64(binary.Size(rdr.super)), 8))
+			var xz *compression.Xz
+			xz, err = compression.NewXzCompressorWithOptions(io.NewSectionReader(rdr.r, int64(binary.Size(rdr.super)), 8))
 			if err != nil {
 				return nil, err
 			}
@@ -74,13 +76,15 @@ func NewSquashfsReader(r io.ReaderAt) (*Reader, error) {
 			}
 			rdr.decompressor = xz
 		case Lz4Compression:
-			lz4, err := compression.NewLz4CompressorWithOptions(io.NewSectionReader(rdr.r, int64(binary.Size(rdr.super)), 8))
+			var lz4 *compression.Lz4
+			lz4, err = compression.NewLz4CompressorWithOptions(io.NewSectionReader(rdr.r, int64(binary.Size(rdr.super)), 8))
 			if err != nil {
 				return nil, err
 			}
 			rdr.decompressor = lz4
 		case ZstdCompression:
-			zstd, err := compression.NewZstdCompressorWithOptions(io.NewSectionReader(rdr.r, int64(binary.Size(rdr.super)), 4))
+			var zstd *compression.Zstd
+			zstd, err = compression.NewZstdCompressorWithOptions(io.NewSectionReader(rdr.r, int64(binary.Size(rdr.super)), 4))
 			if err != nil {
 				return nil, err
 			}

@@ -146,8 +146,8 @@ func (f *File) GetChildrenRecursively() (children []*File, err error) {
 	errChan := make(chan error)
 	for _, folds := range childFolders {
 		go func(fil *File) {
-			childs, err := fil.GetChildrenRecursively()
-			errChan <- err
+			childs, childsErr := fil.GetChildrenRecursively()
+			errChan <- childsErr
 			foldChil <- childs
 		}(folds)
 	}
@@ -320,7 +320,8 @@ func (f *File) ExtractWithOptions(path string, dereferenceSymlink, unbreakSymlin
 				errs = append(errs, err)
 				return
 			}
-			fil, err := os.Open(path + "/" + f.name)
+			var fil *os.File
+			fil, err = os.Open(path + "/" + f.name)
 			if err != nil {
 				if verbose {
 					fmt.Println("Error while opening:", path+"/"+f.name)
@@ -347,7 +348,8 @@ func (f *File) ExtractWithOptions(path string, dereferenceSymlink, unbreakSymlin
 				errs = append(errs, err)
 			}
 		}
-		children, err := f.GetChildren()
+		var children []*File
+		children, err = f.GetChildren()
 		if err != nil {
 			if verbose {
 				fmt.Println("Error getting children for:", f.Path())
@@ -371,7 +373,8 @@ func (f *File) ExtractWithOptions(path string, dereferenceSymlink, unbreakSymlin
 		}
 		return
 	case f.IsFile():
-		fil, err := os.Create(path + "/" + f.name)
+		var fil *os.File
+		fil, err = os.Create(path + "/" + f.name)
 		if os.IsExist(err) {
 			err = os.Remove(path + "/" + f.name)
 			if err != nil {
