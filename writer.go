@@ -33,6 +33,7 @@ type Writer struct {
 	symlinkTable    map[string]string //[oldpath]newpath
 	uidGUIDTable    []int
 	compressionType int
+	Flags           superblockFlags
 	allowErrors     bool
 }
 
@@ -80,6 +81,9 @@ func (w *Writer) AddFileTo(filepath string, file *os.File) error {
 	filepath = path.Clean(filepath)
 	if !strings.HasPrefix(filepath, "/") {
 		filepath = "/" + filepath
+	}
+	if w.Contains(filepath) {
+		return errors.New("File already exists at " + filepath)
 	}
 	var holder fileHolder
 	holder.path, holder.name = path.Split(filepath)
@@ -150,6 +154,9 @@ func (w *Writer) AddReaderTo(filepath string, reader io.Reader) error {
 	if !strings.HasPrefix(filepath, "/") {
 		filepath = "/" + filepath
 	}
+	if w.Contains(filepath) {
+		return errors.New("File already exists at " + filepath)
+	}
 	var holder fileHolder
 	holder.path, holder.name = path.Split(filepath)
 	holder.reader = reader
@@ -171,10 +178,11 @@ func (w *Writer) Remove(filepath string) bool {
 			for i, fil := range files {
 				if match, _ = path.Match(name, fil.name); match {
 					matchFound = true
-					if i != len(files)-1 {
-						w.structure[structDir] = append(w.structure[structDir][:i], w.structure[structDir][i+1:]...)
+					if len(w.structure[structDir]) > 1 {
+						w.structure[structDir][i] = w.structure[structDir][len(w.structure[structDir])-1]
+						w.structure[structDir] = w.structure[structDir][:len(w.structure[structDir])-1]
 					} else {
-						w.structure[structDir] = w.structure[structDir][:i]
+						w.structure[structDir] = nil
 					}
 				}
 			}
@@ -185,11 +193,120 @@ func (w *Writer) Remove(filepath string) bool {
 
 //FixSymlinks will scan through the squashfs archive and try to find broken symlinks and fix them.
 //This done by replacing the symlink with the target file and then pointing other symlinks to that file.
-//
-//If this is not run before writing, you may end up with broken symlinks.
-func (w *Writer) FixSymlinks() error {
-	//TODO
-	return errors.New("DON'T")
+//If all symlinks can be resolved, the error slice will be nil, and the bool false, otherwise all errors occured will be in the slice.
+func (w *Writer) FixSymlinks() (errs []error, problems bool) {
+	for dir, holderSlice := range w.structure {
+		for i, holder := range holderSlice {
+			if !holder.symlink {
+				continue
+			}
+			sym := holder.symLocation
+			if !path.IsAbs(holder.symLocation) {
+				sym = path.Join(dir, holder.symLocation)
+			}
+			if path, ok := w.symlinkTable[sym]; ok {
+				w.structure[dir][i].symLocation = path
+				continue
+			}
+			if path.IsAbs(sym) || strings.HasPrefix(sym, "../") {
+				var symFil *os.File
+				var err error
+				if strings.HasPrefix(sym, "../") {
+					holderFil, ok := holder.reader.(*os.File)
+					if !ok {
+						problems = true
+						errs = append(errs, errors.New("Cannot resolve symlink at "+dir+holder.name))
+						continue
+					}
+					symFilPath := path.Dir(holderFil.Name())
+					symFilPath = path.Join(symFilPath, holder.symLocation)
+					symFil, err = os.Open(symFilPath)
+				} else {
+					symFil, err = os.Open(sym)
+				}
+				if err != nil {
+					problems = true
+					errs = append(errs, err)
+					continue
+				}
+				suc := w.Remove(dir + holder.name)
+				if !suc {
+					problems = true
+					errs = append(errs, errors.New("Cannot resolve symlink at "+dir+holder.name))
+					continue
+				}
+				err = w.AddFileTo(dir+holder.name, symFil)
+				if err != nil {
+					w.structure[dir] = append(w.structure[dir], holder)
+					problems = true
+					errs = append(errs, err)
+					continue
+				}
+				w.symlinkTable[sym] = dir + holder.name
+			} else {
+				symHolder := w.holderAt(sym)
+				if symHolder != nil {
+					w.symlinkTable[sym] = sym
+					continue
+				}
+				holderFil, ok := holder.reader.(*os.File)
+				if !ok {
+					problems = true
+					errs = append(errs, errors.New("Cannot resolve symlink at "+dir+holder.name))
+					continue
+				}
+				symFilPath := path.Dir(holderFil.Name())
+				symFilPath = path.Join(symFilPath, holder.symLocation)
+				symFil, err := os.Open(symFilPath)
+				if err != nil {
+					problems = true
+					errs = append(errs, err)
+					continue
+				}
+				err = w.AddFileTo(sym, symFil)
+				if err != nil {
+					problems = true
+					errs = append(errs, err)
+					continue
+				}
+				w.symlinkTable[sym] = sym
+			}
+		}
+	}
+	return
+}
+
+func (w *Writer) holderAt(filepath string) *fileHolder {
+	filepath = path.Clean(filepath)
+	if !strings.HasPrefix(filepath, "/") {
+		filepath = "/" + filepath
+	}
+	dir, name := path.Split(filepath)
+	if holderSlice, ok := w.structure[dir]; ok {
+		for _, holder := range holderSlice {
+			if holder.name == name {
+				return holder
+			}
+		}
+	}
+	return nil
+}
+
+//Contains returns whether a file is present at the given filepath
+func (w *Writer) Contains(filepath string) bool {
+	filepath = path.Clean(filepath)
+	if !strings.HasPrefix(filepath, "/") {
+		filepath = "/" + filepath
+	}
+	dir, name := path.Split(filepath)
+	if holderSlice, ok := w.structure[dir]; ok {
+		for _, holder := range holderSlice {
+			if holder.name == name {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 //WriteToFilename creates the squashfs archive with the given filepath.

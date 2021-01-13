@@ -16,7 +16,7 @@ import (
 const (
 	downloadURL  = "https://github.com/srevinsaju/Firefox-Appimage/releases/download/firefox-v84.0.r20201221152838/firefox-84.0.r20201221152838-x86_64.AppImage"
 	appImageName = "firefox-84.0.r20201221152838-x86_64.AppImage"
-	squashfsName = "balenaEtcher-1.5.113-x64.AppImage.sfs" //testing with a ArchLinux root fs from the live img
+	squashfsName = "balenaEtcher-1.5.113-x64.AppImage.sfs"
 )
 
 func TestSquashfs(t *testing.T) {
