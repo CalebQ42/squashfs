@@ -142,21 +142,14 @@ func (f *File) GetChildrenRecursively() (children []*File, err error) {
 			childFolders = append(childFolders, child)
 		}
 	}
-	foldChil := make(chan []*File)
-	errChan := make(chan error)
 	for _, folds := range childFolders {
-		go func(fil *File) {
-			childs, childsErr := fil.GetChildrenRecursively()
-			errChan <- childsErr
-			foldChil <- childs
-		}(folds)
-	}
-	for range childFolders {
-		err = <-errChan
+		var childs []*File
+		childs, err = folds.GetChildrenRecursively()
 		if err != nil {
+			fmt.Println(err)
 			return
 		}
-		children = append(children, <-foldChil...)
+		children = append(children, childs...)
 	}
 	return
 }
@@ -173,11 +166,11 @@ func (f *File) Path() string {
 //Returns nil if called on something other then a folder, OR if the path goes oustide the archive.
 //Allows wildcards supported by path.Match (namely * and ?) and will return the FIRST file that matches.
 func (f *File) GetFileAtPath(dirPath string) *File {
-	if dirPath == "" {
-		return f
-	}
 	dirPath = path.Clean(dirPath)
 	dirPath = strings.TrimPrefix(dirPath, "/")
+	if dirPath == "" || dirPath == "." {
+		return f
+	}
 	if dirPath != "." && !f.IsDir() {
 		return nil
 	}

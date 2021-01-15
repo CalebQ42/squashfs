@@ -76,14 +76,14 @@ func TestAppImage(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	errs := rdr.ExtractTo(wd + "/testing/firefox")
-	if len(errs) > 0 {
-		t.Fatal(errs)
+	rt := rdr.GetFileAtPath("/")
+	fils, err := rt.GetChildrenRecursively()
+	if err != nil {
+		t.Fatal(err)
 	}
-	// os.RemoveAll(wd + "/testing/" + appImageName + ".d")
-	// root, _ := rdr.GetRootFolder()
-	// errs := root.ExtractWithOptions(wd+"/testing/"+appImageName+".d", true, os.ModePerm, true)
-	// t.Fatal(errs)
+	for _, fil := range fils {
+		fmt.Println(fil.Path())
+	}
 	fmt.Println(time.Since(start))
 	t.Fatal("No problemo!")
 }

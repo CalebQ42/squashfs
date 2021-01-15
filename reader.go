@@ -159,25 +159,24 @@ func (r *Reader) ModTime() time.Time {
 //ExtractTo tries to extract ALL files to the given path. This is the same as getting the root folder and extracting that.
 func (r *Reader) ExtractTo(path string) []error {
 	if r.root == nil {
-		root, err := r.GetRootFolder()
+		_, err := r.GetRootFolder()
 		if err != nil {
 			return []error{err}
 		}
-		r.root = root
 	}
 	return r.root.ExtractTo(path)
 }
 
 //GetRootFolder returns a squashfs.File that references the root directory of the squashfs archive.
-func (r *Reader) GetRootFolder() (root *File, err error) {
+func (r *Reader) GetRootFolder() (*File, error) {
 	if r.root != nil {
 		return r.root, nil
 	}
-	root = new(File)
 	mr, err := r.newMetadataReaderFromInodeRef(r.super.RootInodeRef)
 	if err != nil {
 		return nil, err
 	}
+	var root File
 	root.in, err = inode.ProcessInode(mr, r.super.BlockSize)
 	if err != nil {
 		return nil, err
@@ -185,7 +184,8 @@ func (r *Reader) GetRootFolder() (root *File, err error) {
 	root.dir = "/"
 	root.filType = root.in.Type
 	root.r = r
-	return root, nil
+	r.root = &root
+	return r.root, nil
 }
 
 //GetAllFiles returns a slice of ALL files and folders contained in the squashfs.
@@ -243,11 +243,13 @@ func (r *Reader) FindFile(query func(*File) bool) *File {
 
 //FindAll returns all files where the given function returns true.
 func (r *Reader) FindAll(query func(*File) bool) (all []*File) {
-	root, err := r.GetRootFolder()
-	if err != nil {
-		return nil
+	if r.root == nil {
+		_, err := r.GetRootFolder()
+		if err != nil {
+			return nil
+		}
 	}
-	fils, err := root.GetChildrenRecursively()
+	fils, err := r.root.GetChildrenRecursively()
 	if err != nil {
 		return nil
 	}
@@ -260,10 +262,12 @@ func (r *Reader) FindAll(query func(*File) bool) (all []*File) {
 }
 
 //GetFileAtPath will return the file at the given path. If the file cannot be found, will return nil.
-func (r *Reader) GetFileAtPath(path string) *File {
-	dir, err := r.GetRootFolder()
-	if err != nil {
-		return nil
+func (r *Reader) GetFileAtPath(filepath string) *File {
+	if r.root == nil {
+		_, err := r.GetRootFolder()
+		if err != nil {
+			return nil
+		}
 	}
-	return dir.GetFileAtPath(path)
+	return r.root.GetFileAtPath(filepath)
 }
