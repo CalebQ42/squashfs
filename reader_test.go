@@ -15,7 +15,7 @@ import (
 
 const (
 	downloadURL  = "https://github.com/srevinsaju/Firefox-Appimage/releases/download/firefox-v84.0.r20201221152838/firefox-84.0.r20201221152838-x86_64.AppImage"
-	appImageName = "firefox-84.0.r20201221152838-x86_64.AppImage"
+	appImageName = "Ultimaker_Cura-4.8.0.AppImage"
 	squashfsName = "balenaEtcher-1.5.113-x64.AppImage.sfs"
 )
 
@@ -71,20 +71,17 @@ func TestAppImage(t *testing.T) {
 	stat, _ := aiFil.Stat()
 	os.RemoveAll(wd + "/testing/firefox")
 	ai := goappimage.NewAppImage(wd + "/testing/" + appImageName)
-	start := time.Now()
 	rdr, err := NewSquashfsReader(io.NewSectionReader(aiFil, ai.Offset, stat.Size()-ai.Offset))
 	if err != nil {
 		t.Fatal(err)
 	}
-	rt := rdr.GetFileAtPath("/")
-	fils, err := rt.GetChildrenRecursively()
-	if err != nil {
-		t.Fatal(err)
+	desktop := rdr.GetFileAtPath("*.desktop")
+	if desktop == nil {
+		t.Fatal("Problema!")
 	}
-	for _, fil := range fils {
-		fmt.Println(fil.Path())
-	}
-	fmt.Println(time.Since(start))
+	os.Remove(wd + "/testing/cura.desktop")
+	deskFil, _ := os.Create(wd + "/testing/cura.desktop")
+	io.Copy(deskFil, desktop.Sys().(io.Reader))
 	t.Fatal("No problemo!")
 }
 

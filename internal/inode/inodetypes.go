@@ -16,7 +16,7 @@ const (
 	SocketType
 	ExtDirType
 	ExtFileType
-	ExtSymlinkType
+	ExtSymType
 	ExtBlockDeviceType
 	ExtCharDeviceType
 	ExtFifoType
@@ -67,7 +67,8 @@ func NewExtendedDirectory(rdr io.Reader) (ExtDir, error) {
 		return inode, err
 	}
 	for i := uint16(0); i < inode.IndexCount; i++ {
-		tmp, err := NewDirectoryIndex(rdr)
+		var tmp DirIndex
+		tmp, err = NewDirectoryIndex(rdr)
 		if err != nil {
 			return inode, err
 		}
@@ -139,8 +140,8 @@ func NewFile(rdr io.Reader, blockSize uint32) (File, error) {
 
 //ExtFileInit is the information that can be directly decoded
 type ExtFileInit struct {
-	BlockStart     uint32
-	Size           uint32
+	BlockStart     uint64
+	Size           uint64
 	Sparse         uint64
 	HardLinks      uint32
 	FragmentIndex  uint32
@@ -163,8 +164,8 @@ func NewExtendedFile(rdr io.Reader, blockSize uint32) (ExtFile, error) {
 		return inode, err
 	}
 	inode.Fragmented = inode.FragmentIndex != 0xFFFFFFFF
-	blocks := inode.Size / blockSize
-	if inode.Size%blockSize > 0 {
+	blocks := inode.Size / uint64(blockSize)
+	if inode.Size%uint64(blockSize) > 0 {
 		blocks++
 	}
 	inode.BlockSizes = make([]uint32, blocks, blocks)

@@ -18,7 +18,7 @@ type fragmentEntry struct {
 //GetFragmentDataFromInode returns the fragment data for a given inode.
 //If the inode does not have a fragment, harmlessly returns an empty slice without an error.
 func (r *Reader) getFragmentDataFromInode(in *inode.Inode) ([]byte, error) {
-	var size uint32
+	var size uint64
 	var fragIndex uint32
 	var fragOffset uint32
 	if in.Type == inode.FileType {
@@ -27,9 +27,9 @@ func (r *Reader) getFragmentDataFromInode(in *inode.Inode) ([]byte, error) {
 			return make([]byte, 0), nil
 		}
 		if bf.BlockStart == 0 {
-			size = bf.Size
+			size = uint64(bf.Size)
 		} else {
-			size = bf.BlockSizes[len(bf.BlockSizes)-1]
+			size = uint64(bf.BlockSizes[len(bf.BlockSizes)-1])
 		}
 		fragIndex = bf.FragmentIndex
 		fragOffset = bf.FragmentOffset
@@ -41,7 +41,7 @@ func (r *Reader) getFragmentDataFromInode(in *inode.Inode) ([]byte, error) {
 		if bf.BlockStart == 0 {
 			size = bf.Size
 		} else {
-			size = bf.BlockSizes[len(bf.BlockSizes)-1]
+			size = uint64(bf.BlockSizes[len(bf.BlockSizes)-1])
 		}
 		fragIndex = bf.FragmentIndex
 		fragOffset = bf.FragmentOffset
