@@ -16,7 +16,7 @@ const (
 	SocketType
 	ExtDirType
 	ExtFileType
-	ExtSymlinkType
+	ExtSymType
 	ExtBlockDeviceType
 	ExtCharDeviceType
 	ExtFifoType
@@ -67,7 +67,8 @@ func NewExtendedDirectory(rdr io.Reader) (ExtDir, error) {
 		return inode, err
 	}
 	for i := uint16(0); i < inode.IndexCount; i++ {
-		tmp, err := NewDirectoryIndex(rdr)
+		var tmp DirIndex
+		tmp, err = NewDirectoryIndex(rdr)
 		if err != nil {
 			return inode, err
 		}

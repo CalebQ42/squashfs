@@ -203,7 +203,7 @@ func (f *File) IsDir() bool {
 
 //IsSymlink returns if the file is a symlink.
 func (f *File) IsSymlink() bool {
-	return f.filType == inode.SymType || f.filType == inode.ExtSymlinkType
+	return f.filType == inode.SymType || f.filType == inode.ExtSymType
 }
 
 //IsFile returns if the file is a file.
@@ -217,8 +217,8 @@ func (f *File) SymlinkPath() string {
 	switch f.filType {
 	case inode.SymType:
 		return f.in.Info.(inode.Sym).Path
-	case inode.ExtSymlinkType:
-		return f.in.Info.(inode.Sym).Path
+	case inode.ExtSymType:
+		return f.in.Info.(inode.ExtSym).Path
 	default:
 		return ""
 	}

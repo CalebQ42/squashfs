@@ -31,13 +31,15 @@ func ProcessInode(br io.Reader, blockSize uint32) (*Inode, error) {
 		}
 		info = inode
 	case FileType:
-		inode, err := NewFile(br, blockSize)
+		var inode File
+		inode, err = NewFile(br, blockSize)
 		if err != nil {
 			return nil, err
 		}
 		info = inode
 	case SymType:
-		inode, err := NewSymlink(br)
+		var inode Sym
+		inode, err = NewSymlink(br)
 		if err != nil {
 			return nil, err
 		}
@@ -71,19 +73,22 @@ func ProcessInode(br io.Reader, blockSize uint32) (*Inode, error) {
 		}
 		info = inode
 	case ExtDirType:
-		inode, err := NewExtendedDirectory(br)
+		var inode ExtDir
+		inode, err = NewExtendedDirectory(br)
 		if err != nil {
 			return nil, err
 		}
 		info = inode
 	case ExtFileType:
-		inode, err := NewExtendedFile(br, blockSize)
+		var inode ExtFile
+		inode, err = NewExtendedFile(br, blockSize)
 		if err != nil {
 			return nil, err
 		}
 		info = inode
-	case ExtSymlinkType:
-		inode, err := NewExtendedSymlink(br)
+	case ExtSymType:
+		var inode ExtSym
+		inode, err = NewExtendedSymlink(br)
 		if err != nil {
 			return nil, err
 		}
