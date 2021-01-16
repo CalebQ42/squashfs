@@ -13,18 +13,6 @@ import (
 	"github.com/CalebQ42/squashfs/internal/compression"
 )
 
-type fileHolder struct {
-	reader      io.Reader
-	path        string
-	name        string
-	symLocation string
-	UID         int
-	GUID        int
-	perm        int
-	folder      bool
-	symlink     bool
-}
-
 //Writer is used to creaste squashfs archives. Currently unusable
 //TODO: Make usable
 type Writer struct {
@@ -33,8 +21,10 @@ type Writer struct {
 	symlinkTable    map[string]string //[oldpath]newpath
 	uidGUIDTable    []int
 	compressionType int
-	Flags           superblockFlags
-	allowErrors     bool
+	//Flags are the SuperblockFlags used when writing the archive.
+	//Currently Duplicates, Exportable, UncompressedXattr, NoXattr values are ignored
+	Flags       SuperblockFlags
+	allowErrors bool
 }
 
 //NewWriter creates a new with the default options (Gzip compression and allow errors)
@@ -60,6 +50,19 @@ func NewWriterWithOptions(compressionType int, allowErrors bool) (*Writer, error
 		compressionType: compressionType,
 		allowErrors:     allowErrors,
 	}, nil
+}
+
+//fileHolder holds the necessary information about a given file inside of a squashfs
+type fileHolder struct {
+	reader      io.Reader
+	path        string
+	name        string
+	symLocation string
+	UID         int
+	GUID        int
+	perm        int
+	folder      bool
+	symlink     bool
 }
 
 //AddFile attempts to add an os.File to the archive at it's root.
@@ -317,10 +320,4 @@ func (w *Writer) WriteToFilename(filepath string) error {
 	}
 	_, err = w.WriteTo(newFil)
 	return err
-}
-
-//WriteTo attempts to write the archive to the given io.Writer.
-func (w *Writer) WriteTo(write io.Writer) (int64, error) {
-	//TODO
-	return 0, errors.New("I SAID DON'T")
 }

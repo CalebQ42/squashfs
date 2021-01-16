@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	magic = 0x73717368
+	magic uint32 = 0x73717368
 )
 
 var (
@@ -34,7 +34,7 @@ type Reader struct {
 	fragOffsets  []uint64
 	idTable      []uint32
 	super        superblock
-	flags        superblockFlags
+	flags        SuperblockFlags
 }
 
 //NewSquashfsReader returns a new squashfs.Reader from an io.ReaderAt
@@ -53,7 +53,7 @@ func NewSquashfsReader(r io.ReaderAt) (*Reader, error) {
 	// 	return nil, errors.New("BlockSize and BlockLog doesn't match. The archive is probably corrupt")
 	// }
 	rdr.flags = rdr.super.GetFlags()
-	if rdr.flags.CompressorOptions {
+	if rdr.flags.compressorOptions {
 		switch rdr.super.CompressionType {
 		case GzipCompression:
 			var gzip *compression.Gzip
