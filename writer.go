@@ -21,6 +21,9 @@ type Writer struct {
 	symlinkTable    map[string]string //[oldpath]newpath
 	uidGUIDTable    []int
 	compressionType int
+	//BlockSize is how large the data blocks are. Can be between 4096 (4KB) and 1048576 (1 MB). Default is 1048576.
+	//If BlockSize is not inside that range, it will be set to within the range before writing
+	BlockSize uint32
 	//Flags are the SuperblockFlags used when writing the archive.
 	//Currently Duplicates, Exportable, UncompressedXattr, NoXattr values are ignored
 	Flags       SuperblockFlags
@@ -49,6 +52,7 @@ func NewWriterWithOptions(compressionType int, allowErrors bool) (*Writer, error
 		symlinkTable:    make(map[string]string),
 		compressionType: compressionType,
 		allowErrors:     allowErrors,
+		BlockSize:       uint32(1048576),
 	}, nil
 }
 
@@ -61,6 +65,7 @@ type fileHolder struct {
 	UID         int
 	GUID        int
 	perm        int
+	size        uint32
 	folder      bool
 	symlink     bool
 }
