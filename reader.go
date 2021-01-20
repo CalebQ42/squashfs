@@ -26,6 +26,8 @@ var (
 	ErrOptions = errors.New("Possibly incompatible compressor options")
 )
 
+//TODO: implement fs.FS, possibly more FS types for compatibility. Most of this work will mostly be handed off to root anyway so this shouldn't be too difficult.
+
 //Reader processes and reads a squashfs archive.
 type Reader struct {
 	r            io.ReaderAt
@@ -39,7 +41,6 @@ type Reader struct {
 
 //NewSquashfsReader returns a new squashfs.Reader from an io.ReaderAt
 func NewSquashfsReader(r io.ReaderAt) (*Reader, error) {
-	hasUnsupportedOptions := false
 	var rdr Reader
 	rdr.r = r
 	err := binary.Read(io.NewSectionReader(rdr.r, 0, int64(binary.Size(rdr.super))), binary.LittleEndian, &rdr.super)
@@ -49,9 +50,10 @@ func NewSquashfsReader(r io.ReaderAt) (*Reader, error) {
 	if rdr.super.Magic != magic {
 		return nil, errNoMagic
 	}
-	// if rdr.super.BlockLog == uint16(math.Log2(float64(rdr.super.BlockSize))) {
-	// 	return nil, errors.New("BlockSize and BlockLog doesn't match. The archive is probably corrupt")
-	// }
+	if rdr.super.BlockLog != uint16(math.Log2(float64(rdr.super.BlockSize))) {
+		return nil, errors.New("BlockSize and BlockLog doesn't match. The archive is probably corrupt")
+	}
+	hasUnsupportedOptions := false
 	rdr.flags = rdr.super.GetFlags()
 	if rdr.flags.compressorOptions {
 		switch rdr.super.CompressionType {

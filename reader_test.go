@@ -3,6 +3,7 @@ package squashfs
 import (
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"os"
 	"os/exec"
@@ -69,19 +70,13 @@ func TestAppImage(t *testing.T) {
 	}
 	defer aiFil.Close()
 	stat, _ := aiFil.Stat()
-	os.RemoveAll(wd + "/testing/firefox")
 	ai := goappimage.NewAppImage(wd + "/testing/" + appImageName)
 	rdr, err := NewSquashfsReader(io.NewSectionReader(aiFil, ai.Offset, stat.Size()-ai.Offset))
 	if err != nil {
 		t.Fatal(err)
 	}
-	desktop := rdr.GetFileAtPath("*.desktop")
-	if desktop == nil {
-		t.Fatal("Problema!")
-	}
-	os.Remove(wd + "/testing/cura.desktop")
-	deskFil, _ := os.Create(wd + "/testing/cura.desktop")
-	io.Copy(deskFil, desktop.Sys().(io.Reader))
+	fmt.Println(rdr.super.BlockLog, strconv.FormatInt(int64(rdr.super.BlockSize), 2))
+	fmt.Println(math.Log2(float64(rdr.super.BlockSize)))
 	t.Fatal("No problemo!")
 }
 

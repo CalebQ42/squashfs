@@ -13,7 +13,7 @@ import (
 	"github.com/CalebQ42/squashfs/internal/compression"
 )
 
-//Writer is used to creaste squashfs archives. Currently unusable
+//Writer is used to creaste squashfs archives. Currently unusable.
 //TODO: Make usable
 type Writer struct {
 	compressor      compression.Compressor
@@ -21,8 +21,9 @@ type Writer struct {
 	symlinkTable    map[string]string //[oldpath]newpath
 	uidGUIDTable    []int
 	compressionType int
-	//BlockSize is how large the data blocks are. Can be between 4096 (4KB) and 1048576 (1 MB). Default is 1048576.
-	//If BlockSize is not inside that range, it will be set to within the range before writing
+	//BlockSize is how large the data blocks are. Can be between 4096 (4KB) and 1048576 (1 MB).
+	//If BlockSize is not inside that range, it will be set to within the range before writing.
+	//Default is 1048576.
 	BlockSize uint32
 	//Flags are the SuperblockFlags used when writing the archive.
 	//Currently Duplicates, Exportable, UncompressedXattr, NoXattr values are ignored

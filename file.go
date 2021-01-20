@@ -105,6 +105,7 @@ func (f *File) Sys() interface{} {
 // }
 
 //Close does nothing. It's simply here to satisfy fs.File
+//TODO: add actual implementation
 // func (f *File) Close() error {
 // 	return nil
 // }
@@ -292,13 +293,6 @@ func (f *File) Mode() os.FileMode {
 	}
 	return mode
 }
-
-//TODO: Implement with 1.16
-
-//Type returns the type bits from fs.FileMode
-// func (f *File) Type() fs.FileInfo {
-// 	return Mod() ^&fs.ModePerm
-// }
 
 //ExtractTo extracts the file to the given path. This is the same as ExtractWithOptions(path, false, false, os.ModePerm, false).
 //Will NOT try to keep symlinks valid, folders extracted will have the permissions set by the squashfs, but the folder to make path will have full permissions (777).
