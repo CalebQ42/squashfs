@@ -13,6 +13,8 @@ import (
 	"github.com/CalebQ42/squashfs/internal/inode"
 )
 
+//TODO: implement fs.FS, fs.ReadDirFile, fs.ReadFileFS, fs.StatFS, fs.SubFS with 1.16
+
 var (
 	//ErrNotDirectory is returned when you're trying to do directory things with a non-directory
 	errNotDirectory = errors.New("File is not a directory")
@@ -94,6 +96,18 @@ func (f *File) Sys() interface{} {
 	}
 	return f.reader
 }
+
+//TODO: Implement below when 1.16 drops to satisfy fs.File
+
+//Stat simply returns the file. It's simply here to satisfy fs.File
+// func (f *File) Stat() (fs.FileInfo, error) {
+// 	return f, nil
+// }
+
+//Close does nothing. It's simply here to satisfy fs.File
+// func (f *File) Close() error {
+// 	return nil
+// }
 
 //GetChildren returns a *squashfs.File slice of every direct child of the directory. If the File is not a directory, will return ErrNotDirectory
 func (f *File) GetChildren() (children []*File, err error) {
@@ -196,6 +210,16 @@ func (f *File) GetFileAtPath(dirPath string) *File {
 	return nil
 }
 
+//TODO: add with 1.16
+//Open is the same as GetFileAtPath to implement fs.FS
+// func (f *File) Open(name string) (fs.File, error) {
+// 	tmp := f.GetFileAtPath(name)
+// 	if tmp == nil {
+// 		return tmp, fs.ErrNotExist
+// 	}
+// 	return tmp, nil
+// }
+
 //IsDir returns if the file is a directory.
 func (f *File) IsDir() bool {
 	return f.filType == inode.DirType || f.filType == inode.ExtDirType
@@ -268,6 +292,13 @@ func (f *File) Mode() os.FileMode {
 	}
 	return mode
 }
+
+//TODO: Implement with 1.16
+
+//Type returns the type bits from fs.FileMode
+// func (f *File) Type() fs.FileInfo {
+// 	return Mod() ^&fs.ModePerm
+// }
 
 //ExtractTo extracts the file to the given path. This is the same as ExtractWithOptions(path, false, false, os.ModePerm, false).
 //Will NOT try to keep symlinks valid, folders extracted will have the permissions set by the squashfs, but the folder to make path will have full permissions (777).
