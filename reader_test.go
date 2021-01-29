@@ -34,18 +34,18 @@ func TestSquashfs(t *testing.T) {
 		t.Fatal(err)
 	}
 	fmt.Println("stuff", rdr.super.CompressionType)
-	fil := rdr.GetFileAtPath("*.desktop")
-	if fil == nil {
-		t.Fatal("Can't find desktop fil")
-	}
-	errs := fil.ExtractTo(wd + "/testing")
-	if len(errs) > 0 {
-		t.Fatal(errs)
-	}
-	errs = rdr.ExtractTo(wd + "/testing/" + squashfsName + ".d")
-	if len(errs) > 0 {
-		t.Fatal(errs)
-	}
+	// fil := rdr.GetFileAtPath("*.desktop")
+	// if fil == nil {
+	// 	t.Fatal("Can't find desktop fil")
+	// }
+	// errs := fil.ExtractTo(wd + "/testing")
+	// if len(errs) > 0 {
+	// 	t.Fatal(errs)
+	// }
+	// errs = rdr.ExtractTo(wd + "/testing/" + squashfsName + ".d")
+	// if len(errs) > 0 {
+	// 	t.Fatal(errs)
+	// }
 	t.Fatal("No Problems")
 }
 
@@ -131,7 +131,7 @@ func BenchmarkDragRace(b *testing.B) {
 	} else if err != nil {
 		b.Fatal(err)
 	}
-	stat, _ := aiFil.Stat()
+	// stat, _ := aiFil.Stat()
 	ai := goappimage.NewAppImage(wd + "/testing/" + appImageName)
 	os.RemoveAll(wd + "/testing/unsquashFirefox")
 	os.RemoveAll(wd + "/testing/firefox")
@@ -143,14 +143,14 @@ func BenchmarkDragRace(b *testing.B) {
 	}
 	unsquashTime := time.Since(start)
 	start = time.Now()
-	rdr, err := NewSquashfsReader(io.NewSectionReader(aiFil, ai.Offset, stat.Size()-ai.Offset))
-	if err != nil {
-		b.Fatal(err)
-	}
-	errs := rdr.ExtractTo(wd + "/testing/firefox")
-	if len(errs) > 0 {
-		b.Fatal(errs)
-	}
+	// rdr, err := NewSquashfsReader(io.NewSectionReader(aiFil, ai.Offset, stat.Size()-ai.Offset))
+	// if err != nil {
+	// 	b.Fatal(err)
+	// }
+	// errs := rdr.ExtractTo(wd + "/testing/firefox")
+	// if len(errs) > 0 {
+	// 	b.Fatal(errs)
+	// }
 	libTime := time.Since(start)
 	b.Log("Unsqushfs:", unsquashTime.Round(time.Millisecond))
 	b.Log("Library:", libTime.Round(time.Millisecond))
