@@ -9,6 +9,7 @@ import (
 	"github.com/CalebQ42/squashfs/internal/inode"
 )
 
+//DirEntry is a child of a directory.
 type DirEntry struct {
 	en     *directory.Entry
 	parent *FS
@@ -23,14 +24,17 @@ func (r *Reader) newDirEntry(en *directory.Entry, parent *FS) *DirEntry {
 	}
 }
 
+//Name returns the DirEntry's name
 func (d DirEntry) Name() string {
 	return d.en.Name
 }
 
+//IsDir Yep.
 func (d DirEntry) IsDir() bool {
 	return d.en.Type == inode.DirType
 }
 
+//Type returns the type bits of fs.FileMode of the DirEntry.
 func (d DirEntry) Type() fs.FileMode {
 	switch d.en.Type {
 	case inode.DirType:
@@ -42,6 +46,7 @@ func (d DirEntry) Type() fs.FileMode {
 	}
 }
 
+//Info returns the fs.FileInfo for the given DirEntry.
 func (d DirEntry) Info() (fs.FileInfo, error) {
 	in, err := d.r.getInodeFromEntry(d.en)
 	if err != nil {
@@ -72,6 +77,7 @@ func (r *Reader) getInodeFromEntry(en *directory.Entry) (*inode.Inode, error) {
 	return i, nil
 }
 
+//FileInfo is a fs.FileInfo for a file.
 type FileInfo struct {
 	i      *inode.Inode
 	parent *FS
@@ -79,10 +85,12 @@ type FileInfo struct {
 	name   string
 }
 
+//Name is the file's name.
 func (f FileInfo) Name() string {
 	return f.name
 }
 
+//Size is the file's size if it's a regular file. Otherwise, returns 0.
 func (f FileInfo) Size() int64 {
 	switch f.i.Type {
 	case inode.FileType:
@@ -93,6 +101,7 @@ func (f FileInfo) Size() int64 {
 	return 0
 }
 
+//Mode returns the fs.FileMode bits of the file.
 func (f FileInfo) Mode() fs.FileMode {
 	mode := fs.FileMode(f.i.Permissions)
 	switch f.i.Type {
@@ -108,19 +117,21 @@ func (f FileInfo) Mode() fs.FileMode {
 	return mode
 }
 
+//ModTime is the last time the file was modified.
 func (f FileInfo) ModTime() time.Time {
 	return time.Unix(int64(f.i.ModifiedTime), 0)
 }
 
+//IsDir yep.
 func (f FileInfo) IsDir() bool {
 	return f.i.Type == inode.DirType || f.i.Type == inode.ExtDirType
 }
 
+//Sys returns the File for the FileInfo. If something goes wrong, nil is returned.
 func (f FileInfo) Sys() interface{} {
-	return &File{
-		name:   f.name,
-		i:      f.i,
-		r:      f.r,
-		parent: f.parent,
+	fil, err := f.File()
+	if err != nil {
+		return nil
 	}
+	return fil
 }

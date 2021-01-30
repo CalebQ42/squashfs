@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/CalebQ42/squashfs/internal/compression"
+	"github.com/CalebQ42/squashfs/internal/inode"
 )
 
 const (
@@ -29,7 +30,8 @@ var (
 
 //Reader processes and reads a squashfs archive.
 type Reader struct {
-	r            io.ReaderAt
+	FS
+	r            *io.SectionReader
 	decompressor compression.Decompressor
 	root         *File
 	fragOffsets  []uint64
@@ -41,24 +43,25 @@ type Reader struct {
 //NewSquashfsReader returns a new squashfs.Reader from an io.ReaderAt
 func NewSquashfsReader(r io.ReaderAt) (*Reader, error) {
 	var rdr Reader
-	rdr.r = r
-	err := binary.Read(io.NewSectionReader(rdr.r, 0, int64(binary.Size(rdr.super))), binary.LittleEndian, &rdr.super)
+	err := binary.Read(io.NewSectionReader(r, 0, int64(binary.Size(rdr.super))), binary.LittleEndian, &rdr.super)
 	if err != nil {
 		return nil, err
 	}
+	rdr.r = io.NewSectionReader(r, 0, int64(rdr.super.BytesUsed))
 	if rdr.super.Magic != magic {
 		return nil, errNoMagic
 	}
 	if rdr.super.BlockLog != uint16(math.Log2(float64(rdr.super.BlockSize))) {
 		return nil, errors.New("BlockSize and BlockLog doesn't match. The archive is probably corrupt")
 	}
+	rdr.r.Seek(96, io.SeekStart)
 	hasUnsupportedOptions := false
 	rdr.flags = rdr.super.GetFlags()
 	if rdr.flags.compressorOptions {
 		switch rdr.super.CompressionType {
 		case GzipCompression:
 			var gzip *compression.Gzip
-			gzip, err = compression.NewGzipCompressorWithOptions(io.NewSectionReader(rdr.r, int64(binary.Size(rdr.super)), 8))
+			gzip, err = compression.NewGzipCompressorWithOptions(rdr.r)
 			if err != nil {
 				return nil, err
 			}
@@ -68,7 +71,7 @@ func NewSquashfsReader(r io.ReaderAt) (*Reader, error) {
 			rdr.decompressor = gzip
 		case XzCompression:
 			var xz *compression.Xz
-			xz, err = compression.NewXzCompressorWithOptions(io.NewSectionReader(rdr.r, int64(binary.Size(rdr.super)), 8))
+			xz, err = compression.NewXzCompressorWithOptions(rdr.r)
 			if err != nil {
 				return nil, err
 			}
@@ -78,14 +81,14 @@ func NewSquashfsReader(r io.ReaderAt) (*Reader, error) {
 			rdr.decompressor = xz
 		case Lz4Compression:
 			var lz4 *compression.Lz4
-			lz4, err = compression.NewLz4CompressorWithOptions(io.NewSectionReader(rdr.r, int64(binary.Size(rdr.super)), 8))
+			lz4, err = compression.NewLz4CompressorWithOptions(rdr.r)
 			if err != nil {
 				return nil, err
 			}
 			rdr.decompressor = lz4
 		case ZstdCompression:
 			var zstd *compression.Zstd
-			zstd, err = compression.NewZstdCompressorWithOptions(io.NewSectionReader(rdr.r, int64(binary.Size(rdr.super)), 4))
+			zstd, err = compression.NewZstdCompressorWithOptions(rdr.r)
 			if err != nil {
 				return nil, err
 			}
@@ -125,13 +128,14 @@ func NewSquashfsReader(r io.ReaderAt) (*Reader, error) {
 	}
 	unread := rdr.super.IDCount
 	blockOffsets := make([]uint64, int(math.Ceil(float64(rdr.super.IDCount)/2048)))
+	rdr.r.Seek(int64(rdr.super.IDTableStart), io.SeekStart)
 	for i := range blockOffsets {
-		secRdr := io.NewSectionReader(r, int64(rdr.super.IDTableStart)+(8*int64(i)), 8)
-		err = binary.Read(secRdr, binary.LittleEndian, &blockOffsets[i])
+		err = binary.Read(rdr.r, binary.LittleEndian, &blockOffsets[i])
 		if err != nil {
 			return nil, err
 		}
-		idRdr, err := rdr.newMetadataReader(int64(blockOffsets[i]))
+		var idRdr *metadataReader
+		idRdr, err = rdr.newMetadataReader(int64(blockOffsets[i]))
 		if err != nil {
 			return nil, err
 		}
@@ -146,6 +150,23 @@ func NewSquashfsReader(r io.ReaderAt) (*Reader, error) {
 		}
 		unread -= read
 	}
+	metaRdr, err := rdr.newMetadataReaderFromInodeRef(rdr.super.RootInodeRef)
+	if err != nil {
+		return nil, err
+	}
+	i, err := inode.ProcessInode(metaRdr, rdr.super.BlockSize)
+	if err != nil {
+		return nil, err
+	}
+	entries, err := rdr.readDirFromInode(i)
+	if err != nil {
+		return nil, err
+	}
+	rdr.FS = FS{
+		r:       &rdr,
+		name:    "/",
+		entries: entries,
+	}
 	if hasUnsupportedOptions {
 		return &rdr, ErrOptions
 	}
@@ -156,119 +177,3 @@ func NewSquashfsReader(r io.ReaderAt) (*Reader, error) {
 func (r *Reader) ModTime() time.Time {
 	return time.Unix(int64(r.super.CreationTime), 0)
 }
-
-//ExtractTo tries to extract ALL files to the given path. This is the same as getting the root folder and extracting that.
-// func (r *Reader) ExtractTo(path string) []error {
-// 	if r.root == nil {
-// 		_, err := r.GetRootFolder()
-// 		if err != nil {
-// 			return []error{err}
-// 		}
-// 	}
-// 	return r.root.ExtractTo(path)
-// }
-
-//GetRootFolder returns a squashfs.File that references the root directory of the squashfs archive.
-func (r *Reader) GetRootFolder() (*File, error) {
-	if r.root != nil {
-		return r.root, nil
-	}
-	// mr, err := r.newMetadataReaderFromInodeRef(r.super.RootInodeRef)
-	// if err != nil {
-	// 	return nil, err
-	// }
-	var root File
-	// root.in, err = inode.ProcessInode(mr, r.super.BlockSize)
-	// if err != nil {
-	// 	return nil, err
-	// }
-	// root.dir = "/"
-	// root.filType = root.in.Type
-	// root.r = r
-	r.root = &root
-	return r.root, nil
-}
-
-//GetAllFiles returns a slice of ALL files and folders contained in the squashfs.
-// func (r *Reader) GetAllFiles() (fils []*File, err error) {
-// 	if r.root == nil {
-// 		_, err := r.GetRootFolder()
-// 		if err != nil {
-// 			return nil, err
-// 		}
-// 	}
-// 	return r.root.GetChildrenRecursively()
-// }
-
-//FindFile returns the first file (in the same order as Reader.GetAllFiles) that the given function returns true for. Returns nil if nothing is found.
-// func (r *Reader) FindFile(query func(*File) bool) *File {
-// 	if r.root == nil {
-// 		_, err := r.GetRootFolder()
-// 		if err != nil {
-// 			return nil
-// 		}
-// 	}
-// 	fils, err := r.root.GetChildren()
-// 	if err != nil {
-// 		return nil
-// 	}
-// 	var childrenDirs []*File
-// 	for _, fil := range fils {
-// 		if query(fil) {
-// 			return fil
-// 		}
-// 		if fil.IsDir() {
-// 			childrenDirs = append(childrenDirs, fil)
-// 		}
-// 	}
-// 	for len(childrenDirs) != 0 {
-// 		var tmp []*File
-// 		for _, dirs := range childrenDirs {
-// 			chil, err := dirs.GetChildren()
-// 			if err != nil {
-// 				return nil
-// 			}
-// 			for _, child := range chil {
-// 				if query(child) {
-// 					return child
-// 				}
-// 				if child.IsDir() {
-// 					tmp = append(tmp, child)
-// 				}
-// 			}
-// 		}
-// 		childrenDirs = tmp
-// 	}
-// 	return nil
-// }
-
-//FindAll returns all files where the given function returns true.
-// func (r *Reader) FindAll(query func(*File) bool) (all []*File) {
-// 	if r.root == nil {
-// 		_, err := r.GetRootFolder()
-// 		if err != nil {
-// 			return nil
-// 		}
-// 	}
-// 	fils, err := r.root.GetChildrenRecursively()
-// 	if err != nil {
-// 		return nil
-// 	}
-// 	for _, fil := range fils {
-// 		if query(fil) {
-// 			all = append(all, fil)
-// 		}
-// 	}
-// 	return
-// }
-
-//GetFileAtPath will return the file at the given path. If the file cannot be found, will return nil.
-// func (r *Reader) GetFileAtPath(filepath string) *File {
-// 	if r.root == nil {
-// 		_, err := r.GetRootFolder()
-// 		if err != nil {
-// 			return nil
-// 		}
-// 	}
-// 	return r.root.GetFileAtPath(filepath)
-// }

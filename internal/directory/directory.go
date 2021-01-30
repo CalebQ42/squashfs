@@ -25,7 +25,7 @@ type EntryRaw struct {
 type Entry struct {
 	Name             string
 	InodeOffset      uint32
-	InodeBlockOffset int16
+	InodeBlockOffset uint16
 	Type             uint16
 }
 
@@ -42,7 +42,7 @@ func NewEntry(rdr io.Reader) (*Entry, error) {
 		return nil, err
 	}
 	return &Entry{
-		InodeBlockOffset: raw.InodeOffset,
+		InodeBlockOffset: raw.Offset,
 		Type:             raw.Type,
 		Name:             string(tmp),
 	}, nil
