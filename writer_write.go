@@ -3,21 +3,32 @@ package squashfs
 import (
 	"errors"
 	"io"
+	"io/fs"
 	"math"
-	"path"
+	"time"
 )
 
 func (w *Writer) fixFolders() error {
 	for folder := range w.structure {
-		if folder == "/" {
+		if folder == "/" || w.Contains(folder) {
 			continue
 		}
-		dir, name := path.Dir(folder), path.Base(folder)
+		err := w.AddFolderTo(folder, fs.ModePerm)
+		if err != nil {
+			return err
+		}
 	}
+	return nil
 }
 
 //WriteTo attempts to write the archive to the given io.Writer.
+//Folder that aren't present (such as if you add a file at /folder/file, but not the folder /folder)
+//are added with full permission (777).
 func (w *Writer) WriteTo(write io.Writer) (int64, error) {
+	err := w.fixFolders()
+	if err != nil {
+		return 0, err
+	}
 	if w.BlockSize > 1048576 {
 		w.BlockSize = 1048576
 	} else if w.BlockSize < 4096 {
@@ -28,6 +39,8 @@ func (w *Writer) WriteTo(write io.Writer) (int64, error) {
 	w.Flags.NoXattr = true
 	w.superblock = superblock{
 		Magic:           magic,
+		InodeCount:      w.countInodes(),
+		CreationTime:    uint32(time.Now().Unix()),
 		BlockSize:       w.BlockSize,
 		BlockLog:        uint16(math.Log2(float64(w.BlockSize))),
 		CompressionType: uint16(w.compressionType),

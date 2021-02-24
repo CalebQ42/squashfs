@@ -33,6 +33,7 @@ type Writer struct {
 
 	//variables used when actually writing.
 	superblock superblock
+	frags      []fragment
 }
 
 //NewWriter creates a new with the default options (Gzip compression and allow errors)
@@ -68,10 +69,11 @@ type fileHolder struct {
 	path        string
 	name        string
 	symLocation string
-	UID         int
+	blockSizes  []uint32
 	GUID        int
 	perm        int
-	size        uint32
+	size        uint64
+	UID         int
 	folder      bool
 	symlink     bool
 }
@@ -164,7 +166,7 @@ func (w *Writer) AddFileTo(filepath string, file *os.File) error {
 //AddReaderTo adds the data from the given reader to the archive as a file located at the given filepath.
 //Data from the reader is not read until the squashfs archive is writen.
 //If the given reader implements io.Closer, it will be closed after it is fully read.
-func (w *Writer) AddReaderTo(filepath string, reader io.Reader) error {
+func (w *Writer) AddReaderTo(filepath string, reader io.Reader, size uint64) error {
 	filepath = path.Clean(filepath)
 	if !strings.HasPrefix(filepath, "/") {
 		filepath = "/" + filepath
@@ -175,6 +177,7 @@ func (w *Writer) AddReaderTo(filepath string, reader io.Reader) error {
 	var holder fileHolder
 	holder.path = path.Dir(filepath)
 	holder.name = path.Base(filepath)
+	holder.size = size
 	holder.reader = reader
 	w.structure[holder.path] = append(w.structure[holder.path], &holder)
 	return nil
