@@ -4,7 +4,17 @@ import (
 	"errors"
 	"io"
 	"math"
+	"path"
 )
+
+func (w *Writer) fixFolders() error {
+	for folder := range w.structure {
+		if folder == "/" {
+			continue
+		}
+		dir, name := path.Dir(folder), path.Base(folder)
+	}
+}
 
 //WriteTo attempts to write the archive to the given io.Writer.
 func (w *Writer) WriteTo(write io.Writer) (int64, error) {
@@ -13,8 +23,10 @@ func (w *Writer) WriteTo(write io.Writer) (int64, error) {
 	} else if w.BlockSize < 4096 {
 		w.BlockSize = 4096
 	}
-	//TODO: set forced Flag values
-	_ = superblock{
+	w.Flags.RemoveDuplicates = false
+	w.Flags.Exportable = false
+	w.Flags.NoXattr = true
+	w.superblock = superblock{
 		Magic:           magic,
 		BlockSize:       w.BlockSize,
 		BlockLog:        uint16(math.Log2(float64(w.BlockSize))),
