@@ -20,6 +20,7 @@ type Writer struct {
 	compressor      compression.Compressor
 	structure       map[string][]*fileHolder
 	symlinkTable    map[string]string //[oldpath]newpath
+	folders         []string
 	uidGUIDTable    []int
 	compressionType int
 	//BlockSize is how large the data blocks are. Can be between 4096 (4KB) and 1048576 (1 MB).
@@ -49,11 +50,14 @@ func NewWriterWithOptions(compressionType int, allowErrors bool) (*Writer, error
 		return nil, errors.New("Incorrect compression type")
 	}
 	if compressionType == 3 {
-		return nil, errors.New("LZO compression is not (currently) supported")
+		return nil, errors.New("Lzo compression is not (currently) supported")
 	}
 	return &Writer{
 		structure: map[string][]*fileHolder{
 			"/": make([]*fileHolder, 0),
+		},
+		folders: []string{
+			"/",
 		},
 		symlinkTable:    make(map[string]string),
 		compressionType: compressionType,
@@ -78,7 +82,7 @@ type fileHolder struct {
 	symlink     bool
 }
 
-//AddFile attempts to add an os.File to the archive at it's root.
+//AddFile attempts to add an os.File to the archive's root directory.
 func (w *Writer) AddFile(file *os.File) error {
 	return w.AddFileToFolder("/", file)
 }
@@ -126,6 +130,7 @@ func (w *Writer) AddFileTo(filepath string, file *os.File) error {
 		sort.Ints(w.uidGUIDTable)
 	}
 	if holder.symlink {
+		holder.reader = file
 		target, err := os.Readlink(file.Name())
 		if err != nil {
 			return err
@@ -156,8 +161,14 @@ func (w *Writer) AddFileTo(filepath string, file *os.File) error {
 				dirsAdded = append(dirsAdded, holder.path+"/"+holder.name)
 			}
 		}
-	} else if !stat.Mode().IsRegular() {
+	} else if stat.Mode().IsRegular() {
+		holder.reader = file
+	} else {
 		return errors.New("Unsupported file type " + file.Name())
+	}
+	if _, ok := w.structure[holder.path]; ok {
+		w.folders = append(w.folders, holder.path)
+		sort.Strings(w.folders)
 	}
 	w.structure[holder.path] = append(w.structure[holder.path], &holder)
 	return nil
@@ -179,6 +190,10 @@ func (w *Writer) AddReaderTo(filepath string, reader io.Reader, size uint64) err
 	holder.name = path.Base(filepath)
 	holder.size = size
 	holder.reader = reader
+	if _, ok := w.structure[holder.path]; ok {
+		w.folders = append(w.folders, holder.path)
+		sort.Strings(w.folders)
+	}
 	w.structure[holder.path] = append(w.structure[holder.path], &holder)
 	return nil
 }

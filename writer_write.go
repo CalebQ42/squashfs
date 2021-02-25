@@ -42,12 +42,13 @@ func (w *Writer) WriteTo(write io.Writer) (int64, error) {
 		InodeCount:      w.countInodes(),
 		CreationTime:    uint32(time.Now().Unix()),
 		BlockSize:       w.BlockSize,
-		BlockLog:        uint16(math.Log2(float64(w.BlockSize))),
 		CompressionType: uint16(w.compressionType),
+		BlockLog:        uint16(math.Log2(float64(w.BlockSize))),
 		Flags:           w.Flags.ToUint(),
 		IDCount:         uint16(len(w.uidGUIDTable)),
 		MajorVersion:    4,
 		MinorVersion:    0,
 	}
+	_ = super
 	return 0, errors.New("I SAID DON'T")
 }

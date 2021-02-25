@@ -25,7 +25,7 @@ const (
 
 //Header is the common header for all inodes
 type Header struct {
-	InodeType    uint16
+	Type         uint16
 	Permissions  uint16
 	UID          uint16
 	GID          uint16
