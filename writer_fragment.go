@@ -1,12 +1,17 @@
 package squashfs
 
+import (
+	"bytes"
+	"io"
+)
+
 type fragment struct {
 	w     *Writer
 	files []*fileHolder
 	sizes []uint32
 }
 
-func (f *fragment) SizeLeft() uint32 {
+func (f *fragment) sizeLeft() uint32 {
 	totalSize := uint32(0)
 	for _, siz := range f.sizes {
 		totalSize += siz
@@ -14,11 +19,45 @@ func (f *fragment) SizeLeft() uint32 {
 	return f.w.BlockSize - uint32(totalSize)
 }
 
-func (f *fragment) AddFragment(fil *fileHolder) {
+func (f *fragment) addFragment(fil *fileHolder) {
 	//SizeLeft should already be checked
 	fil.fragOffset = len(f.files)
 	f.files = append(f.files, fil)
 	f.sizes = append(f.sizes, fil.blockSizes[len(fil.blockSizes)-1])
+}
+
+//TODO: give info about the frags for the frag table.
+func (w *Writer) writeFragments(write io.WriterAt, off int64) (curOffset int64, err error) {
+	curOffset = off
+	var buf bytes.Buffer
+	var byts []byte
+	var n int
+	for _, frag := range w.frags {
+		blockOffset := 0
+		for i, fil := range frag.files {
+			_, err = io.CopyN(&buf, fil.reader, int64(frag.sizes[i]))
+			if err != nil {
+				return
+			}
+			fil.fragOffset = blockOffset
+			blockOffset += int(frag.sizes[i])
+		}
+		if !w.Flags.UncompressedFragments && w.compressor != nil {
+			byts, err = w.compressor.Compress(buf.Bytes())
+			if err != nil {
+				return
+			}
+		} else {
+			byts = buf.Bytes()
+		}
+		n, err = write.WriteAt(byts, curOffset)
+		curOffset += int64(n)
+		if err != nil {
+			return
+		}
+		buf.Reset()
+	}
+	return
 }
 
 func (w *Writer) addToFragments(fil *fileHolder) {
@@ -27,10 +66,10 @@ func (w *Writer) addToFragments(fil *fileHolder) {
 	if w.Flags.AlwaysFragment || fragSize < uint32(float32(w.BlockSize)*0.8) {
 		var possibleFrags []int
 		for i := range w.frags {
-			left := w.frags[i].SizeLeft()
+			left := w.frags[i].sizeLeft()
 			if left == fragSize {
 				fil.fragIndex = i
-				w.frags[i].AddFragment(fil)
+				w.frags[i].addFragment(fil)
 				return
 			} else if left > fragSize {
 				possibleFrags = append(possibleFrags, i)
