@@ -3,6 +3,7 @@ package squashfs
 import (
 	"errors"
 	"io"
+	"io/fs"
 	"log"
 	"os"
 	"path"
@@ -30,6 +31,10 @@ type Writer struct {
 	//Currently Duplicates, Exportable, UncompressedXattr, NoXattr values are ignored
 	Flags       SuperblockFlags
 	allowErrors bool
+
+	//variables used when actually writing.
+	superblock superblock
+	frags      []fragment
 }
 
 //NewWriter creates a new with the default options (Gzip compression and allow errors)
@@ -58,6 +63,7 @@ func NewWriterWithOptions(compressionType int, allowErrors bool) (*Writer, error
 		compressionType: compressionType,
 		allowErrors:     allowErrors,
 		BlockSize:       uint32(1048576),
+		Flags:           DefaultFlags,
 	}, nil
 }
 
@@ -67,10 +73,11 @@ type fileHolder struct {
 	path        string
 	name        string
 	symLocation string
-	UID         int
+	blockSizes  []uint32
 	GUID        int
 	perm        int
-	size        uint32
+	size        uint64
+	UID         int
 	folder      bool
 	symlink     bool
 }
@@ -99,7 +106,9 @@ func (w *Writer) AddFileTo(filepath string, file *os.File) error {
 		return errors.New("File already exists at " + filepath)
 	}
 	var holder fileHolder
-	holder.path, holder.name = path.Dir(filepath), path.Base(filepath)
+	holder.path = path.Dir(filepath)
+	holder.name = path.Base(filepath)
+	holder.reader = file
 	stat, err := file.Stat()
 	if err != nil {
 		return err
@@ -168,7 +177,7 @@ func (w *Writer) AddFileTo(filepath string, file *os.File) error {
 //AddReaderTo adds the data from the given reader to the archive as a file located at the given filepath.
 //Data from the reader is not read until the squashfs archive is writen.
 //If the given reader implements io.Closer, it will be closed after it is fully read.
-func (w *Writer) AddReaderTo(filepath string, reader io.Reader) error {
+func (w *Writer) AddReaderTo(filepath string, reader io.Reader, size uint64) error {
 	filepath = path.Clean(filepath)
 	if !strings.HasPrefix(filepath, "/") {
 		filepath = "/" + filepath
@@ -177,13 +186,37 @@ func (w *Writer) AddReaderTo(filepath string, reader io.Reader) error {
 		return errors.New("File already exists at " + filepath)
 	}
 	var holder fileHolder
-	holder.path, holder.name = path.Dir(filepath), path.Base(filepath)
+	holder.path = path.Dir(filepath)
+	holder.name = path.Base(filepath)
+	holder.size = size
 	holder.reader = reader
 	if _, ok := w.structure[holder.path]; ok {
 		w.folders = append(w.folders, holder.path)
 		sort.Strings(w.folders)
 	}
 	w.structure[holder.path] = append(w.structure[holder.path], &holder)
+	return nil
+}
+
+//AddFolderTo adds a folder at the given path. IF the folder is already present, it sets the folder's permissions.
+//If the path points to a non-folder (such as a file or symlink), an error is returned
+func (w *Writer) AddFolderTo(folderpath string, permission fs.FileMode) error {
+	folderpath = path.Clean(folderpath)
+	tmp := w.holderAt(folderpath)
+	if tmp != nil {
+		if !tmp.folder {
+			return errors.New("Path is not a folder: " + folderpath)
+		}
+		tmp.perm = int(permission.Perm())
+		return nil
+	}
+	file := fileHolder{
+		path:   path.Dir(folderpath),
+		name:   path.Base(folderpath),
+		perm:   int(permission | fs.ModePerm),
+		folder: true,
+	}
+	w.structure[file.path] = append(w.structure[file.path], &file)
 	return nil
 }
 

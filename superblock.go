@@ -35,28 +35,34 @@ type superblock struct {
 
 //SuperblockFlags is the series of flags describing how a squashfs archive is packed.
 type SuperblockFlags struct {
-	//If true, inodes are stored uncompressed
+	//If true, inodes are stored uncompressed.
 	UncompressedInodes bool
-	//If true, data is stored uncompressed
+	//If true, data is stored uncompressed.
 	UncompressedData bool
 	check            bool
-	//If true, fragments are stored uncompressed
+	//If true, fragments are stored uncompressed.
 	UncompressedFragments bool
-	//If true, ALL data is stored in sequential data blocks instead of utilizing fragments
+	//If true, ALL data is stored in sequential data blocks instead of utilizing fragments.
 	NoFragments bool
 	//If true, the last block of data will always be stored as a fragment if it's less then the block size.
 	AlwaysFragments bool
-	//If true, duplicate files are only stored once.
-	Duplicates bool
-	//If true, the export table is populated
+	//If true, duplicate files are only stored once. (Currently unsupported)
+	RemoveDuplicates bool
+	//If true, the export table is populated. (Currently unsupported)
 	Exportable bool
-	//If true, the xattr table is uncompressed
+	//If true, the xattr table is uncompressed. (Currently unsupported)
 	UncompressedXattr bool
-	//If true, the xattr table is not populated
+	//If true, the xattr table is not populated. (Currently unsupported)
 	NoXattr           bool
 	compressorOptions bool
-	//If true, the UID/GID table is stored uncompressed
+	//If true, the UID/GID table is stored uncompressed.
 	UncompressedIDs bool
+}
+
+//DefaultFlags are the default SuperblockFlags that are used.
+var DefaultFlags = SuperblockFlags{
+	RemoveDuplicates: true,
+	Exportable:       true,
 }
 
 //GetFlags returns a SuperblockFlags for a given superblock.
@@ -68,7 +74,7 @@ func (s *superblock) GetFlags() SuperblockFlags {
 		UncompressedFragments: s.Flags&0x8 == 0x8,
 		NoFragments:           s.Flags&0x10 == 0x10,
 		AlwaysFragments:       s.Flags&0x20 == 0x20,
-		Duplicates:            s.Flags&0x40 == 0x40,
+		RemoveDuplicates:      s.Flags&0x40 == 0x40,
 		Exportable:            s.Flags&0x80 == 0x80,
 		UncompressedXattr:     s.Flags&0x100 == 0x100,
 		NoXattr:               s.Flags&0x200 == 0x200,
@@ -98,7 +104,7 @@ func (s *SuperblockFlags) ToUint() uint16 {
 	if s.AlwaysFragments {
 		out = out | 0x20
 	}
-	if s.Duplicates {
+	if s.RemoveDuplicates {
 		out = out | 0x40
 	}
 	if s.Exportable {
