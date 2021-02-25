@@ -19,9 +19,11 @@ import (
 type Writer struct {
 	compressor      compression.Compressor
 	structure       map[string][]*fileHolder
-	symlinkTable    map[string]string //[oldpath]newpath
+	symlinkTable    map[string]string
 	folders         []string
 	uidGUIDTable    []int
+	frags           []fragment
+	superblock      superblock
 	compressionType int
 	//BlockSize is how large the data blocks are. Can be between 4096 (4KB) and 1048576 (1 MB).
 	//If BlockSize is not inside that range, it will be set to within the range before writing.
@@ -31,10 +33,6 @@ type Writer struct {
 	//Currently Duplicates, Exportable, UncompressedXattr, NoXattr values are ignored
 	Flags       SuperblockFlags
 	allowErrors bool
-
-	//variables used when actually writing.
-	superblock superblock
-	frags      []fragment
 }
 
 //NewWriter creates a new with the default options (Gzip compression and allow errors)
@@ -52,7 +50,7 @@ func NewWriterWithOptions(compressionType int, allowErrors bool) (*Writer, error
 	if compressionType == 3 {
 		return nil, errors.New("Lzo compression is not (currently) supported")
 	}
-	return &Writer{
+	writer := &Writer{
 		structure: map[string][]*fileHolder{
 			"/": make([]*fileHolder, 0),
 		},
@@ -64,7 +62,20 @@ func NewWriterWithOptions(compressionType int, allowErrors bool) (*Writer, error
 		allowErrors:     allowErrors,
 		BlockSize:       uint32(1048576),
 		Flags:           DefaultFlags,
-	}, nil
+	}
+	switch compressionType {
+	case 1:
+		writer.compressor = &compression.Gzip{}
+	case 2:
+		writer.compressor = &compression.Lzma{}
+	case 4:
+		writer.compressor = &compression.Xz{}
+	case 5:
+		writer.compressor = &compression.Lz4{}
+	case 6:
+		writer.compressor = &compression.Zstd{}
+	}
+	return writer, nil
 }
 
 //fileHolder holds the necessary information about a given file inside of a squashfs
@@ -80,6 +91,9 @@ type fileHolder struct {
 	UID         int
 	folder      bool
 	symlink     bool
+
+	fragIndex  int
+	fragOffset int
 }
 
 //AddFile attempts to add an os.File to the archive's root directory.

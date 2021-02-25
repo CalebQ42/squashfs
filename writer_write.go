@@ -24,6 +24,8 @@ func (w *Writer) fixFolders() error {
 //WriteTo attempts to write the archive to the given io.Writer.
 //Folder that aren't present (such as if you add a file at /folder/file, but not the folder /folder)
 //are added with full permission (777).
+//
+//Not working. Yet.
 func (w *Writer) WriteTo(write io.Writer) (int64, error) {
 	err := w.fixFolders()
 	if err != nil {
@@ -37,6 +39,7 @@ func (w *Writer) WriteTo(write io.Writer) (int64, error) {
 	w.Flags.RemoveDuplicates = false
 	w.Flags.Exportable = false
 	w.Flags.NoXattr = true
+	w.calculateFragsAndBlockSizes()
 	w.superblock = superblock{
 		Magic:           magic,
 		InodeCount:      w.countInodes(),
@@ -49,6 +52,5 @@ func (w *Writer) WriteTo(write io.Writer) (int64, error) {
 		MajorVersion:    4,
 		MinorVersion:    0,
 	}
-	_ = super
 	return 0, errors.New("I SAID DON'T")
 }

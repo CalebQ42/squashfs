@@ -45,7 +45,7 @@ type SuperblockFlags struct {
 	//If true, ALL data is stored in sequential data blocks instead of utilizing fragments.
 	NoFragments bool
 	//If true, the last block of data will always be stored as a fragment if it's less then the block size.
-	AlwaysFragments bool
+	AlwaysFragment bool
 	//If true, duplicate files are only stored once. (Currently unsupported)
 	RemoveDuplicates bool
 	//If true, the export table is populated. (Currently unsupported)
@@ -73,7 +73,7 @@ func (s *superblock) GetFlags() SuperblockFlags {
 		check:                 s.Flags&0x4 == 0x4,
 		UncompressedFragments: s.Flags&0x8 == 0x8,
 		NoFragments:           s.Flags&0x10 == 0x10,
-		AlwaysFragments:       s.Flags&0x20 == 0x20,
+		AlwaysFragment:        s.Flags&0x20 == 0x20,
 		RemoveDuplicates:      s.Flags&0x40 == 0x40,
 		Exportable:            s.Flags&0x80 == 0x80,
 		UncompressedXattr:     s.Flags&0x100 == 0x100,
@@ -101,7 +101,7 @@ func (s *SuperblockFlags) ToUint() uint16 {
 	if s.NoFragments {
 		out = out | 0x10
 	}
-	if s.AlwaysFragments {
+	if s.AlwaysFragment {
 		out = out | 0x20
 	}
 	if s.RemoveDuplicates {
