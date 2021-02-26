@@ -12,7 +12,7 @@ import (
 type fragmentEntry struct {
 	Start uint64
 	Size  uint32
-	// Unused uint32
+	_     uint32 //unused
 }
 
 //GetFragmentDataFromInode returns the fragment data for a given inode.

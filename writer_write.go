@@ -26,7 +26,7 @@ func (w *Writer) fixFolders() error {
 //are added with full permission (777).
 //
 //Not working. Yet.
-func (w *Writer) WriteTo(write io.Writer) (int64, error) {
+func (w *Writer) WriteTo(write io.WriterAt) (int64, error) {
 	err := w.fixFolders()
 	if err != nil {
 		return 0, err
