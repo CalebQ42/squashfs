@@ -87,7 +87,7 @@ type fileHolder struct {
 	blockSizes  []uint32
 	GUID        int
 	perm        int
-	size        uint64
+	size        uint64 //when folder, size is of the directory entry(s) in the Directory Table.
 	UID         int
 	folder      bool
 	symlink     bool
@@ -145,19 +145,22 @@ func (w *Writer) AddFileTo(filepath string, file *os.File) error {
 	}
 	if holder.symlink {
 		holder.reader = file
-		target, err := os.Readlink(file.Name())
+		var target string
+		target, err = os.Readlink(file.Name())
 		if err != nil {
 			return err
 		}
 		holder.symLocation = target
 	} else if holder.folder {
-		subDirNames, err := file.Readdirnames(-1)
+		var subDirNames []string
+		subDirNames, err = file.Readdirnames(-1)
 		if err != nil {
 			return err
 		}
 		dirsAdded := make([]string, 0)
 		for _, subDir := range subDirNames {
-			fil, err := os.Open(file.Name() + subDir)
+			var fil *os.File
+			fil, err = os.Open(file.Name() + subDir)
 			if err != nil {
 				return err
 			}
@@ -181,6 +184,12 @@ func (w *Writer) AddFileTo(filepath string, file *os.File) error {
 		return errors.New("Unsupported file type " + file.Name())
 	}
 	if _, ok := w.structure[holder.path]; ok {
+		if !w.Contains(holder.path) {
+			err = w.AddFolderTo(holder.path, fs.ModePerm)
+			if err != nil {
+				return err
+			}
+		}
 		w.folders = append(w.folders, holder.path)
 		sort.Strings(w.folders)
 	}
@@ -205,6 +214,12 @@ func (w *Writer) AddReaderTo(filepath string, reader io.Reader, size uint64) err
 	holder.size = size
 	holder.reader = reader
 	if _, ok := w.structure[holder.path]; ok {
+		if !w.Contains(holder.path) {
+			err := w.AddFolderTo(holder.path, fs.ModePerm)
+			if err != nil {
+				return err
+			}
+		}
 		w.folders = append(w.folders, holder.path)
 		sort.Strings(w.folders)
 	}
@@ -227,8 +242,18 @@ func (w *Writer) AddFolderTo(folderpath string, permission fs.FileMode) error {
 	file := fileHolder{
 		path:   path.Dir(folderpath),
 		name:   path.Base(folderpath),
-		perm:   int(permission | fs.ModePerm),
+		perm:   int(permission.Perm()),
 		folder: true,
+	}
+	if _, ok := w.structure[file.path]; ok {
+		if !w.Contains(file.path) {
+			err := w.AddFolderTo(file.path, fs.ModePerm)
+			if err != nil {
+				return err
+			}
+		}
+		w.folders = append(w.folders, file.path)
+		sort.Strings(w.folders)
 	}
 	w.structure[file.path] = append(w.structure[file.path], &file)
 	return nil

@@ -64,6 +64,8 @@ func (w *Writer) addToFragments(fil *fileHolder) {
 	fragSize := fil.blockSizes[len(fil.blockSizes)-1]
 	//only fragment if the final block is less then 80% of a full block or AlwaysFragment
 	if w.Flags.AlwaysFragment || fragSize < uint32(float32(w.BlockSize)*0.8) {
+		//Try to slot the fragment into a fragment that has the perfect size left. If not, just pick the first one.
+		//TODO: possibly make this more efficient, possibly by calculating fragments all at once and seeing which combos match BlockSize perfectly.
 		var possibleFrags []int
 		for i := range w.frags {
 			left := w.frags[i].sizeLeft()
