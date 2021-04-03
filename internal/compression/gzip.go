@@ -2,9 +2,10 @@ package compression
 
 import (
 	"bytes"
-	"compress/zlib"
 	"encoding/binary"
 	"io"
+
+	"github.com/klauspost/compress/zlib"
 )
 
 type gzipInit struct {

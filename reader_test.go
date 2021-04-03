@@ -154,6 +154,7 @@ func BenchmarkDragRace(b *testing.B) {
 	b.Log("Unsqushfs:", unsquashTime.Round(time.Millisecond))
 	b.Log("Library:", libTime.Round(time.Millisecond))
 	b.Log("unsquashfs is", strconv.FormatFloat(float64(libTime.Milliseconds())/float64(unsquashTime.Milliseconds()), 'f', 2, 64)+"x faster")
+	b.Error("STOP ALREADY!")
 }
 
 func downloadTestAppImage(dir string) error {
