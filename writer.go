@@ -42,13 +42,14 @@ func NewWriter() (*Writer, error) {
 
 //NewWriterWithOptions creates a new squashfs.Writer with the given options.
 //compressionType can be of any types, except LZO (which this library doesn't have support for yet)
-//allowErrors determines if, when adding folders, it allows errors encountered with it's sub-directories and instead logs the errors.
+//allowErrors determines, when adding folders, if it allows errors encountered with it's sub-directories
+//and instead just logs the errors.
 func NewWriterWithOptions(compressionType int, allowErrors bool) (*Writer, error) {
 	if compressionType < 0 || compressionType > 6 {
-		return nil, errors.New("Incorrect compression type")
+		return nil, errors.New("incorrect compression type")
 	}
 	if compressionType == 3 {
-		return nil, errors.New("Lzo compression is not (currently) supported")
+		return nil, errors.New("LZO compression is not (currently) supported")
 	}
 	writer := &Writer{
 		structure: map[string][]*fileHolder{

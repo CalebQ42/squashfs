@@ -133,7 +133,7 @@ func (br *metadataReader) Read(p []byte) (int, error) {
 	}
 	br.readOffset += read
 	if read != len(p) {
-		return read, errors.New("Didn't read enough data")
+		return read, errors.New("didn't read enough data")
 	}
 	return read, nil
 }
@@ -181,7 +181,7 @@ func (br *metadataReader) Seek(offset int64, whence int) (int64, error) {
 		br.readOffset = len(br.data) - int(offset)
 		if br.readOffset < 0 {
 			br.readOffset = 0
-			return int64(br.readOffset), errors.New("Trying to seek to a negative value")
+			return int64(br.readOffset), errors.New("trying to seek to a negative value")
 		}
 	}
 	return int64(br.readOffset), nil

@@ -10,9 +10,9 @@ import (
 
 var (
 	//ErrInodeNotFile is given when giving an inode, but the function requires a file inode.
-	errInodeNotFile = errors.New("Given inode is NOT a file type")
+	errInodeNotFile = errors.New("given inode is NOT a file type")
 	//ErrInodeOnlyFragment is given when trying to make a DataReader from an inode, but the inode only had data in a fragment
-	errInodeOnlyFragment = errors.New("Given inode ONLY has fragment data")
+	errInodeOnlyFragment = errors.New("given inode ONLY has fragment data")
 )
 
 //DataReader reads data from data blocks.
@@ -49,9 +49,7 @@ func (r *Reader) newDataReaderFromInode(i *inode.Inode) (*dataReader, error) {
 			return nil, errInodeOnlyFragment
 		}
 		rdr.offset = int64(fil.BlockStart)
-		for _, sizes := range fil.BlockSizes {
-			rdr.sizes = append(rdr.sizes, sizes)
-		}
+		rdr.sizes = append(rdr.sizes, fil.BlockSizes...)
 		if fil.Fragmented {
 			rdr.sizes = rdr.sizes[:len(rdr.sizes)-1]
 		}
@@ -61,9 +59,7 @@ func (r *Reader) newDataReaderFromInode(i *inode.Inode) (*dataReader, error) {
 			return nil, errInodeOnlyFragment
 		}
 		rdr.offset = int64(fil.BlockStart)
-		for _, sizes := range fil.BlockSizes {
-			rdr.sizes = append(rdr.sizes, sizes)
-		}
+		rdr.sizes = append(rdr.sizes, fil.BlockSizes...)
 		if fil.Fragmented {
 			rdr.sizes = rdr.sizes[:len(rdr.sizes)-1]
 		}
@@ -173,7 +169,7 @@ func (d *dataReader) Read(p []byte) (int, error) {
 		}
 	}
 	if read != len(p) {
-		return read, errors.New("Didn't read enough data")
+		return read, errors.New("didn't read enough data")
 	}
 	return read, nil
 }
@@ -199,7 +195,6 @@ func (d *dataReader) WriteTo(w io.Writer) (int64, error) {
 				return
 			}
 			cache.data = data
-			return
 		}(i, dataChan)
 	}
 	curIndex := 0

@@ -17,13 +17,11 @@ const (
 
 var (
 	//ErrNoMagic is returned if the magic number in the superblock isn't correct.
-	errNoMagic = errors.New("Magic number doesn't match. Either isn't a squashfs or corrupted")
+	errNoMagic = errors.New("magic number doesn't match. Either isn't a squashfs or corrupted")
 	//ErrIncompatibleCompression is returned if the compression type in the superblock doesn't work.
-	errIncompatibleCompression = errors.New("Compression type unsupported")
-	//ErrCompressorOptions is returned if compressor options is present. It's not currently supported.
-	errCompressorOptions = errors.New("Compressor options is not currently supported")
+	errIncompatibleCompression = errors.New("compression type unsupported")
 	//ErrOptions is returned when compression options that I haven't tested is set. When this is returned, the Reader is also returned.
-	ErrOptions = errors.New("Possibly incompatible compressor options")
+	ErrOptions = errors.New("possibly incompatible compressor options")
 )
 
 //TODO: implement fs.FS, possibly more FS types for compatibility. Most of this work will mostly be handed off to root anyway so this shouldn't be too difficult.
@@ -33,7 +31,6 @@ type Reader struct {
 	FS
 	r            *io.SectionReader
 	decompressor compression.Decompressor
-	root         *File
 	fragOffsets  []uint64
 	idTable      []uint32
 	super        superblock

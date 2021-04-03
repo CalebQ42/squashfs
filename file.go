@@ -78,7 +78,7 @@ func (f File) Read(p []byte) (int, error) {
 		}
 		return f.reader.Read(p)
 	}
-	return 0, errors.New("Can only read files")
+	return 0, errors.New("can only read files")
 }
 
 //WriteTo writes all data from the file to the writer. This is multi-threaded.
@@ -89,7 +89,7 @@ func (f File) WriteTo(w io.Writer) (int64, error) {
 		}
 		return f.reader.WriteTo(w)
 	}
-	return 0, errors.New("Can only read files")
+	return 0, errors.New("can only read files")
 }
 
 //Close simply nils the underlying reader. Here mostly to satisfy fs.File
@@ -236,6 +236,9 @@ func (f File) ExtractWithOptions(folder string, op ExtractionOptions) error {
 		}
 	}
 	stat, err := f.Stat()
+	if err != nil {
+		return err
+	}
 	if f.IsDir() {
 		if op.notBase {
 			err = os.Mkdir(folder+"/"+f.name, stat.Mode())
@@ -264,7 +267,6 @@ func (f File) ExtractWithOptions(folder string, op ExtractionOptions) error {
 				}
 				errChan <- fil.ExtractWithOptions(folder+"/"+f.name, op)
 				fil.Close()
-				return
 			}(ents[i].(*DirEntry))
 		}
 		for i := 0; i < len(ents); i++ {
@@ -301,7 +303,7 @@ func (f File) ExtractWithOptions(folder string, op ExtractionOptions) error {
 				if op.Verbose {
 					log.Println("Symlink path(", symPath, ") is unobtainable:", folder+"/"+f.name)
 				}
-				return errors.New("Cannot get symlink target")
+				return errors.New("cannot get symlink target")
 			}
 			fil.name = f.name
 			err = fil.ExtractWithOptions(folder, op)
@@ -318,7 +320,7 @@ func (f File) ExtractWithOptions(folder string, op ExtractionOptions) error {
 				if op.Verbose {
 					log.Println("Symlink path(", symPath, ") is unobtainable:", folder+"/"+f.name)
 				}
-				return errors.New("Cannot get symlink target")
+				return errors.New("cannot get symlink target")
 			}
 			extractLoc := path.Clean(folder + "/" + path.Dir(symPath))
 			err = fil.ExtractWithOptions(extractLoc, op)
@@ -361,7 +363,7 @@ func (r *Reader) readDirFromInode(i *inode.Inode) ([]*directory.Entry, error) {
 		metaOffset = i.Info.(inode.ExtDir).DirectoryOffset
 		size = i.Info.(inode.ExtDir).DirectorySize
 	default:
-		return nil, errors.New("Not a directory inode")
+		return nil, errors.New("not a directory inode")
 	}
 	br, err := r.newMetadataReader(int64(r.super.DirTableStart + uint64(offset)))
 	if err != nil {

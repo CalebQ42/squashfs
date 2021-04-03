@@ -22,7 +22,7 @@ type fileReader struct {
 
 var (
 	//ErrPathIsNotFile returns when trying to read from a file, but the given path is NOT a file.
-	errPathIsNotFile = errors.New("The given path is not a file")
+	errPathIsNotFile = errors.New("the given path is not a file")
 )
 
 //ReadFile provides a squashfs.FileReader for the file at the given location.
@@ -53,6 +53,9 @@ func (r *Reader) newFileReader(in *inode.Inode) (*fileReader, error) {
 	}
 	if !rdr.fragOnly {
 		rdr.data, err = r.newDataReaderFromInode(in)
+		if err != nil {
+			return nil, err
+		}
 	}
 	return &rdr, nil
 }
@@ -72,6 +75,9 @@ func (f *fileReader) Read(p []byte) (int, error) {
 	if f.fragged && err == io.EOF {
 		if f.fragmentData == nil {
 			f.fragmentData, err = f.r.getFragmentDataFromInode(f.in)
+			if err != nil {
+				return read, err
+			}
 		}
 		n, err = bytes.NewBuffer(f.fragmentData).Read(p[read:])
 		read += n

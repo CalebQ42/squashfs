@@ -32,5 +32,5 @@ func (w *Writer) WriteTo(write io.Writer) (int64, error) {
 		MajorVersion:    4,
 		MinorVersion:    0,
 	}
-	return 0, errors.New("I SAID DON'T")
+	return 0, errors.New("i SAID DON'T")
 }

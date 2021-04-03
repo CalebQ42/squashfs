@@ -39,7 +39,7 @@ func (f FS) Open(name string) (fs.File, error) {
 				Op:   "open",
 				Path: name,
 				//TODO: make error clearer
-				Err: errors.New("Trying to get file outside of squashfs"),
+				Err: errors.New("trying to get file outside of squashfs"),
 			}
 		}
 		return f.parent.Open(strings.Join(split[1:], "/"))
@@ -107,7 +107,7 @@ func (f FS) Glob(pattern string) (out []string, err error) {
 				Op:   "readdir",
 				Path: pattern,
 				//TODO: make error clearer
-				Err: errors.New("Trying to get file outside of squashfs"),
+				Err: errors.New("trying to get file outside of squashfs"),
 			}
 		}
 		return f.parent.Glob(strings.Join(split[1:], "/"))
@@ -178,7 +178,7 @@ func (f FS) ReadDir(name string) ([]fs.DirEntry, error) {
 				Op:   "readdir",
 				Path: name,
 				//TODO: make error clearer
-				Err: errors.New("Trying to get file outside of squashfs"),
+				Err: errors.New("trying to get file outside of squashfs"),
 			}
 		}
 		return f.parent.ReadDir(strings.Join(split[1:], "/"))
@@ -294,7 +294,7 @@ func (f FS) Stat(name string) (fs.FileInfo, error) {
 				Op:   "stat",
 				Path: name,
 				//TODO: make error clearer
-				Err: errors.New("Trying to get file outside of squashfs"),
+				Err: errors.New("trying to get file outside of squashfs"),
 			}
 		}
 		return f.parent.Stat(strings.Join(split[1:], "/"))
@@ -377,7 +377,7 @@ func (f FS) Sub(dir string) (fs.FS, error) {
 				Op:   "sub",
 				Path: dir,
 				//TODO: make error clearer
-				Err: errors.New("Trying to get file outside of squashfs"),
+				Err: errors.New("trying to get file outside of squashfs"),
 			}
 		}
 		return f.parent.Sub(strings.Join(split[1:], "/"))
@@ -435,6 +435,11 @@ func (f FS) Sub(dir string) (fs.FS, error) {
 }
 
 func (f FS) path() string {
+	if f.name == "/" {
+		return f.name
+	} else if f.parent.name == "/" {
+		return f.name
+	}
 	return f.parent.path() + "/" + f.name
 }
 
@@ -472,7 +477,6 @@ func (f FS) ExtractWithOptions(folder string, op ExtractionOptions) error {
 			}
 			errChan <- fil.ExtractWithOptions(folder, op)
 			fil.Close()
-			return
 		}(&DirEntry{
 			en:     f.entries[i],
 			parent: &f,
