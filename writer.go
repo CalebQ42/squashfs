@@ -404,13 +404,3 @@ func (w *Writer) Contains(filepath string) bool {
 	}
 	return false
 }
-
-//WriteToFilename creates the squashfs archive with the given filepath.
-func (w *Writer) WriteToFilename(filepath string) error {
-	newFil, err := os.Create(filepath)
-	if err != nil {
-		return err
-	}
-	_, err = w.WriteTo(newFil)
-	return err
-}

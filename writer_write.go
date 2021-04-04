@@ -4,8 +4,19 @@ import (
 	"errors"
 	"io"
 	"math"
+	"os"
 	"time"
 )
+
+//WriteToFilename creates the squashfs archive with the given filepath.
+func (w *Writer) WriteToFilename(filepath string) error {
+	newFil, err := os.Create(filepath)
+	if err != nil {
+		return err
+	}
+	_, err = w.WriteTo(newFil)
+	return err
+}
 
 //WriteTo attempts to write the archive to the given io.Writer.
 //
@@ -32,5 +43,25 @@ func (w *Writer) WriteTo(write io.Writer) (int64, error) {
 		MajorVersion:    4,
 		MinorVersion:    0,
 	}
-	return 0, errors.New("i SAID DON'T")
+	return 0, errors.New("i said don't")
+}
+
+//splits up the size of files into
+func (w *Writer) calculateFragsAndBlockSizes() {
+	for _, files := range w.structure {
+		for i := range files {
+			files[i].fragIndex = -1
+			files[i].blockSizes = make([]uint32, files[i].size/uint64(w.BlockSize))
+			for j := range files[i].blockSizes {
+				files[i].blockSizes[j] = w.BlockSize
+			}
+			fragSize := uint32(files[i].size % uint64(w.BlockSize))
+			if fragSize > 0 {
+				files[i].blockSizes = append(files[i].blockSizes, fragSize)
+				if !w.Flags.NoFragments {
+					w.addToFragments(files[i])
+				}
+			}
+		}
+	}
 }

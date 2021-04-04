@@ -27,8 +27,8 @@ func (f *fragment) addFragment(fil *fileHolder) {
 }
 
 //TODO: give info about the frags for the frag table.
-func (w *Writer) writeFragments(write io.WriterAt, off int64) (curOffset int64, err error) {
-	curOffset = off
+func (w *Writer) writeFragments(write io.WriterAt, off int64) (newOff int64, err error) {
+	newOff = off
 	var buf bytes.Buffer
 	var byts []byte
 	var n int
@@ -50,8 +50,8 @@ func (w *Writer) writeFragments(write io.WriterAt, off int64) (curOffset int64, 
 		} else {
 			byts = buf.Bytes()
 		}
-		n, err = write.WriteAt(byts, curOffset)
-		curOffset += int64(n)
+		n, err = write.WriteAt(byts, newOff)
+		newOff += int64(n)
 		if err != nil {
 			return
 		}
@@ -62,7 +62,8 @@ func (w *Writer) writeFragments(write io.WriterAt, off int64) (curOffset int64, 
 
 func (w *Writer) addToFragments(fil *fileHolder) {
 	fragSize := fil.blockSizes[len(fil.blockSizes)-1]
-	//only fragment if the final block is less then 80% of a full block or AlwaysFragment
+	//only fragment if the final block is less then 80% of a full block or AlwaysFragment.
+	//TODO: Make this check after looking at all fragment blocks. Below option is better, but this is easier to implement...
 	if w.Flags.AlwaysFragment || fragSize < uint32(float32(w.BlockSize)*0.8) {
 		//Try to slot the fragment into a fragment that has the perfect size left. If not, just pick the first one.
 		//TODO: possibly make this more efficient, possibly by calculating fragments all at once and seeing which combos match BlockSize perfectly.
@@ -86,25 +87,6 @@ func (w *Writer) addToFragments(fil *fileHolder) {
 				files: []*fileHolder{fil},
 				sizes: []uint32{fragSize},
 			})
-		}
-	}
-}
-
-func (w *Writer) calculateFragsAndBlockSizes() {
-	for _, files := range w.structure {
-		for i := range files {
-			files[i].fragIndex = -1
-			files[i].blockSizes = make([]uint32, files[i].size/uint64(w.BlockSize))
-			for j := range files[i].blockSizes {
-				files[i].blockSizes[j] = w.BlockSize
-			}
-			fragSize := uint32(files[i].size % uint64(w.BlockSize))
-			if fragSize > 0 {
-				files[i].blockSizes = append(files[i].blockSizes, fragSize)
-				if !w.Flags.NoFragments {
-					w.addToFragments(files[i])
-				}
-			}
 		}
 	}
 }
