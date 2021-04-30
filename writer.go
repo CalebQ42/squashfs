@@ -12,18 +12,22 @@ import (
 	"syscall"
 
 	"github.com/CalebQ42/squashfs/internal/compression"
+	"github.com/CalebQ42/squashfs/internal/inode"
 )
 
 //Writer is used to creaste squashfs archives. Currently unusable.
 //TODO: Make usable
 type Writer struct {
-	compressor      compression.Compressor
-	structure       map[string][]*fileHolder
-	symlinkTable    map[string]string
-	folders         []string
-	uidGUIDTable    []int
-	frags           []fragment
-	superblock      superblock
+	compressor   compression.Compressor
+	structure    map[string][]*fileHolder
+	symlinkTable map[string]string
+	folders      []string
+	uidGUIDTable []int
+	frags        []fragment
+	superblock   superblock
+	//since we need some information from the actually compressed and writen data for tables
+	//we need to write the data FIRST, but make sure there's enough space for the tables.
+	dataOffset      int
 	compressionType int
 	//BlockSize is how large the data blocks are. Can be between 4096 (4KB) and 1048576 (1 MB).
 	//If BlockSize is not inside that range, it will be set to within the range before writing.
@@ -95,6 +99,7 @@ type fileHolder struct {
 
 	fragIndex  int
 	fragOffset int
+	inode      inode.Inode
 }
 
 //AddFile attempts to add an os.File to the archive's root directory.

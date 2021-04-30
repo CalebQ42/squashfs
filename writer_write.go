@@ -18,10 +18,10 @@ func (w *Writer) WriteToFilename(filepath string) error {
 	return err
 }
 
-//WriteTo attempts to write the archive to the given io.Writer.
+//WriteTo attempts to write the archive to the given io.WriterAt.
 //
 //Not working. Yet.
-func (w *Writer) WriteTo(write io.Writer) (int64, error) {
+func (w *Writer) WriteTo(write io.WriterAt) (int64, error) {
 	if w.BlockSize > 1048576 {
 		w.BlockSize = 1048576
 	} else if w.BlockSize < 4096 {
@@ -43,6 +43,9 @@ func (w *Writer) WriteTo(write io.Writer) (int64, error) {
 		MajorVersion:    4,
 		MinorVersion:    0,
 	}
+	w.dataOffset = 96 //superblock size
+	//write compression options
+	w.calculateInodeTableSize()
 	return 0, errors.New("i said don't")
 }
 
