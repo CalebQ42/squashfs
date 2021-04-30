@@ -45,7 +45,8 @@ func (w *Writer) WriteTo(write io.WriterAt) (int64, error) {
 	}
 	w.dataOffset = 96 //superblock size
 	//write compression options
-	w.calculateInodeTableSize()
+	//write/calculate compressed data sizes
+
 	return 0, errors.New("i said don't")
 }
 

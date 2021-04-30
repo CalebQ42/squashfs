@@ -3,6 +3,8 @@ package squashfs
 import (
 	"encoding/binary"
 	"io"
+
+	"github.com/CalebQ42/squashfs/internal/inode"
 )
 
 func (w *Writer) countInodes() (out uint32) {
@@ -13,14 +15,10 @@ func (w *Writer) countInodes() (out uint32) {
 	return
 }
 
-func (w *Writer) calculateInodeTableSize() (out int, err error) {
-	for _, files := range w.structure {
-		for i := range files {
-			_ = i
-			//set up each file's inode and add it's binary.size to out
-			out += binary.Size(files[i].inode)
-		}
-	}
+func (w *Writer) setupInodes() (size int, err error) {
+	w.rootInode.Type = inode.DirType
+	//setup
+	size += binary.Size(w.rootInode)
 	return
 }
 

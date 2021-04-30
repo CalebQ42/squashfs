@@ -25,6 +25,7 @@ type Writer struct {
 	uidGUIDTable []int
 	frags        []fragment
 	superblock   superblock
+	rootInode    inode.Inode
 	//since we need some information from the actually compressed and writen data for tables
 	//we need to write the data FIRST, but make sure there's enough space for the tables.
 	dataOffset      int

@@ -11,8 +11,8 @@ import (
 //
 //Info holds the actual Inode. Due to each inode type being a different type, it's store as an interface{}
 type Inode struct {
-	Info interface{} //Info is the parsed specific data. It's type is defined by Type.
 	Header
+	Info interface{} //Info is the parsed specific data. It's type is defined by Type.
 }
 
 //ProcessInode tries to read an inode from the BlockReader
