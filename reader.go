@@ -72,10 +72,14 @@ func NewSquashfsReader(r io.ReaderAt) (*Reader, error) {
 			if err != nil {
 				return nil, err
 			}
-			if xz.HasFilters {
-				return nil, errors.New("XZ compression options has filters. These are not yet supported")
-			}
 			rdr.decompressor = xz
+		case LzoCompression:
+			var lz *compression.Lzo
+			lz, err = compression.NewLzoCompressorWithOptions(rdr.r)
+			if err != nil {
+				return nil, err
+			}
+			rdr.decompressor = lz
 		case Lz4Compression:
 			var lz4 *compression.Lz4
 			lz4, err = compression.NewLz4CompressorWithOptions(rdr.r)
@@ -99,6 +103,8 @@ func NewSquashfsReader(r io.ReaderAt) (*Reader, error) {
 			rdr.decompressor = &compression.Gzip{}
 		case LzmaCompression:
 			rdr.decompressor = &compression.Lzma{}
+		case LzoCompression:
+			rdr.decompressor = &compression.Lzo{}
 		case XzCompression:
 			rdr.decompressor = &compression.Xz{}
 		case Lz4Compression:

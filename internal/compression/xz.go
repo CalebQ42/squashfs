@@ -5,44 +5,29 @@ import (
 	"encoding/binary"
 	"io"
 
-	"github.com/ulikunitz/xz"
+	"github.com/therootcompany/xz"
+
+	wrtXz "github.com/ulikunitz/xz"
 )
 
-type xzInit struct {
-	DictionarySize int32
-	Filters        int32
-}
-
-//Xz is a Xz decompressor.
 type Xz struct {
 	DictionarySize int32
-	HasFilters     bool
+	Filters        int32
 }
 
 //NewXzCompressorWithOptions creates a new Xz compressor/decompressor that reads the compressor options from the given reader.
 func NewXzCompressorWithOptions(rdr io.Reader) (*Xz, error) {
 	var x Xz
-	var init xzInit
-	err := binary.Read(rdr, binary.LittleEndian, &init)
+	err := binary.Read(rdr, binary.LittleEndian, &x)
 	if err != nil {
 		return nil, err
-	}
-	x.DictionarySize = init.DictionarySize
-	//TODO: When I can do filters, parse the filters
-	if init.Filters != 0 {
-		x.HasFilters = true
 	}
 	return &x, nil
 }
 
 //Decompress decompresses all the data from the rdr and returns the uncompressed bytes.
 func (x *Xz) Decompress(rdr io.Reader) ([]byte, error) {
-	r, err := xz.NewReader(rdr)
-	if err != nil {
-		return nil, err
-	}
-	r.DictCap = int(x.DictionarySize)
-	err = r.Verify()
+	r, err := xz.NewReader(rdr, 0)
 	if err != nil {
 		return nil, err
 	}
@@ -57,7 +42,7 @@ func (x *Xz) Decompress(rdr io.Reader) ([]byte, error) {
 //Compress implements compression.Compress
 func (x *Xz) Compress(data []byte) ([]byte, error) {
 	var buf bytes.Buffer
-	w, err := xz.NewWriter(&buf)
+	w, err := wrtXz.NewWriter(&buf)
 	if err != nil {
 		return nil, err
 	}
