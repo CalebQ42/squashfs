@@ -14,9 +14,10 @@ import (
 )
 
 const (
-	downloadURL  = "https://github.com/srevinsaju/Firefox-Appimage/releases/download/firefox-v84.0.r20201221152838/firefox-84.0.r20201221152838-x86_64.AppImage"
+	appImageURL  = "https://github.com/srevinsaju/Firefox-Appimage/releases/download/firefox-v84.0.r20201221152838/firefox-84.0.r20201221152838-x86_64.AppImage"
 	appImageName = "firefox-84.0.r20201221152838-x86_64.AppImage"
-	squashfsName = "balenaEtcher-1.5.113-x64.AppImage.sfs"
+	squashfsURL  = "https://darkstorm.tech/LinuxPATest.sfs"
+	squashfsName = "LinuxPATest.sfs"
 )
 
 func TestSquashfs(t *testing.T) {
@@ -25,10 +26,23 @@ func TestSquashfs(t *testing.T) {
 		t.Fatal(err)
 	}
 	squashFil, err := os.Open(wd + "/testing/" + squashfsName)
+	if os.IsNotExist(err) {
+		err = downloadTestSquash(wd + "/testing")
+		if err != nil {
+			t.Fatal(err)
+		}
+		squashFil, err = os.Open(wd + "/testing/" + squashfsName)
+	}
 	if err != nil {
 		t.Fatal(err)
 	}
 	rdr, err := NewSquashfsReader(squashFil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	op := DefaultOptions()
+	op.Verbose = true
+	err = rdr.ExtractWithOptions(wd+"/testing/"+squashfsName+".d", op)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -171,12 +185,38 @@ func downloadTestAppImage(dir string) error {
 			return nil
 		},
 	}
-	resp, err := check.Get(downloadURL)
+	resp, err := check.Get(appImageURL)
 	if err != nil {
 		return err
 	}
 	defer resp.Body.Close()
 	_, err = io.Copy(appImage, resp.Body)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func downloadTestSquash(dir string) error {
+	//seems to time out on slow connections. Might fix that at some point... or not. It's just a test...
+	os.Mkdir(dir, os.ModePerm)
+	sfs, err := os.Create(dir + "/" + squashfsName)
+	if err != nil {
+		return err
+	}
+	defer sfs.Close()
+	check := http.Client{
+		CheckRedirect: func(r *http.Request, _ []*http.Request) error {
+			r.URL.Opaque = r.URL.Path
+			return nil
+		},
+	}
+	resp, err := check.Get(squashfsURL)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	_, err = io.Copy(sfs, resp.Body)
 	if err != nil {
 		return err
 	}
