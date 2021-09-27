@@ -40,25 +40,13 @@ func TestSquashfs(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	os.RemoveAll(wd + "/testing/" + squashfsName + ".d")
 	op := DefaultOptions()
 	op.Verbose = true
 	err = rdr.ExtractWithOptions(wd+"/testing/"+squashfsName+".d", op)
 	if err != nil {
 		t.Fatal(err)
 	}
-	fmt.Println("stuff", rdr.super.CompressionType)
-	// fil := rdr.GetFileAtPath("*.desktop")
-	// if fil == nil {
-	// 	t.Fatal("Can't find desktop fil")
-	// }
-	// errs := fil.ExtractTo(wd + "/testing")
-	// if len(errs) > 0 {
-	// 	t.Fatal(errs)
-	// }
-	// errs = rdr.ExtractTo(wd + "/testing/" + squashfsName + ".d")
-	// if len(errs) > 0 {
-	// 	t.Fatal(errs)
-	// }
 	t.Fatal("No Problems")
 }
 
@@ -72,6 +60,7 @@ func TestSquashfsFromReader(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	os.RemoveAll("testing/" + squashfsName + ".d")
 	op := DefaultOptions()
 	op.Verbose = true
 	err = rdr.ExtractWithOptions("testing/"+squashfsName+".d", op)

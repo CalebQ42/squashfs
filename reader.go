@@ -46,12 +46,18 @@ func NewSquashfsReader(r io.ReaderAt) (*Reader, error) {
 }
 
 //NewSquashfsReaderFromReader returns a new squashfs.Reader from an io.Reader.
-//If possible, try to use a io.ReaderAt.
-//With an io.Reader, much of the data has to be cached to memory.
+//If the io.Reader implements io.Seeker, the seek functions are used.
+//It is NOT recommended to use a pure io.Reader as due to how squashfs
+//archives are formatted, the ENTIRETY of the io.Reader's data is loaded into
+//memory first before it can be used.
 func NewSquashfsReaderFromReader(r io.Reader) (*Reader, error) {
 	var rdr Reader
-	rdr.r = rawreader.ConvertReader(r)
-	err := rdr.Init()
+	var err error
+	rdr.r, err = rawreader.ConvertReader(r)
+	if err != nil {
+		return nil, err
+	}
+	err = rdr.Init()
 	if err != nil {
 		return nil, err
 	}
@@ -145,7 +151,10 @@ func (r *Reader) Init() error {
 	}
 	unread := r.super.IDCount
 	blockOffsets := make([]uint64, int(math.Ceil(float64(r.super.IDCount)/2048)))
-	r.r.Seek(int64(r.super.IDTableStart), io.SeekStart)
+	_, err = r.r.Seek(int64(r.super.IDTableStart), io.SeekStart)
+	if err != nil {
+		return err
+	}
 	for i := range blockOffsets {
 		err = binary.Read(r.r, binary.LittleEndian, &blockOffsets[i])
 		if err != nil {

@@ -1,23 +1,28 @@
 package rawreader
 
 import (
+	"bytes"
 	"errors"
 	"io"
 )
 
-func ConvertReader(r io.Reader) RawReader {
+func ConvertReader(r io.Reader) (RawReader, error) {
 	if rr, ok := r.(RawReader); ok {
-		return rr
+		return rr, nil
 	}
 	if rs, is := r.(io.ReadSeeker); is {
 		return &fromReadSeeker{
 			ReadSeeker: rs,
-		}
+		}, nil
+	}
+	buf := new(bytes.Buffer)
+	_, err := io.Copy(buf, r)
+	if err != nil {
+		return nil, err
 	}
 	return &fromReader{
-		rdr:   r,
-		cache: make([]byte, 0),
-	}
+		data: buf.Bytes(),
+	}, nil
 }
 
 func ConvertReaderAt(r io.ReaderAt) RawReader {
@@ -37,27 +42,21 @@ type RawReader interface {
 }
 
 type fromReader struct {
-	rdr   io.Reader
-	cache []byte
-	off   int
-}
-
-func (r *fromReader) increaseCache(len int) error {
-	newCache := make([]byte, len)
-	_, err := r.rdr.Read(newCache)
-	if err != nil {
-		return err
-	}
-	r.cache = append(r.cache, newCache...)
-	return nil
+	data []byte
+	off  int
 }
 
 func (r *fromReader) ReadAt(p []byte, off int64) (n int, err error) {
-	if int(off)+len(p) > len(r.cache) {
-		r.increaseCache((int(off) + len(p)) - len(r.cache))
+	n = len(p)
+	if int(off)+len(p) > len(r.data) {
+		n = len(r.data) - int(off)
+		err = io.EOF
 	}
-	for i := int64(0); i < int64(len(p)); i++ {
-		p[i] = r.cache[off+i]
+	if n < 0 {
+		n = 0
+	}
+	for i := 0; i < n; i++ {
+		p[i] = r.data[int(off)+i]
 	}
 	return
 }
@@ -65,32 +64,35 @@ func (r *fromReader) ReadAt(p []byte, off int64) (n int, err error) {
 func (r *fromReader) Seek(off int64, whence int) (n int64, err error) {
 	switch whence {
 	case io.SeekEnd:
-		return 0, errors.New("cannot SeekEnd RawReader")
+		r.off = len(r.data) - int(off)
+		if r.off < 0 {
+			r.off = 0
+			err = io.EOF
+		}
 	case io.SeekCurrent:
 		r.off += int(off)
 	case io.SeekStart:
 		r.off = int(off)
 	}
-	if r.off > len(r.cache) {
-		err = r.increaseCache(len(r.cache) - r.off)
-		if err != nil {
-			r.off = len(r.cache)
-		}
+	if r.off > len(r.data) {
+		r.off = len(r.data)
+		return int64(r.off), io.EOF
 	}
 	return int64(r.off), err
 }
 
 func (r *fromReader) Read(p []byte) (n int, err error) {
-	if len(p)+r.off > len(r.cache) {
-		err = r.increaseCache((len(p) + r.off) - len(r.cache))
-		if err != nil {
-			return
-		}
+	n = len(p)
+	if r.off+len(p) > len(r.data) {
+		n = len(r.data) - r.off
+		err = io.EOF
 	}
-	for i := 0; i < len(p); i++ {
-		p[i] = r.cache[r.off+i]
+	if n < 0 {
+		n = 0
 	}
-	r.off += len(p)
+	for i := 0; i < n; i++ {
+		p[i] = r.data[r.off+i]
+	}
 	return
 }
 
