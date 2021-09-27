@@ -62,6 +62,25 @@ func TestSquashfs(t *testing.T) {
 	t.Fatal("No Problems")
 }
 
+func TestSquashfsFromReader(t *testing.T) {
+	resp, err := http.DefaultClient.Get(squashfsURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	rdr, err := NewSquashfsReaderFromReader(resp.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	op := DefaultOptions()
+	op.Verbose = true
+	err = rdr.ExtractWithOptions("testing/"+squashfsName+".d", op)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Fatal("No Problems")
+}
+
 func TestAppImage(t *testing.T) {
 	t.Parallel()
 	wd, err := os.Getwd()
