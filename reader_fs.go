@@ -10,11 +10,13 @@ import (
 	"strings"
 
 	"github.com/CalebQ42/squashfs/internal/directory"
+	"github.com/CalebQ42/squashfs/internal/inode"
 )
 
 //FS is a fs.FS representation of a squashfs directory.
 //Implements fs.GlobFS, fs.ReadDirFS, fs.ReadFileFS, fs.StatFS, and fs.SubFS
 type FS struct {
+	i       *inode.Inode
 	r       *Reader
 	parent  *FS
 	name    string
@@ -43,6 +45,9 @@ func (f FS) Open(name string) (fs.File, error) {
 			}
 		}
 		return f.parent.Open(strings.Join(split[1:], "/"))
+	}
+	if split[0] == "." {
+		return &File{i: f.i, r: f.r, parent: f.parent, name: f.name}, nil
 	}
 	for i := 0; i < len(f.entries); i++ {
 		if match, _ := path.Match(split[0], f.entries[i].Name); match {
@@ -183,6 +188,10 @@ func (f FS) ReadDir(name string) ([]fs.DirEntry, error) {
 		}
 		return f.parent.ReadDir(strings.Join(split[1:], "/"))
 	}
+	if split[0] == "." {
+		f := &File{i: f.i, r: f.r, parent: f.parent, name: f.name}
+		return f.ReadDir(-1)
+	}
 	for i := 0; i < len(f.entries); i++ {
 		if match, _ := path.Match(split[0], f.entries[i].Name); match {
 			if len(split) == 1 {
@@ -202,7 +211,7 @@ func (f FS) ReadDir(name string) ([]fs.DirEntry, error) {
 						Err:  err,
 					}
 				}
-				out := make([]fs.DirEntry, len(f.entries))
+				out := make([]fs.DirEntry, len(ents))
 				for i, ent := range ents {
 					out[i] = &DirEntry{
 						en:     ent,
@@ -299,6 +308,10 @@ func (f FS) Stat(name string) (fs.FileInfo, error) {
 		}
 		return f.parent.Stat(strings.Join(split[1:], "/"))
 	}
+	if split[0] == "." {
+		f := &File{i: f.i, r: f.r, parent: f.parent, name: f.name}
+		return f.Stat()
+	}
 	for i := 0; i < len(f.entries); i++ {
 		if match, _ := path.Match(split[0], f.entries[i].Name); match {
 			if len(split) == 1 {
@@ -382,6 +395,9 @@ func (f FS) Sub(dir string) (fs.FS, error) {
 		}
 		return f.parent.Sub(strings.Join(split[1:], "/"))
 	}
+	if split[0] == "." {
+		return f, nil
+	}
 	for i := 0; i < len(f.entries); i++ {
 		if match, _ := path.Match(split[0], f.entries[i].Name); match {
 			if len(split) == 1 {
@@ -401,7 +417,8 @@ func (f FS) Sub(dir string) (fs.FS, error) {
 						Err:  err,
 					}
 				}
-				return &FS{
+				return FS{
+					i:       in,
 					r:       f.r,
 					parent:  &f,
 					name:    f.entries[i].Name,
