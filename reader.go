@@ -189,6 +189,7 @@ func (r *Reader) Init() error {
 		return err
 	}
 	r.FS = FS{
+		i:       i,
 		r:       r,
 		name:    "/",
 		entries: entries,

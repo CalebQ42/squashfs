@@ -135,10 +135,11 @@ func (f File) FS() (*FS, error) {
 		return nil, err
 	}
 	return &FS{
-		entries: ents,
-		parent:  f.parent,
+		i:       f.i,
 		r:       f.r,
+		parent:  f.parent,
 		name:    f.name,
+		entries: ents,
 	}, nil
 }
 
