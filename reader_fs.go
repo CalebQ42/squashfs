@@ -50,7 +50,7 @@ func (f FS) Open(name string) (fs.File, error) {
 		return &File{i: f.i, r: f.r, parent: f.parent, name: f.name}, nil
 	}
 	for i := 0; i < len(f.entries); i++ {
-		if match, _ := path.Match(split[0], f.entries[i].Name); match {
+		if split[0] == f.entries[i].Name {
 			if len(split) == 1 {
 				return f.r.newFileFromDirEntry(f.entries[i], &f)
 			}
@@ -193,7 +193,7 @@ func (f FS) ReadDir(name string) ([]fs.DirEntry, error) {
 		return f.ReadDir(-1)
 	}
 	for i := 0; i < len(f.entries); i++ {
-		if match, _ := path.Match(split[0], f.entries[i].Name); match {
+		if split[0] == f.entries[i].Name {
 			if len(split) == 1 {
 				in, err := f.r.getInodeFromEntry(f.entries[i])
 				if err != nil {
@@ -313,7 +313,7 @@ func (f FS) Stat(name string) (fs.FileInfo, error) {
 		return f.Stat()
 	}
 	for i := 0; i < len(f.entries); i++ {
-		if match, _ := path.Match(split[0], f.entries[i].Name); match {
+		if split[0] == f.entries[i].Name {
 			if len(split) == 1 {
 				in, err := f.r.getInodeFromEntry(f.entries[i])
 				if err != nil {
@@ -399,7 +399,7 @@ func (f FS) Sub(dir string) (fs.FS, error) {
 		return f, nil
 	}
 	for i := 0; i < len(f.entries); i++ {
-		if match, _ := path.Match(split[0], f.entries[i].Name); match {
+		if split[0] == f.entries[i].Name {
 			if len(split) == 1 {
 				in, err := f.r.getInodeFromEntry(f.entries[i])
 				if err != nil {
