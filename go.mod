@@ -1,6 +1,6 @@
 module github.com/CalebQ42/squashfs
 
-go 1.17
+go 1.18
 
 require (
 	github.com/CalebQ42/GoAppImage v0.5.0

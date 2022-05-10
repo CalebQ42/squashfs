@@ -7,197 +7,226 @@ import (
 	"math"
 	"time"
 
-	"github.com/CalebQ42/squashfs/internal/compression"
+	"github.com/CalebQ42/squashfs/internal/decompress"
+	"github.com/CalebQ42/squashfs/internal/directory"
 	"github.com/CalebQ42/squashfs/internal/inode"
-	"github.com/CalebQ42/squashfs/internal/rawreader"
+	"github.com/CalebQ42/squashfs/internal/metadata"
+	"github.com/CalebQ42/squashfs/internal/toreader"
+)
+
+type Reader struct {
+	*FS
+	d           decompress.Decompressor
+	r           io.ReaderAt
+	fragEntries []fragEntry
+	ids         []uint32
+	exportTable []uint64
+	s           superblock
+}
+
+var (
+	ErrorMagic = errors.New("magic incorrect. probably not reading squashfs archive")
+	ErrorLog   = errors.New("block log is incorrect. possible corrupted archive")
 )
 
 const (
-	magic uint32 = 0x73717368
+	GZipCompression = uint16(iota + 1)
+	LZMACompression
+	LZOCompression
+	XZCompression
+	LZ4Compression
+	ZSTDCompression
 )
 
-var (
-	//ErrNoMagic is returned if the magic number in the superblock isn't correct.
-	errNoMagic = errors.New("magic number doesn't match. Either isn't a squashfs or corrupted")
-	//ErrIncompatibleCompression is returned if the compression type in the superblock doesn't work.
-	errIncompatibleCompression = errors.New("compression type unsupported")
-)
-
-//Reader processes and reads a squashfs archive.
-type Reader struct {
-	FS
-	r            rawreader.RawReader
-	decompressor compression.Decompressor
-	fragOffsets  []uint64
-	idTable      []uint32
-	super        superblock
-	flags        SuperblockFlags
-}
-
-//NewSquashfsReader returns a new squashfs.Reader from an io.ReaderAt
-func NewSquashfsReader(r io.ReaderAt) (*Reader, error) {
-	var rdr Reader
-	rdr.r = rawreader.ConvertReaderAt(r)
-	err := rdr.Init()
+func NewReaderFromReader(r io.Reader) (*Reader, error) {
+	rdr, err := toreader.NewReaderAt(r)
 	if err != nil {
 		return nil, err
 	}
-	return &rdr, nil
+	return NewReader(rdr)
 }
 
-//NewSquashfsReaderFromReader returns a new squashfs.Reader from an io.Reader.
-//If the io.Reader implements io.Seeker, the seek functions are used.
-//It is NOT recommended to use a pure io.Reader as due to how squashfs
-//archives are formatted, the ENTIRETY of the io.Reader's data is loaded into
-//memory first before it can be used.
-func NewSquashfsReaderFromReader(r io.Reader) (*Reader, error) {
-	var rdr Reader
-	var err error
-	rdr.r, err = rawreader.ConvertReader(r)
+func NewReader(r io.ReaderAt) (*Reader, error) {
+	var squash Reader
+	squash.r = r
+	err := binary.Read(toreader.NewReader(r, 0), binary.LittleEndian, &squash.s)
 	if err != nil {
 		return nil, err
 	}
-	err = rdr.Init()
-	if err != nil {
-		return nil, err
+	if !squash.s.hasMagic() {
+		return nil, ErrorMagic
 	}
-	return &rdr, nil
-}
-
-func (r *Reader) Init() error {
-	err := binary.Read(r.r, binary.LittleEndian, &r.super)
-	if err != nil {
-		return err
+	if !squash.s.checkBlockLog() {
+		return nil, ErrorLog
 	}
-	if r.super.Magic != magic {
-		return errNoMagic
+	switch squash.s.CompType {
+	case GZipCompression:
+		squash.d = decompress.GZip{}
+	case LZMACompression:
+		squash.d = decompress.Lzma{}
+	case LZOCompression:
+		squash.d = decompress.Lzo{}
+	case XZCompression:
+		squash.d = decompress.Xz{}
+	case LZ4Compression:
+		squash.d = decompress.Lz4{}
+	case ZSTDCompression:
+		squash.d = decompress.Zstd{}
+	default:
+		return nil, errors.New("uh, I need to do this, OR something if very wrong")
 	}
-	if r.super.BlockLog != uint16(math.Log2(float64(r.super.BlockSize))) {
-		return errors.New("BlockSize and BlockLog doesn't match. The archive is probably corrupt")
-	}
-	r.r.Seek(96, io.SeekStart)
-	r.flags = r.super.GetFlags()
-	if r.flags.compressorOptions {
-		switch r.super.CompressionType {
-		case GzipCompression:
-			var gzip *compression.Gzip
-			gzip, err = compression.NewGzipCompressorWithOptions(r.r)
-			if err != nil {
-				return err
-			}
-			r.decompressor = gzip
-		case XzCompression:
-			var xz *compression.Xz
-			xz, err = compression.NewXzCompressorWithOptions(r.r)
-			if err != nil {
-				return err
-			}
-			r.decompressor = xz
-		case LzoCompression:
-			var lz *compression.Lzo
-			lz, err = compression.NewLzoCompressorWithOptions(r.r)
-			if err != nil {
-				return err
-			}
-			r.decompressor = lz
-		case Lz4Compression:
-			var lz4 *compression.Lz4
-			lz4, err = compression.NewLz4CompressorWithOptions(r.r)
-			if err != nil {
-				return err
-			}
-			r.decompressor = lz4
-		case ZstdCompression:
-			var zstd *compression.Zstd
-			zstd, err = compression.NewZstdCompressorWithOptions(r.r)
-			if err != nil {
-				return err
-			}
-			r.decompressor = zstd
-		default:
-			return errIncompatibleCompression
-		}
-	} else {
-		switch r.super.CompressionType {
-		case GzipCompression:
-			r.decompressor = &compression.Gzip{}
-		case LzmaCompression:
-			r.decompressor = &compression.Lzma{}
-		case LzoCompression:
-			r.decompressor = &compression.Lzo{}
-		case XzCompression:
-			r.decompressor = &compression.Xz{}
-		case Lz4Compression:
-			r.decompressor = &compression.Lz4{}
-		case ZstdCompression:
-			r.decompressor = &compression.Zstd{}
-		default:
-			//TODO: all compression types.
-			return errIncompatibleCompression
-		}
-	}
-	fragBlocks := int(math.Ceil(float64(r.super.FragCount) / 512))
-	if fragBlocks > 0 {
-		offset := int64(r.super.FragTableStart)
-		for i := 0; i < fragBlocks; i++ {
-			tmp := make([]byte, 8)
-			_, err = r.r.ReadAt(tmp, offset)
-			if err != nil {
-				return err
-			}
-			r.fragOffsets = append(r.fragOffsets, binary.LittleEndian.Uint64(tmp))
-			offset += 8
-		}
-	}
-	unread := r.super.IDCount
-	blockOffsets := make([]uint64, int(math.Ceil(float64(r.super.IDCount)/2048)))
-	_, err = r.r.Seek(int64(r.super.IDTableStart), io.SeekStart)
-	if err != nil {
-		return err
-	}
-	for i := range blockOffsets {
-		err = binary.Read(r.r, binary.LittleEndian, &blockOffsets[i])
+	if !squash.s.noFragments() && squash.s.FragCount > 0 {
+		fragOffsets := make([]uint64, int(math.Ceil(float64(squash.s.FragCount)/512)))
+		err = binary.Read(toreader.NewReader(r, int64(squash.s.FragTableStart)), binary.LittleEndian, &fragOffsets)
 		if err != nil {
-			return err
+			return nil, err
 		}
-		var idRdr *metadataReader
-		idRdr, err = r.newMetadataReader(int64(blockOffsets[i]))
-		if err != nil {
-			return err
-		}
-		read := uint16(math.Min(float64(unread), 2048))
-		for i := uint16(0); i < read; i++ {
-			var tmp uint32
-			err = binary.Read(idRdr, binary.LittleEndian, &tmp)
+		squash.fragEntries = make([]fragEntry, squash.s.FragCount)
+		if len(fragOffsets) == 1 {
+			var rdr *metadata.Reader
+			rdr, err = metadata.NewReader(toreader.NewReader(r, int64(fragOffsets[0])), squash.d)
 			if err != nil {
-				return err
+				return nil, err
 			}
-			r.idTable = append(r.idTable, tmp)
+			err = binary.Read(rdr, binary.LittleEndian, &squash.fragEntries)
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			toRead := squash.s.IdCount
+			var curRead uint16
+			var tmp []fragEntry
+			var rdr *metadata.Reader
+			var offset int
+			for i := range fragOffsets {
+				curRead = uint16(math.Min(512, float64(toRead)))
+				tmp = make([]fragEntry, curRead)
+				rdr, err = metadata.NewReader(toreader.NewReader(r, int64(fragOffsets[i])), squash.d)
+				if err != nil {
+					return nil, err
+				}
+				err = binary.Read(rdr, binary.LittleEndian, &tmp)
+				if err != nil {
+					return nil, err
+				}
+				offset = int(squash.s.IdCount - toRead)
+				for i := range tmp {
+					squash.fragEntries[offset+i] = tmp[i]
+				}
+				toRead -= curRead
+			}
 		}
-		unread -= read
 	}
-	metaRdr, err := r.newMetadataReaderFromInodeRef(r.super.RootInodeRef)
+	if squash.s.IdCount > 0 {
+		idOffsets := make([]uint64, int(math.Ceil(float64(squash.s.IdCount)/2048)))
+		err = binary.Read(toreader.NewReader(r, int64(squash.s.IdTableStart)), binary.LittleEndian, &idOffsets)
+		if err != nil {
+			return nil, err
+		}
+		squash.ids = make([]uint32, squash.s.IdCount)
+		if len(idOffsets) == 1 {
+			var rdr *metadata.Reader
+			rdr, err = metadata.NewReader(toreader.NewReader(r, int64(idOffsets[0])), squash.d)
+			if err != nil {
+				return nil, err
+			}
+			err = binary.Read(rdr, binary.LittleEndian, &squash.ids)
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			toRead := squash.s.IdCount
+			var curRead uint16
+			var tmp []uint32
+			var rdr *metadata.Reader
+			var offset int
+			for i := range idOffsets {
+				curRead = uint16(math.Min(2048, float64(toRead)))
+				tmp = make([]uint32, curRead)
+				rdr, err = metadata.NewReader(toreader.NewReader(r, int64(idOffsets[i])), squash.d)
+				if err != nil {
+					return nil, err
+				}
+				err = binary.Read(rdr, binary.LittleEndian, &tmp)
+				if err != nil {
+					return nil, err
+				}
+				offset = int(squash.s.IdCount - toRead)
+				for i := range tmp {
+					squash.ids[offset+i] = tmp[i]
+				}
+				toRead -= curRead
+			}
+		}
+	}
+	root, err := squash.inodeFromRef(squash.s.RootInodeRef)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	i, err := inode.ProcessInode(metaRdr, r.super.BlockSize)
+	rootEnts, err := squash.readDirectory(root)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	entries, err := r.readDirFromInode(i)
+	enType := root.Type
+	if enType == inode.EDir {
+		enType = inode.Dir
+	}
+	squash.FS = &FS{
+		e: rootEnts,
+		File: &File{
+			rdr: &squash,
+			i:   root,
+			e: directory.Entry{
+				Name: "root",
+				Type: enType,
+			},
+		},
+	}
+	return &squash, nil
+}
+
+func (r *Reader) initExport() (err error) {
+	num := int(math.Ceil(float64(r.s.InodeCount) / 1024))
+	offsets := make([]uint64, num)
+	err = binary.Read(toreader.NewReader(r.r, int64(r.s.ExportTableStart)), binary.LittleEndian, &offsets)
 	if err != nil {
-		return err
+		return
 	}
-	r.FS = FS{
-		i:       i,
-		r:       r,
-		name:    "/",
-		entries: entries,
+	left := r.s.InodeCount
+	var toRead uint32
+	var new []uint64
+	var rdr *metadata.Reader
+	for i := range offsets {
+		rdr, err = metadata.NewReader(toreader.NewReader(r.r, int64(offsets[i])), r.d)
+		if err != nil {
+			return
+		}
+		toRead = uint32(math.Min(1024, float64(left)))
+		new = make([]uint64, toRead)
+		err = binary.Read(rdr, binary.LittleEndian, &new)
+		if err != nil {
+			return
+		}
+		left -= toRead
+		r.exportTable = append(r.exportTable, new...)
 	}
 	return nil
 }
 
-//ModTime is the last time the file was modified/created.
-func (r *Reader) ModTime() time.Time {
-	return time.Unix(int64(r.super.CreationTime), 0)
+func (r *Reader) inode(index uint32) (i inode.Inode, err error) {
+	if r.s.exportable() {
+		if r.exportTable == nil {
+			err = r.initExport()
+			if err != nil {
+				return
+			}
+		}
+		return r.inodeFromRef(r.exportTable[index-1])
+	}
+	err = errors.New("archive is not exportable")
+	return
+}
+
+func (r Reader) ModTime() time.Time {
+	return time.Unix(int64(r.s.ModTime), 0)
 }

@@ -2,11 +2,10 @@ package squashfs
 
 import (
 	"bytes"
-	"errors"
 	"io"
 	"io/fs"
-	"os"
 	"path"
+	"path/filepath"
 	"strings"
 
 	"github.com/CalebQ42/squashfs/internal/directory"
@@ -16,11 +15,19 @@ import (
 //FS is a fs.FS representation of a squashfs directory.
 //Implements fs.GlobFS, fs.ReadDirFS, fs.ReadFileFS, fs.StatFS, and fs.SubFS
 type FS struct {
-	i       *inode.Inode
-	r       *Reader
-	parent  *FS
-	name    string
-	entries []*directory.Entry
+	*File
+	e []directory.Entry
+}
+
+func (r Reader) newFS(e directory.Entry) (f *FS, err error) {
+	f = new(FS)
+	f.i, err = r.inodeFromDir(e)
+	if err != nil {
+		return
+	}
+	f.r = &r
+	f.e, err = r.readDirectory(f.i)
+	return
 }
 
 //Open opens the file at name. Returns a squashfs.File.
@@ -32,59 +39,46 @@ func (f FS) Open(name string) (fs.File, error) {
 			Err:  fs.ErrInvalid,
 		}
 	}
-	name = path.Clean(strings.TrimPrefix(name, "/"))
+	name = filepath.Clean(name)
+	if name == "." || name == "" {
+		return f.File, nil
+	}
 	split := strings.Split(name, "/")
-	if split[0] == ".." {
-		if f.parent == nil {
-			//This should only happen on the root FS
+	for i := range f.e {
+		if f.e[i].Name != split[0] {
+			continue
+		}
+		if len(split) > 1 && f.e[i].Type != inode.Dir {
 			return nil, &fs.PathError{
 				Op:   "open",
 				Path: name,
-				//TODO: make error clearer
-				Err: errors.New("trying to get file outside of squashfs"),
+				Err:  fs.ErrNotExist,
 			}
 		}
-		return f.parent.Open(strings.Join(split[1:], "/"))
-	}
-	if split[0] == "." {
-		return &File{i: f.i, r: f.r, parent: f.parent, name: f.name}, nil
-	}
-	for i := 0; i < len(f.entries); i++ {
-		if split[0] == f.entries[i].Name {
-			if len(split) == 1 {
-				return f.r.newFileFromDirEntry(f.entries[i], &f)
-			}
-			sub, err := f.Sub(split[0])
+		if len(split) > 1 {
+			newFS, err := f.r.newFS(f.e[i])
 			if err != nil {
-				if pathErr, ok := err.(*fs.PathError); ok {
-					pathErr.Op = "open"
-					pathErr.Path = name
-					return nil, err
-				}
 				return nil, &fs.PathError{
 					Op:   "open",
 					Path: name,
 					Err:  err,
 				}
 			}
-			fil, err := sub.Open(strings.Join(split[1:], "/"))
+			out, err := newFS.Open(strings.Join(split[1:], "/"))
 			if err != nil {
-				if pathErr, ok := err.(*fs.PathError); ok {
-					if pathErr.Err == fs.ErrNotExist {
-						continue
-					}
-					pathErr.Op = "open"
-					pathErr.Path = name
-					return nil, err
-				}
-				return nil, &fs.PathError{
-					Op:   "open",
-					Path: name,
-					Err:  err,
-				}
+				err.(*fs.PathError).Path = name
 			}
-			return fil, nil
+			return out, err
 		}
+		out, err := f.r.newFile(f.e[i])
+		if err != nil {
+			err = &fs.PathError{
+				Op:   "open",
+				Path: name,
+				Err:  err,
+			}
+		}
+		return out, err
 	}
 	return nil, &fs.PathError{
 		Op:   "open",
@@ -95,6 +89,7 @@ func (f FS) Open(name string) (fs.File, error) {
 
 //Glob returns the name of the files at the given pattern.
 //All paths are relative to the FS.
+//Uses filepath.Match to compare names.
 func (f FS) Glob(pattern string) (out []string, err error) {
 	if !fs.ValidPath(pattern) {
 		return nil, &fs.PathError{
@@ -103,24 +98,12 @@ func (f FS) Glob(pattern string) (out []string, err error) {
 			Err:  fs.ErrInvalid,
 		}
 	}
-	pattern = path.Clean(strings.TrimPrefix(pattern, "/"))
+	pattern = filepath.Clean(pattern)
 	split := strings.Split(pattern, "/")
-	if split[0] == ".." {
-		if f.parent == nil {
-			//This should only happen on the root FS
-			return nil, &fs.PathError{
-				Op:   "readdir",
-				Path: pattern,
-				//TODO: make error clearer
-				Err: errors.New("trying to get file outside of squashfs"),
-			}
-		}
-		return f.parent.Glob(strings.Join(split[1:], "/"))
-	}
-	for i := 0; i < len(f.entries); i++ {
-		if match, _ := path.Match(split[0], f.entries[i].Name); match {
+	for i := 0; i < len(f.e); i++ {
+		if match, _ := path.Match(split[0], f.e[i].Name); match {
 			if len(split) == 1 {
-				out = append(out, f.entries[i].Name)
+				out = append(out, f.e[i].Name)
 				continue
 			}
 			sub, err := f.Sub(split[0])
@@ -156,7 +139,7 @@ func (f FS) Glob(pattern string) (out []string, err error) {
 				}
 			}
 			for i := 0; i < len(subGlob); i++ {
-				subGlob[i] = f.name + "/" + subGlob[i]
+				subGlob[i] = f.File.e.Name + "/" + subGlob[i]
 			}
 			out = append(out, subGlob...)
 		}
@@ -174,28 +157,15 @@ func (f FS) ReadDir(name string) ([]fs.DirEntry, error) {
 			Err:  fs.ErrInvalid,
 		}
 	}
-	name = path.Clean(strings.TrimPrefix(name, "/"))
+	name = filepath.Clean(name)
+	if name == "." || name == "" {
+		return f.File.ReadDir(-1)
+	}
 	split := strings.Split(name, "/")
-	if split[0] == ".." {
-		if f.parent == nil {
-			//This should only happen on the root FS
-			return nil, &fs.PathError{
-				Op:   "readdir",
-				Path: name,
-				//TODO: make error clearer
-				Err: errors.New("trying to get file outside of squashfs"),
-			}
-		}
-		return f.parent.ReadDir(strings.Join(split[1:], "/"))
-	}
-	if split[0] == "." {
-		f := &File{i: f.i, r: f.r, parent: f.parent, name: f.name}
-		return f.ReadDir(-1)
-	}
-	for i := 0; i < len(f.entries); i++ {
-		if split[0] == f.entries[i].Name {
+	for i := 0; i < len(f.e); i++ {
+		if split[0] == f.e[i].Name {
 			if len(split) == 1 {
-				in, err := f.r.getInodeFromEntry(f.entries[i])
+				fi, err := f.r.newFile(f.e[i])
 				if err != nil {
 					return nil, &fs.PathError{
 						Op:   "readdir",
@@ -203,23 +173,15 @@ func (f FS) ReadDir(name string) ([]fs.DirEntry, error) {
 						Err:  err,
 					}
 				}
-				ents, err := f.r.readDirFromInode(in)
+				out, err := fi.ReadDir(-1)
 				if err != nil {
-					return nil, &fs.PathError{
+					err = &fs.PathError{
 						Op:   "readdir",
 						Path: name,
 						Err:  err,
 					}
 				}
-				out := make([]fs.DirEntry, len(ents))
-				for i, ent := range ents {
-					out[i] = &DirEntry{
-						en:     ent,
-						parent: &f,
-						r:      f.r,
-					}
-				}
-				return out, nil
+				return out, err
 			}
 			sub, err := f.Sub(split[0])
 			if err != nil {
@@ -294,41 +256,23 @@ func (f FS) Stat(name string) (fs.FileInfo, error) {
 			Err:  fs.ErrInvalid,
 		}
 	}
-	name = path.Clean(strings.TrimPrefix(name, "/"))
+	name = filepath.Clean(strings.TrimPrefix(name, "/"))
+	if name == "." || name == "" {
+		return f.File.Stat()
+	}
 	split := strings.Split(name, "/")
-	if split[0] == ".." {
-		if f.parent == nil {
-			//This should only happen on the root FS
-			return nil, &fs.PathError{
-				Op:   "stat",
-				Path: name,
-				//TODO: make error clearer
-				Err: errors.New("trying to get file outside of squashfs"),
-			}
-		}
-		return f.parent.Stat(strings.Join(split[1:], "/"))
-	}
-	if split[0] == "." {
-		f := &File{i: f.i, r: f.r, parent: f.parent, name: f.name}
-		return f.Stat()
-	}
-	for i := 0; i < len(f.entries); i++ {
-		if split[0] == f.entries[i].Name {
+	for i := 0; i < len(f.e); i++ {
+		if split[0] == f.e[i].Name {
 			if len(split) == 1 {
-				in, err := f.r.getInodeFromEntry(f.entries[i])
+				in, err := f.r.newFileInfo(f.e[i])
 				if err != nil {
-					return nil, &fs.PathError{
+					err = &fs.PathError{
 						Op:   "stat",
 						Path: name,
 						Err:  err,
 					}
 				}
-				return FileInfo{
-					i:      in,
-					parent: &f,
-					r:      f.r,
-					name:   f.entries[i].Name,
-				}, nil
+				return in, err
 			}
 			sub, err := f.Sub(split[0])
 			if err != nil {
@@ -381,130 +325,42 @@ func (f FS) Sub(dir string) (fs.FS, error) {
 			Err:  fs.ErrInvalid,
 		}
 	}
-	dir = path.Clean(strings.TrimPrefix(dir, "/"))
+	dir = filepath.Clean(dir)
+	if dir == "." || dir == "" {
+		return f, nil
+	}
 	split := strings.Split(dir, "/")
-	if split[0] == ".." {
-		if f.parent == nil {
-			//This should only happen on the root FS
+	for i := range f.e {
+		if f.e[i].Name != split[0] {
+			continue
+		}
+		if f.e[i].Type != inode.Dir {
 			return nil, &fs.PathError{
 				Op:   "sub",
 				Path: dir,
-				//TODO: make error clearer
-				Err: errors.New("trying to get file outside of squashfs"),
+				Err:  fs.ErrNotExist,
 			}
 		}
-		return f.parent.Sub(strings.Join(split[1:], "/"))
-	}
-	if split[0] == "." {
-		return f, nil
-	}
-	for i := 0; i < len(f.entries); i++ {
-		if split[0] == f.entries[i].Name {
-			if len(split) == 1 {
-				in, err := f.r.getInodeFromEntry(f.entries[i])
-				if err != nil {
-					return nil, &fs.PathError{
-						Op:   "sub",
-						Path: dir,
-						Err:  err,
-					}
-				}
-				ents, err := f.r.readDirFromInode(in)
-				if err != nil {
-					return nil, &fs.PathError{
-						Op:   "sub",
-						Path: dir,
-						Err:  err,
-					}
-				}
-				return FS{
-					i:       in,
-					r:       f.r,
-					parent:  &f,
-					name:    f.entries[i].Name,
-					entries: ents,
-				}, nil
+		newFS, err := f.r.newFS(f.e[i])
+		if err != nil {
+			return nil, &fs.PathError{
+				Op:   "sub",
+				Path: dir,
+				Err:  err,
 			}
-			sub, err := f.Sub(strings.Join(split[1:], "/"))
+		}
+		if len(split) > 1 {
+			ret, err := newFS.Sub(strings.Join(split[1:], "/"))
 			if err != nil {
-				if pathErr, ok := err.(*fs.PathError); ok {
-					if pathErr.Err == fs.ErrNotExist {
-						continue
-					}
-					pathErr.Op = "sub"
-					pathErr.Path = dir
-					return nil, pathErr
-				}
-				return nil, &fs.PathError{
-					Op:   "sub",
-					Path: dir,
-					Err:  err,
-				}
+				err.(*fs.PathError).Path = dir
 			}
-			return sub, nil
+			return ret, err
 		}
+		return newFS, nil
 	}
 	return nil, &fs.PathError{
 		Op:   "sub",
 		Path: dir,
 		Err:  fs.ErrNotExist,
 	}
-}
-
-func (f FS) path() string {
-	if f.name == "/" {
-		return f.name
-	} else if f.parent.name == "/" {
-		return f.name
-	}
-	return f.parent.path() + "/" + f.name
-}
-
-//ExtractTo extracts the File to the given folder with the default options.
-//It extracts the directory's contents to the folder.
-func (f FS) ExtractTo(folder string) error {
-	return f.ExtractWithOptions(folder, DefaultOptions())
-}
-
-//ExtractSymlink extracts the File to the folder with the DereferenceSymlink option.
-//It extracts the directory's contents to the folder.
-func (f FS) ExtractSymlink(folder string) error {
-	return f.ExtractWithOptions(folder, ExtractionOptions{
-		DereferenceSymlink: true,
-		FolderPerm:         fs.ModePerm,
-	})
-}
-
-//ExtractWithOptions extracts the File to the given folder with the given ExtrationOptions.
-//It extracts the directory's contents to the folder.
-func (f FS) ExtractWithOptions(folder string, op ExtractionOptions) error {
-	op.notBase = true
-	folder = path.Clean(folder)
-	err := os.MkdirAll(folder, op.FolderPerm)
-	if err != nil {
-		return err
-	}
-	errChan := make(chan error)
-	for i := 0; i < len(f.entries); i++ {
-		go func(ent *DirEntry) {
-			fil, goErr := ent.File()
-			if goErr != nil {
-				errChan <- goErr
-				return
-			}
-			errChan <- fil.ExtractWithOptions(folder, op)
-			fil.Close()
-		}(&DirEntry{
-			en:     f.entries[i],
-			parent: &f,
-			r:      f.r,
-		})
-	}
-	for i := 0; i < len(f.entries); i++ {
-		err := <-errChan
-		if err != nil {
-			return err
-		}
-	}
-	return nil
 }

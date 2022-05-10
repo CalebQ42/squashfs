@@ -6,7 +6,7 @@ import (
 	"io/fs"
 	"log"
 	"os"
-	"path"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -16,164 +16,150 @@ import (
 
 //File represents a file inside a squashfs archive.
 type File struct {
-	i        *inode.Inode
-	parent   *FS
+	i        inode.Inode
+	rdr      io.Reader
+	fullRdr  io.WriterTo
 	r        *Reader
-	reader   *fileReader
-	name     string
+	parent   *FS
+	e        directory.Entry
 	dirsRead int
 }
 
-//File creates a File from the FileInfo.
-//*File satisfies fs.File and fs.ReadDirFile.
-func (f FileInfo) File() (file *File, err error) {
-	file = &File{
-		name:   f.name,
-		r:      f.r,
-		parent: f.parent,
-		i:      f.i,
-	}
-	if file.IsRegular() {
-		file.reader, err = f.r.newFileReader(f.i)
-	}
-	return
-}
+var (
+	ErrReadNotFile = errors.New("read called on non-file")
+)
 
-//File creates a File from the DirEntry.
-func (d DirEntry) File() (file *File, err error) {
-	return d.r.newFileFromDirEntry(d.en, d.parent)
-}
-
-func (r Reader) newFileFromDirEntry(en *directory.Entry, parent *FS) (file *File, err error) {
-	file = &File{
-		name:   en.Name,
-		r:      &r,
-		parent: parent,
-	}
-	file.i, err = r.getInodeFromEntry(en)
+func (r Reader) newFile(en directory.Entry) (*File, error) {
+	i, err := r.inodeFromDir(en)
 	if err != nil {
 		return nil, err
 	}
-	if file.IsRegular() {
-		file.reader, err = r.newFileReader(file.i)
+	var rdr io.Reader
+	var full io.WriterTo
+	if en.Type == inode.Fil {
+		rdr, err = r.getData(i)
+		if err != nil {
+			return nil, err
+		}
+		full, err = r.getFullReader(i)
+		if err != nil {
+			return nil, err
+		}
 	}
-	return
+	return &File{
+		e:       en,
+		i:       i,
+		rdr:     rdr,
+		fullRdr: full,
+		r:       &r,
+	}, nil
 }
 
 //Stat returns the File's fs.FileInfo
 func (f File) Stat() (fs.FileInfo, error) {
-	return &FileInfo{
-		i:      f.i,
-		name:   f.name,
-		parent: f.parent,
-		r:      f.r,
-	}, nil
+	return newFileInfo(f.e, f.i), nil
 }
 
 //Read reads the data from the file. Only works if file is a normal file.
 func (f File) Read(p []byte) (int, error) {
-	if f.i.Type == inode.FileType || f.i.Type == inode.ExtFileType {
-		if f.reader == nil {
-			return 0, fs.ErrClosed
-		}
-		return f.reader.Read(p)
+	if f.i.Type != inode.Fil && f.i.Type != inode.EFil {
+		return 0, ErrReadNotFile
 	}
-	return 0, errors.New("can only read files")
+	if f.rdr == nil {
+		return 0, fs.ErrClosed
+	}
+	return f.rdr.Read(p)
 }
 
 //WriteTo writes all data from the file to the writer. This is multi-threaded.
+//The underlying reader is seperate from the one used with Read and can be reused.
 func (f File) WriteTo(w io.Writer) (int64, error) {
-	if f.i.Type == inode.FileType || f.i.Type == inode.ExtFileType {
-		if f.reader == nil {
-			return 0, fs.ErrClosed
-		}
-		return f.reader.WriteTo(w)
-	}
-	return 0, errors.New("can only read files")
+	return f.fullRdr.WriteTo(w)
 }
 
 //Close simply nils the underlying reader. Here mostly to satisfy fs.File
 func (f *File) Close() error {
-	f.reader = nil
+	f.rdr = nil
 	return nil
 }
 
 //ReadDir returns n fs.DirEntry's that's contained in the File (if it's a directory).
 //If n <= 0 all fs.DirEntry's are returned.
-func (f File) ReadDir(n int) ([]fs.DirEntry, error) {
+func (f *File) ReadDir(n int) (out []fs.DirEntry, err error) {
 	if !f.IsDir() {
 		return nil, errors.New("File is not a directory")
 	}
-	ffs, err := f.FS()
+	ents, err := f.r.readDirectory(f.i)
 	if err != nil {
 		return nil, err
 	}
-	var beg, end int
-	if n <= 0 {
-		beg, end = 0, len(ffs.entries)
-	} else {
-		beg, end = f.dirsRead, f.dirsRead+n
-		if end > len(ffs.entries) {
-			end = len(ffs.entries)
+	start, end := 0, len(ents)
+	if n > 0 {
+		start, end = f.dirsRead, f.dirsRead+n
+		if end > len(f.r.e) {
+			end = len(f.r.e)
 			err = io.EOF
 		}
 	}
-	out := make([]fs.DirEntry, end-beg)
-	for i, ent := range ffs.entries[beg:end] {
-		out[i] = f.r.newDirEntry(ent, ffs)
+	var fi FileInfo
+	for _, e := range ents[start:end] {
+		fi, err = f.r.newFileInfo(e)
+		if err != nil {
+			f.dirsRead += len(out)
+			return
+		}
+		out = append(out, fs.FileInfoToDirEntry(fi))
 	}
-	return out, err
+	f.dirsRead += len(out)
+	return
 }
 
 //FS returns the File as a FS.
-func (f File) FS() (*FS, error) {
+func (f *File) FS() (*FS, error) {
 	if !f.IsDir() {
 		return nil, errors.New("File is not a directory")
 	}
-	ents, err := f.r.readDirFromInode(f.i)
+	ents, err := f.r.readDirectory(f.i)
 	if err != nil {
 		return nil, err
 	}
 	return &FS{
-		i:       f.i,
-		r:       f.r,
-		parent:  f.parent,
-		name:    f.name,
-		entries: ents,
+		File: f,
+		e:    ents,
 	}, nil
 }
 
 //IsDir Yep.
 func (f File) IsDir() bool {
-	return f.i.Type == inode.DirType || f.i.Type == inode.ExtDirType
-}
-
-func (f File) path() string {
-	if f.name == "/" {
-		return f.name
-	}
-	return f.parent.path() + "/" + f.name
+	return f.i.Type == inode.Dir || f.i.Type == inode.EDir
 }
 
 //IsRegular yep.
 func (f File) IsRegular() bool {
-	return f.i.Type == inode.FileType || f.i.Type == inode.ExtFileType
+	return f.i.Type == inode.Fil || f.i.Type == inode.EFil
 }
 
 //IsSymlink yep.
 func (f File) IsSymlink() bool {
-	return f.i.Type == inode.SymType || f.i.Type == inode.ExtSymType
+	return f.i.Type == inode.Sym || f.i.Type == inode.ESym
 }
 
 //SymlinkPath returns the symlink's target path. Is the File isn't a symlink, returns an empty string.
 func (f File) SymlinkPath() string {
 	switch f.i.Type {
-	case inode.SymType:
-		return f.i.Info.(inode.Sym).Path
-	case inode.ExtSymType:
-		return f.i.Info.(inode.ExtSym).Path
+	case inode.Sym:
+		return string(f.i.Data.(inode.Symlink).Target)
+	case inode.ESym:
+		return string(f.i.Data.(inode.ESymlink).Target)
 	}
 	return ""
+}
+
+func (f File) path() string {
+	if f.parent == nil {
+		return f.e.Name
+	}
+	return f.parent.path() + "/" + f.e.Name
 }
 
 //GetSymlinkFile returns the File the symlink is pointing to.
@@ -229,28 +215,28 @@ func (f File) ExtractSymlink(folder string) error {
 //ExtractWithOptions extracts the File to the given folder with the given ExtrationOptions.
 //If the File is a directory, it instead extracts the directory's contents to the folder.
 func (f File) ExtractWithOptions(folder string, op ExtractionOptions) error {
-	folder = path.Clean(folder)
 	if !op.notBase {
 		err := os.MkdirAll(folder, op.FolderPerm)
 		if err != nil {
 			return err
 		}
 	}
+	folder = filepath.Clean(folder)
 	stat, err := f.Stat()
 	if err != nil {
 		return err
 	}
 	if f.IsDir() {
 		if op.notBase {
-			err = os.Mkdir(folder+"/"+f.name, stat.Mode())
+			err = os.Mkdir(folder+"/"+f.e.Name, stat.Mode())
 			if err != nil && !os.IsExist(err) {
 				return err
 			}
 		} else {
 			op.notBase = true
 		}
-		var ents []fs.DirEntry
-		ents, err = f.ReadDir(0)
+		var ents []directory.Entry
+		ents, err = f.r.readDirectory(f.i)
 		if err != nil {
 			if op.Verbose {
 				log.Println("Error while reading children of", f.path())
@@ -259,16 +245,16 @@ func (f File) ExtractWithOptions(folder string, op ExtractionOptions) error {
 		}
 		errChan := make(chan error)
 		for i := 0; i < len(ents); i++ {
-			go func(ent *DirEntry) {
-				fil, goErr := ent.File()
+			go func(ent directory.Entry) {
+				fil, goErr := f.r.newFile(ent)
 				if goErr != nil {
 					errChan <- goErr
 					fil.Close()
 					return
 				}
-				errChan <- fil.ExtractWithOptions(folder+"/"+f.name, op)
+				errChan <- fil.ExtractWithOptions(folder+"/"+f.e.Name, op)
 				fil.Close()
-			}(ents[i].(*DirEntry))
+			}(ents[i])
 		}
 		for i := 0; i < len(ents); i++ {
 			err = <-errChan
@@ -279,12 +265,12 @@ func (f File) ExtractWithOptions(folder string, op ExtractionOptions) error {
 		return nil
 	} else if f.IsRegular() {
 		var fil *os.File
-		fil, err = os.Create(folder + "/" + f.name)
+		fil, err = os.Create(folder + "/" + f.e.Name)
 		if os.IsExist(err) {
-			os.Remove(folder + "/" + f.name)
-			fil, err = os.Create(folder + "/" + f.name)
+			os.Remove(folder + "/" + f.e.Name)
+			fil, err = os.Create(folder + "/" + f.e.Name)
 			if err != nil {
-				log.Println("Error while creating", folder+"/"+f.name)
+				log.Println("Error while creating", folder+"/"+f.e.Name)
 				return err
 			}
 		} else if err != nil {
@@ -292,7 +278,7 @@ func (f File) ExtractWithOptions(folder string, op ExtractionOptions) error {
 		}
 		_, err = io.Copy(fil, f)
 		if err != nil {
-			log.Println("Error while copying data to", folder+"/"+f.name)
+			log.Println("Error while copying data to", folder+"/"+f.e.Name)
 			return err
 		}
 		return nil
@@ -302,15 +288,15 @@ func (f File) ExtractWithOptions(folder string, op ExtractionOptions) error {
 			fil := f.GetSymlinkFile()
 			if fil == nil {
 				if op.Verbose {
-					log.Println("Symlink path(", symPath, ") is unobtainable:", folder+"/"+f.name)
+					log.Println("Symlink path(", symPath, ") is unobtainable:", folder+"/"+f.e.Name)
 				}
 				return errors.New("cannot get symlink target")
 			}
-			fil.name = f.name
+			fil.e.Name = f.e.Name
 			err = fil.ExtractWithOptions(folder, op)
 			if err != nil {
 				if op.Verbose {
-					log.Println("Error while extracting the symlink's file:", folder+"/"+f.name)
+					log.Println("Error while extracting the symlink's file:", folder+"/"+f.e.Name)
 				}
 				return err
 			}
@@ -319,64 +305,31 @@ func (f File) ExtractWithOptions(folder string, op ExtractionOptions) error {
 			fil := f.GetSymlinkFile()
 			if fil == nil {
 				if op.Verbose {
-					log.Println("Symlink path(", symPath, ") is unobtainable:", folder+"/"+f.name)
+					log.Println("Symlink path(", symPath, ") is unobtainable:", folder+"/"+f.e.Name)
 				}
 				return errors.New("cannot get symlink target")
 			}
-			extractLoc := path.Clean(folder + "/" + path.Dir(symPath))
+			extractLoc := filepath.Clean(folder + "/" + filepath.Dir(symPath))
 			err = fil.ExtractWithOptions(extractLoc, op)
 			if err != nil {
 				if op.Verbose {
-					log.Println("Error while extracting ", folder+"/"+f.name)
+					log.Println("Error while extracting ", folder+"/"+f.e.Name)
 				}
 				return err
 			}
 		}
-		err = os.Symlink(f.SymlinkPath(), folder+"/"+f.name)
+		err = os.Symlink(f.SymlinkPath(), folder+"/"+f.e.Name)
 		if os.IsExist(err) {
-			os.Remove(folder + "/" + f.name)
-			err = os.Symlink(f.SymlinkPath(), folder+"/"+f.name)
+			os.Remove(folder + "/" + f.e.Name)
+			err = os.Symlink(f.SymlinkPath(), folder+"/"+f.e.Name)
 		}
 		if err != nil {
 			if op.Verbose {
-				log.Println("Error while making symlink:", folder+"/"+f.name)
+				log.Println("Error while making symlink:", folder+"/"+f.e.Name)
 			}
 			return err
 		}
 		return nil
 	}
 	return errors.New("Unsupported file type. Inode type: " + strconv.Itoa(int(f.i.Type)))
-}
-
-//ReadDirFromInode returns a fully populated Directory from a given Inode.
-//If the given inode is not a directory it returns an error.
-func (r *Reader) readDirFromInode(i *inode.Inode) ([]*directory.Entry, error) {
-	var offset uint32
-	var metaOffset uint16
-	var size uint32
-	switch i.Type {
-	case inode.DirType:
-		offset = i.Info.(inode.Dir).DirectoryIndex
-		metaOffset = i.Info.(inode.Dir).DirectoryOffset
-		size = uint32(i.Info.(inode.Dir).DirectorySize)
-	case inode.ExtDirType:
-		offset = i.Info.(inode.ExtDir).DirectoryIndex
-		metaOffset = i.Info.(inode.ExtDir).DirectoryOffset
-		size = i.Info.(inode.ExtDir).DirectorySize
-	default:
-		return nil, errors.New("not a directory inode")
-	}
-	br, err := r.newMetadataReader(int64(r.super.DirTableStart + uint64(offset)))
-	if err != nil {
-		return nil, err
-	}
-	_, err = br.Seek(int64(metaOffset), io.SeekStart)
-	if err != nil {
-		return nil, err
-	}
-	ents, err := directory.NewDirectory(br, size)
-	if err != nil {
-		return nil, err
-	}
-	return ents, nil
 }

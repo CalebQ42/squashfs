@@ -36,7 +36,7 @@ func TestSquashfs(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	rdr, err := NewSquashfsReader(squashFil)
+	rdr, err := NewReader(squashFil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -56,7 +56,7 @@ func TestSquashfsFromReader(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer resp.Body.Close()
-	rdr, err := NewSquashfsReaderFromReader(resp.Body)
+	rdr, err := NewReaderFromReader(resp.Body)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -92,7 +92,7 @@ func TestAppImage(t *testing.T) {
 	defer aiFil.Close()
 	stat, _ := aiFil.Stat()
 	ai := goappimage.NewAppImage(wd + "/testing/" + appImageName)
-	rdr, err := NewSquashfsReader(io.NewSectionReader(aiFil, ai.Offset, stat.Size()-ai.Offset))
+	rdr, err := NewReader(io.NewSectionReader(aiFil, ai.Offset, stat.Size()-ai.Offset))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -164,7 +164,7 @@ func BenchmarkDragRace(b *testing.B) {
 	}
 	unsquashTime := time.Since(start)
 	start = time.Now()
-	rdr, err := NewSquashfsReader(io.NewSectionReader(aiFil, ai.Offset, stat.Size()-ai.Offset))
+	rdr, err := NewReader(io.NewSectionReader(aiFil, ai.Offset, stat.Size()-ai.Offset))
 	if err != nil {
 		b.Fatal(err)
 	}
