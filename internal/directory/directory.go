@@ -42,14 +42,14 @@ func readEntry(r io.Reader) (e entry, err error) {
 }
 
 func ReadEntries(rdr io.Reader, size uint32) (e []Entry, err error) {
-	dat := make([]byte, size)
+	dat := make([]byte, size-3)
 	rdr.Read(dat)
 	r := bytes.NewReader(dat)
 	var h header
 	var en entry
 	for {
 		err = binary.Read(r, binary.LittleEndian, &h)
-		if err == io.ErrUnexpectedEOF {
+		if err == io.EOF {
 			err = nil
 			return
 		} else if err != nil {

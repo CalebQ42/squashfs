@@ -97,7 +97,9 @@ func TestAppImage(t *testing.T) {
 		t.Fatal(err)
 	}
 	os.RemoveAll(wd + "/testing/firefox")
-	err = rdr.ExtractTo(wd + "/testing/firefox")
+	op := DefaultOptions()
+	op.Verbose = true
+	err = rdr.ExtractWithOptions(wd+"/testing/firefox", op)
 	t.Fatal(err)
 }
 

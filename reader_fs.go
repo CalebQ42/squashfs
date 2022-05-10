@@ -64,6 +64,7 @@ func (f FS) Open(name string) (fs.File, error) {
 					Err:  err,
 				}
 			}
+			newFS.parent = &f
 			out, err := newFS.Open(strings.Join(split[1:], "/"))
 			if err != nil {
 				err.(*fs.PathError).Path = name
@@ -78,6 +79,7 @@ func (f FS) Open(name string) (fs.File, error) {
 				Err:  err,
 			}
 		}
+		out.parent = &f
 		return out, err
 	}
 	return nil, &fs.PathError{

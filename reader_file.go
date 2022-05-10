@@ -252,6 +252,7 @@ func (f File) ExtractWithOptions(folder string, op ExtractionOptions) error {
 					fil.Close()
 					return
 				}
+				fil.parent, _ = f.FS()
 				errChan <- fil.ExtractWithOptions(folder+"/"+f.e.Name, op)
 				fil.Close()
 			}(ents[i])
