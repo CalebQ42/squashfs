@@ -24,12 +24,16 @@ type superblock struct {
 	ExportTableStart uint64
 }
 
-func (s superblock) hasMagic() bool {
+func (s superblock) checkMagic() bool {
 	return s.Magic == 0x73717368
 }
 
 func (s superblock) checkBlockLog() bool {
 	return s.BlockLog == uint16(math.Log2(float64(s.BlockSize)))
+}
+
+func (s superblock) checkVersion() bool {
+	return s.VerMaj == 4 && s.VerMin == 0
 }
 
 func (s superblock) uncompressedInodes() bool {

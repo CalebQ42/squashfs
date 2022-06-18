@@ -1,5 +1,7 @@
 package squashfs
 
+//A place for temporary, expiremental tests. Not meant for actual testing purposes.
+
 import (
 	"fmt"
 	"io"

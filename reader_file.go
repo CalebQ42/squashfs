@@ -101,7 +101,7 @@ func (f *File) ReadDir(n int) (out []fs.DirEntry, err error) {
 			err = io.EOF
 		}
 	}
-	var fi FileInfo
+	var fi fileInfo
 	for _, e := range ents[start:end] {
 		fi, err = f.r.newFileInfo(e)
 		if err != nil {
@@ -190,10 +190,7 @@ type ExtractionOptions struct {
 //DefaultOptions is the default ExtractionOptions.
 func DefaultOptions() ExtractionOptions {
 	return ExtractionOptions{
-		DereferenceSymlink: false,
-		UnbreakSymlink:     false,
-		Verbose:            false,
-		FolderPerm:         fs.ModePerm,
+		FolderPerm: 0755,
 	}
 }
 
@@ -208,7 +205,7 @@ func (f File) ExtractTo(folder string) error {
 func (f File) ExtractSymlink(folder string) error {
 	return f.ExtractWithOptions(folder, ExtractionOptions{
 		DereferenceSymlink: true,
-		FolderPerm:         fs.ModePerm,
+		FolderPerm:         0755,
 	})
 }
 

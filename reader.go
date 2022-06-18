@@ -25,8 +25,9 @@ type Reader struct {
 }
 
 var (
-	ErrorMagic = errors.New("magic incorrect. probably not reading squashfs archive")
-	ErrorLog   = errors.New("block log is incorrect. possible corrupted archive")
+	ErrorMagic   = errors.New("magic incorrect. probably not reading squashfs archive")
+	ErrorLog     = errors.New("block log is incorrect. possible corrupted archive")
+	ErrorVersion = errors.New("squashfs version of archive is not 4.0")
 )
 
 const (
@@ -53,11 +54,14 @@ func NewReader(r io.ReaderAt) (*Reader, error) {
 	if err != nil {
 		return nil, err
 	}
-	if !squash.s.hasMagic() {
+	if !squash.s.checkMagic() {
 		return nil, ErrorMagic
 	}
 	if !squash.s.checkBlockLog() {
 		return nil, ErrorLog
+	}
+	if !squash.s.checkVersion() {
+		return nil, ErrorVersion
 	}
 	switch squash.s.CompType {
 	case GZipCompression:
