@@ -79,7 +79,6 @@ func (f FS) Open(name string) (fs.File, error) {
 			}
 			return out, err
 		}
-		// fmt.Println(f.e[i])
 		out, err := f.r.newFile(f.e[i], &f)
 		if err != nil {
 			err = &fs.PathError{

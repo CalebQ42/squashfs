@@ -87,11 +87,7 @@ func NewReader(r io.ReaderAt) (*Reader, error) {
 		}
 		squash.fragEntries = make([]fragEntry, squash.s.FragCount)
 		if len(fragOffsets) == 1 {
-			var rdr *metadata.Reader
-			rdr, err = metadata.NewReader(toreader.NewReader(r, int64(fragOffsets[0])), squash.d)
-			if err != nil {
-				return nil, err
-			}
+			rdr := metadata.NewReader(toreader.NewReader(r, int64(fragOffsets[0])), squash.d)
 			err = binary.Read(rdr, binary.LittleEndian, &squash.fragEntries)
 			if err != nil {
 				return nil, err
@@ -105,10 +101,7 @@ func NewReader(r io.ReaderAt) (*Reader, error) {
 			for i := range fragOffsets {
 				curRead = uint16(math.Min(512, float64(toRead)))
 				tmp = make([]fragEntry, curRead)
-				rdr, err = metadata.NewReader(toreader.NewReader(r, int64(fragOffsets[i])), squash.d)
-				if err != nil {
-					return nil, err
-				}
+				rdr = metadata.NewReader(toreader.NewReader(r, int64(fragOffsets[i])), squash.d)
 				err = binary.Read(rdr, binary.LittleEndian, &tmp)
 				if err != nil {
 					return nil, err
@@ -129,11 +122,7 @@ func NewReader(r io.ReaderAt) (*Reader, error) {
 		}
 		squash.ids = make([]uint32, squash.s.IdCount)
 		if len(idOffsets) == 1 {
-			var rdr *metadata.Reader
-			rdr, err = metadata.NewReader(toreader.NewReader(r, int64(idOffsets[0])), squash.d)
-			if err != nil {
-				return nil, err
-			}
+			rdr := metadata.NewReader(toreader.NewReader(r, int64(idOffsets[0])), squash.d)
 			err = binary.Read(rdr, binary.LittleEndian, &squash.ids)
 			if err != nil {
 				return nil, err
@@ -147,10 +136,7 @@ func NewReader(r io.ReaderAt) (*Reader, error) {
 			for i := range idOffsets {
 				curRead = uint16(math.Min(2048, float64(toRead)))
 				tmp = make([]uint32, curRead)
-				rdr, err = metadata.NewReader(toreader.NewReader(r, int64(idOffsets[i])), squash.d)
-				if err != nil {
-					return nil, err
-				}
+				rdr = metadata.NewReader(toreader.NewReader(r, int64(idOffsets[i])), squash.d)
 				err = binary.Read(rdr, binary.LittleEndian, &tmp)
 				if err != nil {
 					return nil, err
@@ -202,10 +188,7 @@ func (r *Reader) initExport() (err error) {
 	var new []uint64
 	var rdr *metadata.Reader
 	for i := range offsets {
-		rdr, err = metadata.NewReader(toreader.NewReader(r.r, int64(offsets[i])), r.d)
-		if err != nil {
-			return
-		}
+		rdr = metadata.NewReader(toreader.NewReader(r.r, int64(offsets[i])), r.d)
 		toRead = uint32(math.Min(1024, float64(left)))
 		new = make([]uint64, toRead)
 		err = binary.Read(rdr, binary.LittleEndian, &new)

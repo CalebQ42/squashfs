@@ -2,8 +2,6 @@ package metadata
 
 import (
 	"encoding/binary"
-	"errors"
-	"fmt"
 	"io"
 
 	"github.com/CalebQ42/squashfs/internal/decompress"
@@ -15,54 +13,51 @@ type Reader struct {
 	d      decompress.Decompressor
 }
 
-func NewReader(r io.Reader, d decompress.Decompressor) (*Reader, error) {
-	var out Reader
-	out.d = d
-	out.master = r
-	return &out, out.Advance()
+func NewReader(master io.Reader, d decompress.Decompressor) *Reader {
+	return &Reader{
+		master: master,
+		d:      d,
+	}
 }
 
-func (r *Reader) Advance() error {
+func realSize(siz uint16) uint16 {
+	return siz &^ 0x8000
+}
 
-	//For some reason things get closed improperly and causes issues.
-	//NO IDEA HOW THIS IS HAPPENING.
-
-	// if clr, ok := r.cur.(io.Closer); ok {
-	// 	clr.Close()
-	// 	r.cur = nil
-	// }
-	var size uint16
-	err := binary.Read(r.master, binary.LittleEndian, &size)
+func (r *Reader) advance() (err error) {
+	if clr, ok := r.cur.(io.Closer); ok {
+		clr.Close()
+	}
+	var raw uint16
+	err = binary.Read(r.master, binary.LittleEndian, &raw)
 	if err != nil {
-		return err
+		return
 	}
-	comp := size&0x8000 != 0x8000
-	size &^= 0x8000
-	if size > 8196 {
-		fmt.Println("uhoh")
-		return errors.New("AH")
-	}
+	size := realSize(raw)
 	r.cur = io.LimitReader(r.master, int64(size))
-	if comp {
+	if size == raw {
 		r.cur, err = r.d.Reader(r.cur)
+	}
+	return
+}
+
+func (r *Reader) Read(p []byte) (n int, err error) {
+	if r.cur == nil {
+		err = r.advance()
 		if err != nil {
-			return err
+			return
 		}
 	}
-	return nil
-}
-
-func (r Reader) Read(p []byte) (n int, err error) {
 	n, err = r.cur.Read(p)
 	if err == io.EOF {
-		err = r.Advance()
+		err = r.advance()
 		if err != nil {
 			return
 		}
 		var tmpN int
 		tmp := make([]byte, len(p)-n)
 		tmpN, err = r.Read(tmp)
-		for i := range tmp {
+		for i := 0; i < tmpN; i++ {
 			p[n+i] = tmp[i]
 		}
 		n += tmpN

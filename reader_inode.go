@@ -13,10 +13,7 @@ import (
 
 func (r Reader) inodeFromRef(ref uint64) (i inode.Inode, err error) {
 	offset, meta := (ref>>16)+r.s.InodeTableStart, ref&0xFFFF
-	rdr, err := metadata.NewReader(toreader.NewReader(r.r, int64(offset)), r.d)
-	if err != nil {
-		return
-	}
+	rdr := metadata.NewReader(toreader.NewReader(r.r, int64(offset)), r.d)
 	_, err = rdr.Read(make([]byte, meta))
 	if err != nil {
 		return
@@ -25,10 +22,7 @@ func (r Reader) inodeFromRef(ref uint64) (i inode.Inode, err error) {
 }
 
 func (r Reader) inodeFromDir(e directory.Entry) (i inode.Inode, err error) {
-	rdr, err := metadata.NewReader(toreader.NewReader(r.r, int64(uint64(e.BlockStart)+r.s.InodeTableStart)), r.d)
-	if err != nil {
-		return
-	}
+	rdr := metadata.NewReader(toreader.NewReader(r.r, int64(uint64(e.BlockStart)+r.s.InodeTableStart)), r.d)
 	_, err = rdr.Read(make([]byte, e.Offset))
 	if err != nil {
 		return
@@ -103,11 +97,8 @@ func (r Reader) readDirectory(i inode.Inode) ([]directory.Entry, error) {
 	} else {
 		return nil, errors.New("readDirectory called on non-directory type")
 	}
-	rdr, err := metadata.NewReader(toreader.NewReader(r.r, int64(offset+r.s.DirTableStart)), r.d)
-	if err != nil {
-		return nil, err
-	}
-	_, err = rdr.Read(make([]byte, blockOffset))
+	rdr := metadata.NewReader(toreader.NewReader(r.r, int64(offset+r.s.DirTableStart)), r.d)
+	_, err := rdr.Read(make([]byte, blockOffset))
 	if err != nil {
 		return nil, err
 	}

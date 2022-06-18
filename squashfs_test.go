@@ -3,6 +3,7 @@ package squashfs_test
 //Actually proper tests go here.
 
 import (
+	"fmt"
 	"io"
 	"io/fs"
 	"net/http"
@@ -89,7 +90,7 @@ func TestExtractQuick(t *testing.T) {
 
 	squashFils := os.DirFS(unsquashPath)
 	err = fs.WalkDir(squashFils, "", func(path string, d fs.DirEntry, err error) error {
-		t.Log(path)
+		fmt.Println(path)
 		return nil
 	})
 	if err != nil {
