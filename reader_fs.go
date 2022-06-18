@@ -19,15 +19,24 @@ type FS struct {
 	e []directory.Entry
 }
 
-func (r Reader) newFS(e directory.Entry) (f *FS, err error) {
-	f = new(FS)
-	f.i, err = r.inodeFromDir(e)
+func (r Reader) newFS(e directory.Entry, parent *FS) (*FS, error) {
+	i, err := r.inodeFromDir(e)
 	if err != nil {
-		return
+		return nil, err
 	}
-	f.r = &r
-	f.e, err = r.readDirectory(f.i)
-	return
+	ents, err := r.readDirectory(i)
+	if err != nil {
+		return nil, err
+	}
+	return &FS{
+		File: &File{
+			i:      i,
+			r:      &r,
+			parent: parent,
+			e:      e,
+		},
+		e: ents,
+	}, nil
 }
 
 //Open opens the file at name. Returns a squashfs.File.
@@ -56,7 +65,7 @@ func (f FS) Open(name string) (fs.File, error) {
 			}
 		}
 		if len(split) > 1 {
-			newFS, err := f.r.newFS(f.e[i])
+			newFS, err := f.r.newFS(f.e[i], &f)
 			if err != nil {
 				return nil, &fs.PathError{
 					Op:   "open",
@@ -64,14 +73,14 @@ func (f FS) Open(name string) (fs.File, error) {
 					Err:  err,
 				}
 			}
-			newFS.parent = &f
 			out, err := newFS.Open(strings.Join(split[1:], "/"))
 			if err != nil {
 				err.(*fs.PathError).Path = name
 			}
 			return out, err
 		}
-		out, err := f.r.newFile(f.e[i])
+		// fmt.Println(f.e[i])
+		out, err := f.r.newFile(f.e[i], &f)
 		if err != nil {
 			err = &fs.PathError{
 				Op:   "open",
@@ -79,7 +88,6 @@ func (f FS) Open(name string) (fs.File, error) {
 				Err:  err,
 			}
 		}
-		out.parent = &f
 		return out, err
 	}
 	return nil, &fs.PathError{
@@ -167,7 +175,7 @@ func (f FS) ReadDir(name string) ([]fs.DirEntry, error) {
 	for i := 0; i < len(f.e); i++ {
 		if split[0] == f.e[i].Name {
 			if len(split) == 1 {
-				fi, err := f.r.newFile(f.e[i])
+				fi, err := f.r.newFile(f.e[i], &f)
 				if err != nil {
 					return nil, &fs.PathError{
 						Op:   "readdir",
@@ -343,7 +351,7 @@ func (f FS) Sub(dir string) (fs.FS, error) {
 				Err:  fs.ErrNotExist,
 			}
 		}
-		newFS, err := f.r.newFS(f.e[i])
+		newFS, err := f.r.newFS(f.e[i], &f)
 		if err != nil {
 			return nil, &fs.PathError{
 				Op:   "sub",

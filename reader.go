@@ -181,9 +181,10 @@ func NewReader(r io.ReaderAt) (*Reader, error) {
 			rdr: &squash,
 			i:   root,
 			e: directory.Entry{
-				Name: "root",
+				Name: "",
 				Type: enType,
 			},
+			r: &squash,
 		},
 	}
 	return &squash, nil

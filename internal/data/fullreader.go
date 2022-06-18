@@ -10,7 +10,7 @@ import (
 type FullReader struct {
 	r         io.ReaderAt
 	d         decompress.Decompressor
-	fragRdr   io.Reader
+	fragRdr   func() (io.Reader, error)
 	sizes     []uint32
 	blockSize uint32
 	start     uint64
@@ -26,7 +26,7 @@ func NewFullReader(r io.ReaderAt, start uint64, d decompress.Decompressor, block
 	}
 }
 
-func (r *FullReader) AddFragment(rdr io.Reader) {
+func (r *FullReader) AddFragment(rdr func() (io.Reader, error)) {
 	r.fragRdr = rdr
 }
 
@@ -40,6 +40,14 @@ func (r FullReader) process(index int, offset int64, out chan outDat) {
 	var err error
 	var dat []byte
 	size := realSize(r.sizes[index])
+	if size == 0 {
+		out <- outDat{
+			i:    index,
+			err:  nil,
+			data: make([]byte, r.blockSize),
+		}
+		return
+	}
 	rdr := io.LimitReader(toreader.NewReader(r.r, offset), int64(size))
 	if size == r.sizes[index] {
 		rdr, err = r.d.Reader(rdr)
@@ -64,13 +72,21 @@ func (r FullReader) WriteTo(w io.Writer) (n int64, err error) {
 	for i := 0; i < num; i++ {
 		if i == num-1 && r.fragRdr != nil {
 			go func() {
-				dat, e := io.ReadAll(r.fragRdr)
+				rdr, e := r.fragRdr()
+				if err != nil {
+					out <- outDat{
+						i:   num - 1,
+						err: e,
+					}
+					return
+				}
+				dat, e := io.ReadAll(rdr)
 				out <- outDat{
-					i:    num,
+					i:    num - 1,
 					err:  e,
 					data: dat,
 				}
-				if clr, ok := r.fragRdr.(io.Closer); ok {
+				if clr, ok := rdr.(io.Closer); ok {
 					clr.Close()
 				}
 			}()

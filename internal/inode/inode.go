@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"io"
+	"strconv"
 )
 
 const (
@@ -72,7 +73,7 @@ func Read(r io.Reader, blockSize uint32) (i Inode, err error) {
 	case ESock:
 		i.Data, err = ReadEIPC(r)
 	default:
-		return i, errors.New("invalid inode type")
+		return i, errors.New("invalid inode type " + strconv.Itoa(int(i.Type)))
 	}
 	return
 }

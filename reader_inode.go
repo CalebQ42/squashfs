@@ -36,75 +36,56 @@ func (r Reader) inodeFromDir(e directory.Entry) (i inode.Inode, err error) {
 	return inode.Read(rdr, r.s.BlockSize)
 }
 
-func (r Reader) getData(i inode.Inode) (io.Reader, error) {
+func (r Reader) getReaders(i inode.Inode) (full *data.FullReader, rdr *data.Reader, err error) {
 	var fragOffset uint64
 	var blockOffset uint32
 	var blockSizes []uint32
 	var fragInd uint32
+	var fragSize uint32
 	if i.Type == inode.Fil {
 		fragOffset = uint64(i.Data.(inode.File).Offset)
 		blockOffset = i.Data.(inode.File).BlockStart
 		blockSizes = i.Data.(inode.File).BlockSizes
 		fragInd = i.Data.(inode.File).FragInd
+		fragSize = i.Data.(inode.File).Size % r.s.BlockSize
 	} else if i.Type == inode.EFil {
 		fragOffset = uint64(i.Data.(inode.EFile).Offset)
 		blockOffset = i.Data.(inode.EFile).BlockStart
 		blockSizes = i.Data.(inode.EFile).BlockSizes
 		fragInd = i.Data.(inode.EFile).FragInd
+		fragSize = uint32(i.Data.(inode.EFile).Size % uint64(r.s.BlockSize))
 	} else {
-		return nil, errors.New("getData called on non-file type")
+		return nil, nil, errors.New("getReaders called on non-file type")
 	}
-	rdr, err := data.NewReader(toreader.NewReader(r.r, int64(blockOffset)), r.d, blockSizes, r.s.BlockSize)
-	if err != nil {
-		return nil, err
-	}
+	rdr = data.NewReader(toreader.NewReader(r.r, int64(blockOffset)), r.d, blockSizes, r.s.BlockSize)
+	full = data.NewFullReader(r.r, uint64(blockOffset), r.d, blockSizes, r.s.BlockSize)
 	if fragInd != 0xFFFFFFFF {
+		full.AddFragment(func() (io.Reader, error) {
+			var fragRdr io.Reader
+			fragRdr, err = r.fragReader(fragInd)
+			if err != nil {
+				return nil, err
+			}
+			_, err = fragRdr.Read(make([]byte, fragOffset))
+			if err != nil {
+				return nil, err
+			}
+			fragRdr = io.LimitReader(fragRdr, int64(fragSize))
+			return fragRdr, nil
+		})
 		var fragRdr io.Reader
 		fragRdr, err = r.fragReader(fragInd)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		_, err = fragRdr.Read(make([]byte, fragOffset))
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
+		fragRdr = io.LimitReader(fragRdr, int64(fragSize))
 		rdr.AddFragment(fragRdr)
 	}
-	return rdr, nil
-}
-
-func (r Reader) getFullReader(i inode.Inode) (rdr *data.FullReader, err error) {
-	var fragOffset uint64
-	var blockOffset uint32
-	var blockSizes []uint32
-	var fragInd uint32
-	if i.Type == inode.Fil {
-		fragOffset = uint64(i.Data.(inode.File).Offset)
-		blockOffset = i.Data.(inode.File).BlockStart
-		blockSizes = i.Data.(inode.File).BlockSizes
-		fragInd = i.Data.(inode.File).FragInd
-	} else if i.Type == inode.EFil {
-		fragOffset = uint64(i.Data.(inode.EFile).Offset)
-		blockOffset = i.Data.(inode.EFile).BlockStart
-		blockSizes = i.Data.(inode.EFile).BlockSizes
-		fragInd = i.Data.(inode.EFile).FragInd
-	} else {
-		return nil, errors.New("getData called on non-file type")
-	}
-	rdr = data.NewFullReader(r.r, uint64(blockOffset), r.d, blockSizes, r.s.BlockSize)
-	if fragInd != 0xFFFFFFFF {
-		var fragRdr io.Reader
-		fragRdr, err = r.fragReader(fragInd)
-		if err != nil {
-			return nil, err
-		}
-		_, err = fragRdr.Read(make([]byte, fragOffset))
-		if err != nil {
-			return nil, err
-		}
-		rdr.AddFragment(fragRdr)
-	}
-	return rdr, nil
+	return
 }
 
 func (r Reader) readDirectory(i inode.Inode) ([]directory.Entry, error) {

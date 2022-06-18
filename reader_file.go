@@ -29,19 +29,15 @@ var (
 	ErrReadNotFile = errors.New("read called on non-file")
 )
 
-func (r Reader) newFile(en directory.Entry) (*File, error) {
+func (r Reader) newFile(en directory.Entry, parent *FS) (*File, error) {
 	i, err := r.inodeFromDir(en)
 	if err != nil {
 		return nil, err
 	}
 	var rdr io.Reader
 	var full io.WriterTo
-	if en.Type == inode.Fil {
-		rdr, err = r.getData(i)
-		if err != nil {
-			return nil, err
-		}
-		full, err = r.getFullReader(i)
+	if i.Type == inode.Fil || i.Type == inode.EFil {
+		full, rdr, err = r.getReaders(i)
 		if err != nil {
 			return nil, err
 		}
@@ -52,6 +48,7 @@ func (r Reader) newFile(en directory.Entry) (*File, error) {
 		rdr:     rdr,
 		fullRdr: full,
 		r:       &r,
+		parent:  parent,
 	}, nil
 }
 
@@ -180,7 +177,7 @@ func (f File) GetSymlinkFile() *File {
 
 //ExtractionOptions are available options on how to extract.
 type ExtractionOptions struct {
-	notBase            bool
+	LogOutput          io.Writer   //Where error log should write. If nil, uses os.Stdout. Has no effect if verbose is false.
 	DereferenceSymlink bool        //Replace symlinks with the target file
 	UnbreakSymlink     bool        //Try to make sure symlinks remain unbroken when extracted, without changing the symlink
 	Verbose            bool        //Prints extra info to log on an error
@@ -212,26 +209,26 @@ func (f File) ExtractSymlink(folder string) error {
 //ExtractWithOptions extracts the File to the given folder with the given ExtrationOptions.
 //If the File is a directory, it instead extracts the directory's contents to the folder.
 func (f File) ExtractWithOptions(folder string, op ExtractionOptions) error {
-	if !op.notBase {
-		err := os.MkdirAll(folder, op.FolderPerm)
-		if err != nil {
-			return err
+	if op.Verbose {
+		if op.LogOutput == nil {
+			op.LogOutput = os.Stdout
 		}
+		log.SetOutput(op.LogOutput)
 	}
-	folder = filepath.Clean(folder)
-	stat, err := f.Stat()
-	if err != nil {
+	return f.realExtract(folder, op)
+}
+
+func (f File) realExtract(folder string, op ExtractionOptions) error {
+	err := os.MkdirAll(folder, op.FolderPerm)
+	if err != nil && !os.IsExist(err) {
+		if op.Verbose {
+			log.Println("Error while creating extraction folder")
+		}
 		return err
 	}
+	folder = filepath.Clean(folder)
 	if f.IsDir() {
-		if op.notBase {
-			err = os.Mkdir(folder+"/"+f.e.Name, stat.Mode())
-			if err != nil && !os.IsExist(err) {
-				return err
-			}
-		} else {
-			op.notBase = true
-		}
+		filFS, _ := f.FS()
 		var ents []directory.Entry
 		ents, err = f.r.readDirectory(f.i)
 		if err != nil {
@@ -243,14 +240,28 @@ func (f File) ExtractWithOptions(folder string, op ExtractionOptions) error {
 		errChan := make(chan error)
 		for i := 0; i < len(ents); i++ {
 			go func(ent directory.Entry) {
-				fil, goErr := f.r.newFile(ent)
+				fil, goErr := f.r.newFile(ent, filFS)
 				if goErr != nil {
+					if op.Verbose {
+						log.Println("Error while reading info for", filepath.Join(f.path(), ent.Name))
+					}
 					errChan <- goErr
-					fil.Close()
 					return
 				}
-				fil.parent, _ = f.FS()
-				errChan <- fil.ExtractWithOptions(folder+"/"+f.e.Name, op)
+				if fil.IsDir() {
+					info, _ := fil.Stat()
+					err = os.Mkdir(filepath.Join(folder, fil.e.Name), info.Mode())
+					if err != nil {
+						if op.Verbose {
+							log.Println("Error while creating", filepath.Join(folder, fil.e.Name))
+						}
+						errChan <- err
+						return
+					}
+					errChan <- fil.realExtract(filepath.Join(folder, fil.e.Name), op)
+				} else {
+					errChan <- fil.realExtract(folder, op)
+				}
 				fil.Close()
 			}(ents[i])
 		}
@@ -268,15 +279,22 @@ func (f File) ExtractWithOptions(folder string, op ExtractionOptions) error {
 			os.Remove(folder + "/" + f.e.Name)
 			fil, err = os.Create(folder + "/" + f.e.Name)
 			if err != nil {
-				log.Println("Error while creating", folder+"/"+f.e.Name)
+				if op.Verbose {
+					log.Println("Error while creating", folder+"/"+f.e.Name)
+				}
 				return err
 			}
 		} else if err != nil {
+			if op.Verbose {
+				log.Println("Error while creating", folder+"/"+f.e.Name)
+			}
 			return err
 		}
 		_, err = io.Copy(fil, f)
 		if err != nil {
-			log.Println("Error while copying data to", folder+"/"+f.e.Name)
+			if op.Verbose {
+				log.Println("Error while copying data to", folder+"/"+f.e.Name)
+			}
 			return err
 		}
 		return nil
@@ -291,7 +309,7 @@ func (f File) ExtractWithOptions(folder string, op ExtractionOptions) error {
 				return errors.New("cannot get symlink target")
 			}
 			fil.e.Name = f.e.Name
-			err = fil.ExtractWithOptions(folder, op)
+			err = fil.realExtract(folder, op)
 			if err != nil {
 				if op.Verbose {
 					log.Println("Error while extracting the symlink's file:", folder+"/"+f.e.Name)
@@ -308,7 +326,7 @@ func (f File) ExtractWithOptions(folder string, op ExtractionOptions) error {
 				return errors.New("cannot get symlink target")
 			}
 			extractLoc := filepath.Clean(folder + "/" + filepath.Dir(symPath))
-			err = fil.ExtractWithOptions(extractLoc, op)
+			err = fil.realExtract(extractLoc, op)
 			if err != nil {
 				if op.Verbose {
 					log.Println("Error while extracting ", folder+"/"+f.e.Name)

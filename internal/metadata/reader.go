@@ -21,9 +21,14 @@ func NewReader(r io.Reader, d decompress.Decompressor) (*Reader, error) {
 }
 
 func (r *Reader) Advance() error {
-	if clr, ok := r.cur.(io.Closer); ok {
-		clr.Close()
-	}
+
+	//For some reason things get closed improperly and causes issues.
+	//NO IDEA HOW THIS IS HAPPENING.
+
+	// if clr, ok := r.cur.(io.Closer); ok {
+	// 	clr.Close()
+	// 	r.cur = nil
+	// }
 	var size uint16
 	err := binary.Read(r.master, binary.LittleEndian, &size)
 	if err != nil {

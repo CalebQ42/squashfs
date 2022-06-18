@@ -1,5 +1,7 @@
 package squashfs_test
 
+//Actually proper tests go here.
+
 import (
 	"io"
 	"io/fs"
@@ -18,7 +20,7 @@ const (
 )
 
 func preTest(dir string) (fil *os.File, err error) {
-	_, err = os.Open(filepath.Join(dir, squashfsName))
+	fil, err = os.Open(filepath.Join(dir, squashfsName))
 	if err != nil {
 		_, err = os.Open(dir)
 		if os.IsNotExist(err) {
@@ -54,20 +56,24 @@ func TestExtractQuick(t *testing.T) {
 
 	//First, setup everything and extract the archive using the library and unsquashfs
 
-	tmpDir := t.TempDir()
+	// tmpDir := t.TempDir()
+	tmpDir := "testing"
 	fil, err := preTest(tmpDir)
 	if err != nil {
 		t.Fatal(err)
 	}
 	libPath := filepath.Join(tmpDir, "ExtractLib")
 	unsquashPath := filepath.Join(tmpDir, "ExtractSquashfs")
-	os.Remove(libPath)
-	os.Remove(unsquashPath)
+	os.RemoveAll(libPath)
+	os.RemoveAll(unsquashPath)
 	rdr, err := squashfs.NewReader(fil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = rdr.ExtractTo(libPath)
+	op := squashfs.DefaultOptions()
+	op.Verbose = true
+	sub := 
+	err = rdr.ExtractWithOptions(libPath, op)
 	if err != nil {
 		t.Fatal(err)
 	}

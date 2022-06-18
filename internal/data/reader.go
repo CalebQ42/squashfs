@@ -16,14 +16,13 @@ type Reader struct {
 	blockSize  uint32
 }
 
-func NewReader(r io.Reader, d decompress.Decompressor, blockSizes []uint32, blockSize uint32) (*Reader, error) {
+func NewReader(r io.Reader, d decompress.Decompressor, blockSizes []uint32, blockSize uint32) *Reader {
 	var out Reader
 	out.d = d
 	out.master = r
 	out.blockSizes = blockSizes
 	out.blockSize = blockSize
-	err := out.advance()
-	return &out, err
+	return &out
 }
 
 func (r *Reader) AddFragment(rdr io.Reader) {
@@ -59,6 +58,12 @@ func (r *Reader) advance() (err error) {
 }
 
 func (r *Reader) Read(p []byte) (n int, err error) {
+	if r.cur == nil {
+		err = r.advance()
+		if err != nil {
+			return
+		}
+	}
 	n, err = r.cur.Read(p)
 	if err == io.EOF {
 		err = r.advance()

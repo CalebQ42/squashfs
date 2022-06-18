@@ -15,7 +15,7 @@ type fragEntry struct {
 func (r Reader) fragReader(index uint32) (io.Reader, error) {
 	realSize := r.fragEntries[index].Size &^ (1 << 24)
 	rdr := io.LimitReader(toreader.NewReader(r.r, int64(r.fragEntries[index].Start)), int64(realSize))
-	if realSize == r.fragEntries[index].Size {
+	if realSize != r.fragEntries[index].Size {
 		return rdr, nil
 	}
 	return r.d.Reader(rdr)

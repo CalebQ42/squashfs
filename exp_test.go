@@ -274,3 +274,30 @@ func TestCreateSquashFromAppImage(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestSTUFF(t *testing.T) {
+	t.Parallel()
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	aiFil, err := os.Open(wd + "/testing/" + squashfsName)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer aiFil.Close()
+	rdr, err := NewReader(aiFil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.Remove(wd + "/testing/test.txt")
+	testOut, _ := os.Create(wd + "/testing/test.txt")
+	testFil, err := rdr.Open("PortableApps/Notepad++Portable/App/Readme.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = io.Copy(testOut, testFil)
+	if err != nil {
+		t.Fatal(err)
+	}
+}
