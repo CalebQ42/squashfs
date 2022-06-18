@@ -73,8 +73,7 @@ func TestExtractQuick(t *testing.T) {
 	}
 	op := squashfs.DefaultOptions()
 	op.Verbose = true
-	sub, _ := rdr.Sub("PortableApps/Notepad++Portable/App/Notepad++64/functionList")
-	err = sub.(*squashfs.FS).ExtractWithOptions(libPath, op)
+	err = rdr.ExtractWithOptions(libPath, op)
 	if err != nil {
 		t.Fatal(err)
 	}

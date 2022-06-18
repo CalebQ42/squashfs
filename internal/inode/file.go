@@ -2,6 +2,7 @@ package inode
 
 import (
 	"encoding/binary"
+	"fmt"
 	"io"
 	"math"
 )
@@ -36,6 +37,7 @@ type EFile struct {
 func ReadFile(r io.Reader, blockSize uint32) (f File, err error) {
 	err = binary.Read(r, binary.LittleEndian, &f.fileInit)
 	if err != nil {
+		fmt.Println("Hi")
 		return
 	}
 	f.BlockSizes = make([]uint32, int(math.Ceil(float64(f.Size)/float64(blockSize))))
