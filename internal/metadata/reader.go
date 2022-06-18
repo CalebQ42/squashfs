@@ -2,6 +2,8 @@ package metadata
 
 import (
 	"encoding/binary"
+	"errors"
+	"fmt"
 	"io"
 
 	"github.com/CalebQ42/squashfs/internal/decompress"
@@ -36,6 +38,10 @@ func (r *Reader) Advance() error {
 	}
 	comp := size&0x8000 != 0x8000
 	size &^= 0x8000
+	if size > 8196 {
+		fmt.Println("uhoh")
+		return errors.New("AH")
+	}
 	r.cur = io.LimitReader(r.master, int64(size))
 	if comp {
 		r.cur, err = r.d.Reader(r.cur)

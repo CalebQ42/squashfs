@@ -290,9 +290,9 @@ func TestSTUFF(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	os.Remove(wd + "/testing/test.txt")
-	testOut, _ := os.Create(wd + "/testing/test.txt")
-	testFil, err := rdr.Open("PortableApps/Notepad++Portable/App/Readme.txt")
+	os.Remove(wd + "/testing/test.xml")
+	testOut, _ := os.Create(wd + "/testing/test.xml")
+	testFil, err := rdr.Open("PortableApps/Notepad++Portable/App/Notepad++64/functionList/cobol-free.xml")
 	if err != nil {
 		t.Fatal(err)
 	}
