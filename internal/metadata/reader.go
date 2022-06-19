@@ -62,8 +62,5 @@ func (r *Reader) Read(p []byte) (n int, err error) {
 		}
 		n += tmpN
 	}
-	if err != nil {
-
-	}
 	return
 }
