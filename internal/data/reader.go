@@ -27,6 +27,7 @@ func NewReader(r io.Reader, d decompress.Decompressor, blockSizes []uint32, bloc
 
 func (r *Reader) AddFragment(rdr io.Reader) {
 	r.fragRdr = rdr
+	r.blockSizes = append(r.blockSizes, 0)
 }
 
 func realSize(siz uint32) uint32 {

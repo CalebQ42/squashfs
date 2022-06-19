@@ -28,6 +28,7 @@ func NewFullReader(r io.ReaderAt, start uint64, d decompress.Decompressor, block
 
 func (r *FullReader) AddFragment(rdr func() (io.Reader, error)) {
 	r.fragRdr = rdr
+	r.sizes = append(r.sizes, 0)
 }
 
 type outDat struct {

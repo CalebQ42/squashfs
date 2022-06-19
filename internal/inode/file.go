@@ -2,7 +2,6 @@ package inode
 
 import (
 	"encoding/binary"
-	"fmt"
 	"io"
 	"math"
 )
@@ -20,7 +19,7 @@ type File struct {
 }
 
 type eFileInit struct {
-	BlockStart uint32
+	BlockStart uint64
 	Size       uint64
 	Sparse     uint64
 	LinkCount  uint32
@@ -37,10 +36,13 @@ type EFile struct {
 func ReadFile(r io.Reader, blockSize uint32) (f File, err error) {
 	err = binary.Read(r, binary.LittleEndian, &f.fileInit)
 	if err != nil {
-		fmt.Println("Hi")
 		return
 	}
-	f.BlockSizes = make([]uint32, int(math.Ceil(float64(f.Size)/float64(blockSize))))
+	toRead := int(math.Floor(float64(f.Size) / float64(blockSize)))
+	if f.FragInd == 0xFFFFFFFF && f.Size%blockSize > 0 {
+		toRead++
+	}
+	f.BlockSizes = make([]uint32, toRead)
 	err = binary.Read(r, binary.LittleEndian, &f.BlockSizes)
 	return
 }
@@ -50,7 +52,11 @@ func ReadEFile(r io.Reader, blockSize uint32) (f EFile, err error) {
 	if err != nil {
 		return
 	}
-	f.BlockSizes = make([]uint32, int(math.Ceil(float64(f.Size)/float64(blockSize))))
+	toRead := int(math.Floor(float64(f.Size) / float64(blockSize)))
+	if f.FragInd == 0xFFFFFFFF && f.Size%uint64(blockSize) > 0 {
+		toRead++
+	}
+	f.BlockSizes = make([]uint32, toRead)
 	err = binary.Read(r, binary.LittleEndian, &f.BlockSizes)
 	return
 }

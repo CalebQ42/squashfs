@@ -3,7 +3,7 @@ package squashfs_test
 //Actually proper tests go here.
 
 import (
-	"fmt"
+	"errors"
 	"io"
 	"io/fs"
 	"net/http"
@@ -88,12 +88,22 @@ func TestExtractQuick(t *testing.T) {
 	//TODO: Add long test that checks contents.
 
 	squashFils := os.DirFS(unsquashPath)
-	err = fs.WalkDir(squashFils, "", func(path string, d fs.DirEntry, err error) error {
-		fmt.Println(path)
+	err = fs.WalkDir(squashFils, ".", func(path string, d fs.DirEntry, _ error) error {
+		libFil, e := os.Open(filepath.Join(libPath, path))
+		if e != nil {
+			return e
+		}
+		stat, _ := d.Info()
+		libStat, _ := libFil.Stat()
+		if stat.Size() != libStat.Size() {
+			t.Log(path, "not the same size between library and unsquashfs")
+			t.Log("File is", libStat.Size())
+			t.Log("Should be", stat.Size())
+			return errors.New("file not the correct size")
+		}
 		return nil
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Fatal("This is a test")
 }

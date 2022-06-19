@@ -32,13 +32,13 @@ func (r Reader) inodeFromDir(e directory.Entry) (i inode.Inode, err error) {
 
 func (r Reader) getReaders(i inode.Inode) (full *data.FullReader, rdr *data.Reader, err error) {
 	var fragOffset uint64
-	var blockOffset uint32
+	var blockOffset uint64
 	var blockSizes []uint32
 	var fragInd uint32
 	var fragSize uint32
 	if i.Type == inode.Fil {
 		fragOffset = uint64(i.Data.(inode.File).Offset)
-		blockOffset = i.Data.(inode.File).BlockStart
+		blockOffset = uint64(i.Data.(inode.File).BlockStart)
 		blockSizes = i.Data.(inode.File).BlockSizes
 		fragInd = i.Data.(inode.File).FragInd
 		fragSize = i.Data.(inode.File).Size % r.s.BlockSize
