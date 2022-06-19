@@ -10,7 +10,9 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"testing"
+	"time"
 
 	"github.com/CalebQ42/squashfs"
 )
@@ -53,11 +55,45 @@ func preTest(dir string) (fil *os.File, err error) {
 	return
 }
 
+func BenchmarkRace(b *testing.B) {
+	// tmpDir := b.TempDir()
+	tmpDir := "testing"
+	fil, err := preTest(tmpDir)
+	if err != nil {
+		b.Fatal(err)
+	}
+	libPath := filepath.Join(tmpDir, "ExtractLib")
+	unsquashPath := filepath.Join(tmpDir, "ExtractSquashfs")
+	os.RemoveAll(libPath)
+	os.RemoveAll(unsquashPath)
+	var libTime, unsquashTime time.Duration
+	start := time.Now()
+	rdr, err := squashfs.NewReader(fil)
+	if err != nil {
+		b.Fatal(err)
+	}
+	err = rdr.ExtractTo(libPath)
+	if err != nil {
+		b.Fatal(err)
+	}
+	libTime = time.Since(start)
+	cmd := exec.Command("unsquashfs", "-d", unsquashPath, fil.Name())
+	start = time.Now()
+	err = cmd.Run()
+	if err != nil {
+		b.Fatal(err)
+	}
+	unsquashTime = time.Since(start)
+	b.Log("Library took:", libTime.Round(time.Millisecond))
+	b.Log("unsquashfs took:", unsquashTime.Round(time.Millisecond))
+	b.Log("unsquashfs is", strconv.FormatFloat(float64(libTime.Milliseconds())/float64(unsquashTime.Milliseconds()), 'f', 2, 64), "times faster")
+}
+
 func TestExtractQuick(t *testing.T) {
 
 	//First, setup everything and extract the archive using the library and unsquashfs
 
-	// tmpDir := t.TempDir()
+	// tmpDir := b.TempDir()
 	tmpDir := "testing"
 	fil, err := preTest(tmpDir)
 	if err != nil {
