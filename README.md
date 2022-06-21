@@ -13,14 +13,6 @@ Thanks also to [distri's squashfs library](https://github.com/distr1/distri/tree
 
 ## Limitations
 
-This library is pure Go (including external libraries) which can cause some issues, which are listed below. Right now this library is also not feature complete, so check out the TODO list above for what I'm still planning on adding.
-
-* No LZO compression. This is purely due to a lack of a good LZO pure golang library. If one is made, it would be a simple job to add it in.
-* GZIP Compression
-  * Strategies might or might not work.
-  * Custom window sizes might or might not work.
-* XZ Compression
-  * LZMA executable filters are NOT supported.
 * No Xattr parsing. This is simply because I haven't done any research on it and how to apply these in a pure go way.
 
 ## Performance
