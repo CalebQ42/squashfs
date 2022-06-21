@@ -40,6 +40,7 @@ type outDat struct {
 func (r FullReader) process(index int, offset int64, out chan outDat) {
 	var err error
 	var dat []byte
+	var rdr io.ReadCloser
 	size := realSize(r.sizes[index])
 	if size == 0 {
 		out <- outDat{
@@ -49,12 +50,24 @@ func (r FullReader) process(index int, offset int64, out chan outDat) {
 		}
 		return
 	}
-	rdr := io.LimitReader(toreader.NewReader(r.r, offset), int64(size))
+	// rdr := io.LimitReader(toreader.NewReader(r.r, offset), int64(size))
 	if size == r.sizes[index] {
-		rdr, err = r.d.Reader(rdr)
-	}
-	if err == nil {
-		dat, err = io.ReadAll(rdr)
+		//Special workaround for zstd for increased performancce.
+		if zstd, ok := r.d.(*decompress.Zstd); ok {
+			dat = make([]byte, size)
+			_, err = r.r.ReadAt(dat, offset)
+			if err == nil {
+				dat, err = zstd.Decode(dat)
+			}
+		} else {
+			rdr, err = r.d.Reader(io.LimitReader(toreader.NewReader(r.r, offset), int64(size)))
+			if err == nil {
+				dat, err = io.ReadAll(rdr)
+			}
+		}
+	} else {
+		dat = make([]byte, size)
+		_, err = r.r.ReadAt(dat, offset)
 	}
 	out <- outDat{
 		i:    index,

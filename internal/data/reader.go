@@ -12,17 +12,20 @@ type Reader struct {
 	cur        io.Reader
 	fragRdr    io.Reader
 	d          decompress.Decompressor
+	comRdr     io.Reader
 	blockSizes []uint32
 	blockSize  uint32
+	resetable  bool
 }
 
 func NewReader(r io.Reader, d decompress.Decompressor, blockSizes []uint32, blockSize uint32) *Reader {
-	var out Reader
-	out.d = d
-	out.master = r
-	out.blockSizes = blockSizes
-	out.blockSize = blockSize
-	return &out
+	return &Reader{
+		d:          d,
+		master:     r,
+		blockSizes: blockSizes,
+		blockSize:  blockSize,
+		resetable:  true,
+	}
 }
 
 func (r *Reader) AddFragment(rdr io.Reader) {
@@ -50,7 +53,19 @@ func (r *Reader) advance() (err error) {
 		} else {
 			r.cur = io.LimitReader(r.master, int64(size))
 			if size == r.blockSizes[0] {
-				r.cur, err = r.d.Reader(r.cur)
+				if r.d.Resetable() {
+					if r.comRdr == nil {
+						r.cur, err = r.d.Reader(r.cur)
+						if err != nil {
+							return
+						}
+					} else {
+						err = r.d.Reset(r.comRdr, r.cur)
+						r.cur = r.comRdr
+					}
+				} else {
+					r.cur, err = r.d.Reader(r.cur)
+				}
 			}
 		}
 	}

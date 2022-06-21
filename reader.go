@@ -75,7 +75,7 @@ func NewReader(r io.ReaderAt) (*Reader, error) {
 	case LZ4Compression:
 		squash.d = decompress.Lz4{}
 	case ZSTDCompression:
-		squash.d = decompress.Zstd{}
+		squash.d = &decompress.Zstd{}
 	default:
 		return nil, errors.New("uh, I need to do this, OR something if very wrong")
 	}
