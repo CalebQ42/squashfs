@@ -130,7 +130,7 @@ func NewFile(rdr io.Reader, blockSize uint32) (File, error) {
 	}
 	inode.Fragmented = inode.FragmentIndex != 0xFFFFFFFF
 	blocks := inode.Size / blockSize
-	if inode.Size%blockSize > 0 {
+	if !inode.Fragmented && inode.Size%blockSize > 0 {
 		blocks++
 	}
 	inode.BlockSizes = make([]uint32, blocks, blocks)
@@ -165,7 +165,7 @@ func NewExtendedFile(rdr io.Reader, blockSize uint32) (ExtFile, error) {
 	}
 	inode.Fragmented = inode.FragmentIndex != 0xFFFFFFFF
 	blocks := inode.Size / uint64(blockSize)
-	if inode.Size%uint64(blockSize) > 0 {
+	if !inode.Fragmented && inode.Size%uint64(blockSize) > 0 {
 		blocks++
 	}
 	inode.BlockSizes = make([]uint32, blocks, blocks)

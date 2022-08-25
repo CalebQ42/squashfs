@@ -26,11 +26,7 @@ func (r *Reader) getFragmentDataFromInode(in *inode.Inode) ([]byte, error) {
 		if !bf.Fragmented {
 			return make([]byte, 0), nil
 		}
-		if bf.BlockStart == 0 {
-			size = uint64(bf.Size)
-		} else {
-			size = uint64(bf.BlockSizes[len(bf.BlockSizes)-1])
-		}
+		size = uint64(bf.Size % r.super.BlockSize)
 		fragIndex = bf.FragmentIndex
 		fragOffset = bf.FragmentOffset
 	} else if in.Type == inode.ExtFileType {
@@ -38,11 +34,7 @@ func (r *Reader) getFragmentDataFromInode(in *inode.Inode) ([]byte, error) {
 		if !bf.Fragmented {
 			return make([]byte, 0), nil
 		}
-		if bf.BlockStart == 0 {
-			size = bf.Size
-		} else {
-			size = uint64(bf.BlockSizes[len(bf.BlockSizes)-1])
-		}
+		size = bf.Size % uint64(r.super.BlockSize)
 		fragIndex = bf.FragmentIndex
 		fragOffset = bf.FragmentOffset
 	} else {
@@ -53,7 +45,7 @@ func (r *Reader) getFragmentDataFromInode(in *inode.Inode) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	_, err = fragEntryRdr.Seek(int64(16*fragIndex), io.SeekStart)
+	_, err = fragEntryRdr.Seek(int64((16*fragIndex)%8192), io.SeekStart)
 	if err != nil {
 		return nil, err
 	}
