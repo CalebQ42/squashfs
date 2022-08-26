@@ -19,9 +19,9 @@ import (
 
 const (
 	squashfsURL  = "https://darkstorm.tech/LinuxPATest.sfs"
-	squashfsName = "out.sfs"
+	squashfsName = "LinuxPATest.sfs"
 
-	filePath = "PortableApps/Desktop.ini"
+	filePath = "PortableApps/Notepad++Portable/App/DefaultData/Config/contextMenu.xml"
 )
 
 func preTest(dir string) (fil *os.File, err error) {
@@ -153,6 +153,7 @@ func TestSingleFile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	os.Remove(filepath.Base(filePath))
 	rdr, err := squashfs.NewReader(fil)
 	if err != nil {
 		t.Fatal(err)

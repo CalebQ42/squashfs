@@ -37,13 +37,13 @@ func (r Reader) getReaders(i inode.Inode) (full *data.FullReader, rdr *data.Read
 	var fragInd uint32
 	var fragSize uint32
 	if i.Type == inode.Fil {
-		fragOffset = uint64(i.Data.(inode.File).Offset)
+		fragOffset = uint64(i.Data.(inode.File).FragOffset)
 		blockOffset = uint64(i.Data.(inode.File).BlockStart)
 		blockSizes = i.Data.(inode.File).BlockSizes
 		fragInd = i.Data.(inode.File).FragInd
 		fragSize = i.Data.(inode.File).Size % r.s.BlockSize
 	} else if i.Type == inode.EFil {
-		fragOffset = uint64(i.Data.(inode.EFile).Offset)
+		fragOffset = uint64(i.Data.(inode.EFile).FragOffset)
 		blockOffset = i.Data.(inode.EFile).BlockStart
 		blockSizes = i.Data.(inode.EFile).BlockSizes
 		fragInd = i.Data.(inode.EFile).FragInd
@@ -60,9 +60,13 @@ func (r Reader) getReaders(i inode.Inode) (full *data.FullReader, rdr *data.Read
 			if err != nil {
 				return nil, err
 			}
-			_, err = fragRdr.Read(make([]byte, fragOffset))
-			if err != nil {
-				return nil, err
+			var n, tmpN int
+			for n != int(fragOffset) {
+				tmpN, err = fragRdr.Read(make([]byte, int(fragOffset)-n))
+				if err != nil {
+					return nil, err
+				}
+				n += tmpN
 			}
 			fragRdr = io.LimitReader(fragRdr, int64(fragSize))
 			return fragRdr, nil
@@ -72,9 +76,13 @@ func (r Reader) getReaders(i inode.Inode) (full *data.FullReader, rdr *data.Read
 		if err != nil {
 			return nil, nil, err
 		}
-		_, err = fragRdr.Read(make([]byte, fragOffset))
-		if err != nil {
-			return nil, nil, err
+		var n, tmpN int
+		for n != int(fragOffset) {
+			tmpN, err = fragRdr.Read(make([]byte, int(fragOffset)-n))
+			if err != nil {
+				return nil, nil, err
+			}
+			n += tmpN
 		}
 		fragRdr = io.LimitReader(fragRdr, int64(fragSize))
 		rdr.AddFragment(fragRdr)

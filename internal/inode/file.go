@@ -9,7 +9,7 @@ import (
 type fileInit struct {
 	BlockStart uint32
 	FragInd    uint32
-	Offset     uint32
+	FragOffset uint32
 	Size       uint32
 }
 
@@ -24,7 +24,7 @@ type eFileInit struct {
 	Sparse     uint64
 	LinkCount  uint32
 	FragInd    uint32
-	Offset     uint32
+	FragOffset uint32
 	XattrInd   uint32
 }
 
