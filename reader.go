@@ -20,8 +20,8 @@ type Reader struct {
 	r           io.ReaderAt
 	fragEntries []fragEntry
 	ids         []uint32
-	exportTable []uint64
-	s           superblock
+	// exportTable []uint64
+	s superblock
 }
 
 var (
@@ -30,6 +30,7 @@ var (
 	ErrorVersion = errors.New("squashfs version of archive is not 4.0")
 )
 
+// The types of compression supported by squashfs
 const (
 	GZipCompression = uint16(iota + 1)
 	LZMACompression
@@ -39,6 +40,7 @@ const (
 	ZSTDCompression
 )
 
+// Creates a new squashfs.Reader from the given io.Reader. NOTE: All data from the io.Reader will be read and stored in memory.
 func NewReaderFromReader(r io.Reader) (*Reader, error) {
 	rdr, err := toreader.NewReaderAt(r)
 	if err != nil {
@@ -47,6 +49,7 @@ func NewReaderFromReader(r io.Reader) (*Reader, error) {
 	return NewReader(rdr)
 }
 
+// Creates a new squashfs.Reader from the given io.ReaderAt.
 func NewReader(r io.ReaderAt) (*Reader, error) {
 	var squash Reader
 	squash.r = r
@@ -176,45 +179,46 @@ func NewReader(r io.ReaderAt) (*Reader, error) {
 	return &squash, nil
 }
 
-func (r *Reader) initExport() (err error) {
-	num := int(math.Ceil(float64(r.s.InodeCount) / 1024))
-	offsets := make([]uint64, num)
-	err = binary.Read(toreader.NewReader(r.r, int64(r.s.ExportTableStart)), binary.LittleEndian, &offsets)
-	if err != nil {
-		return
-	}
-	left := r.s.InodeCount
-	var toRead uint32
-	var new []uint64
-	var rdr *metadata.Reader
-	for i := range offsets {
-		rdr = metadata.NewReader(toreader.NewReader(r.r, int64(offsets[i])), r.d)
-		toRead = uint32(math.Min(1024, float64(left)))
-		new = make([]uint64, toRead)
-		err = binary.Read(rdr, binary.LittleEndian, &new)
-		if err != nil {
-			return
-		}
-		left -= toRead
-		r.exportTable = append(r.exportTable, new...)
-	}
-	return nil
-}
+// func (r *Reader) initExport() (err error) {
+// 	num := int(math.Ceil(float64(r.s.InodeCount) / 1024))
+// 	offsets := make([]uint64, num)
+// 	err = binary.Read(toreader.NewReader(r.r, int64(r.s.ExportTableStart)), binary.LittleEndian, &offsets)
+// 	if err != nil {
+// 		return
+// 	}
+// 	left := r.s.InodeCount
+// 	var toRead uint32
+// 	var new []uint64
+// 	var rdr *metadata.Reader
+// 	for i := range offsets {
+// 		rdr = metadata.NewReader(toreader.NewReader(r.r, int64(offsets[i])), r.d)
+// 		toRead = uint32(math.Min(1024, float64(left)))
+// 		new = make([]uint64, toRead)
+// 		err = binary.Read(rdr, binary.LittleEndian, &new)
+// 		if err != nil {
+// 			return
+// 		}
+// 		left -= toRead
+// 		r.exportTable = append(r.exportTable, new...)
+// 	}
+// 	return nil
+// }
 
-func (r *Reader) inode(index uint32) (i inode.Inode, err error) {
-	if r.s.exportable() {
-		if r.exportTable == nil {
-			err = r.initExport()
-			if err != nil {
-				return
-			}
-		}
-		return r.inodeFromRef(r.exportTable[index-1])
-	}
-	err = errors.New("archive is not exportable")
-	return
-}
+// func (r *Reader) inode(index uint32) (i inode.Inode, err error) {
+// 	if r.s.exportable() {
+// 		if r.exportTable == nil {
+// 			err = r.initExport()
+// 			if err != nil {
+// 				return
+// 			}
+// 		}
+// 		return r.inodeFromRef(r.exportTable[index-1])
+// 	}
+// 	err = errors.New("archive is not exportable")
+// 	return
+// }
 
+// Returns the last time the archive was modified.
 func (r Reader) ModTime() time.Time {
 	return time.Unix(int64(r.s.ModTime), 0)
 }
