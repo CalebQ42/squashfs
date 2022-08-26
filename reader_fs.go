@@ -131,7 +131,7 @@ func (f FS) Glob(pattern string) (out []string, err error) {
 					Err:  err,
 				}
 			}
-			subGlob, err := sub.(FS).Glob(strings.Join(split[1:], "/"))
+			subGlob, err := sub.(fs.GlobFS).Glob(strings.Join(split[1:], "/"))
 			if err != nil {
 				if pathErr, ok := err.(*fs.PathError); ok {
 					if pathErr.Err == fs.ErrNotExist {
@@ -208,7 +208,7 @@ func (f FS) ReadDir(name string) ([]fs.DirEntry, error) {
 					Err:  err,
 				}
 			}
-			redDir, err := sub.(FS).ReadDir(strings.Join(split[1:], "/"))
+			redDir, err := sub.(fs.ReadDirFS).ReadDir(strings.Join(split[1:], "/"))
 			if err != nil {
 				if pathErr, ok := err.(*fs.PathError); ok {
 					if pathErr.Err == fs.ErrNotExist {
@@ -299,7 +299,7 @@ func (f FS) Stat(name string) (fs.FileInfo, error) {
 					Err:  err,
 				}
 			}
-			stat, err := sub.(FS).Stat(strings.Join(split[1:], "/"))
+			stat, err := sub.(fs.StatFS).Stat(strings.Join(split[1:], "/"))
 			if err != nil {
 				if pathErr, ok := err.(*fs.PathError); ok {
 					if pathErr.Err == fs.ErrNotExist {
