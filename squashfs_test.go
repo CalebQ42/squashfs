@@ -19,7 +19,9 @@ import (
 
 const (
 	squashfsURL  = "https://darkstorm.tech/LinuxPATest.sfs"
-	squashfsName = "LinuxPATest.sfs"
+	squashfsName = "out.sfs"
+
+	filePath = "PortableApps/Desktop.ini"
 )
 
 func preTest(dir string) (fil *os.File, err error) {
@@ -142,4 +144,28 @@ func TestExtractQuick(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Fatal("end")
+}
+
+func TestSingleFile(t *testing.T) {
+	tmpDir := "testing"
+	fil, err := preTest(tmpDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rdr, err := squashfs.NewReader(fil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f, err := rdr.Open(filePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	op := squashfs.DefaultOptions()
+	op.Verbose = true
+	err = f.(*squashfs.File).ExtractWithOptions("testing", op)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Fatal("HI")
 }
