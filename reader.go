@@ -96,20 +96,20 @@ func NewReader(r io.ReaderAt) (*Reader, error) {
 				return nil, err
 			}
 		} else {
-			toRead := squash.s.IdCount
-			var curRead uint16
+			toRead := squash.s.FragCount
+			var curRead uint32
 			var tmp []fragEntry
 			var rdr *metadata.Reader
 			var offset int
 			for i := range fragOffsets {
-				curRead = uint16(math.Min(512, float64(toRead)))
+				curRead = uint32(math.Min(512, float64(toRead)))
 				tmp = make([]fragEntry, curRead)
 				rdr = metadata.NewReader(toreader.NewReader(r, int64(fragOffsets[i])), squash.d)
 				err = binary.Read(rdr, binary.LittleEndian, &tmp)
 				if err != nil {
 					return nil, err
 				}
-				offset = int(squash.s.IdCount - toRead)
+				offset = int(squash.s.FragCount - toRead)
 				for i := range tmp {
 					squash.fragEntries[offset+i] = tmp[i]
 				}
