@@ -14,7 +14,7 @@ import (
 	"github.com/CalebQ42/squashfs/internal/inode"
 )
 
-//File represents a file inside a squashfs archive.
+// File represents a file inside a squashfs archive.
 type File struct {
 	i        inode.Inode
 	rdr      io.Reader
@@ -52,12 +52,12 @@ func (r Reader) newFile(en directory.Entry, parent *FS) (*File, error) {
 	}, nil
 }
 
-//Stat returns the File's fs.FileInfo
+// Stat returns the File's fs.FileInfo
 func (f File) Stat() (fs.FileInfo, error) {
 	return newFileInfo(f.e, f.i), nil
 }
 
-//Read reads the data from the file. Only works if file is a normal file.
+// Read reads the data from the file. Only works if file is a normal file.
 func (f File) Read(p []byte) (int, error) {
 	if f.i.Type != inode.Fil && f.i.Type != inode.EFil {
 		return 0, ErrReadNotFile
@@ -68,20 +68,20 @@ func (f File) Read(p []byte) (int, error) {
 	return f.rdr.Read(p)
 }
 
-//WriteTo writes all data from the file to the writer. This is multi-threaded.
-//The underlying reader is seperate from the one used with Read and can be reused.
+// WriteTo writes all data from the file to the writer. This is multi-threaded.
+// The underlying reader is seperate from the one used with Read and can be reused.
 func (f File) WriteTo(w io.Writer) (int64, error) {
 	return f.fullRdr.WriteTo(w)
 }
 
-//Close simply nils the underlying reader. Here mostly to satisfy fs.File
+// Close simply nils the underlying reader. Here mostly to satisfy fs.File
 func (f *File) Close() error {
 	f.rdr = nil
 	return nil
 }
 
-//ReadDir returns n fs.DirEntry's that's contained in the File (if it's a directory).
-//If n <= 0 all fs.DirEntry's are returned.
+// ReadDir returns n fs.DirEntry's that's contained in the File (if it's a directory).
+// If n <= 0 all fs.DirEntry's are returned.
 func (f *File) ReadDir(n int) (out []fs.DirEntry, err error) {
 	if !f.IsDir() {
 		return nil, errors.New("File is not a directory")
@@ -111,7 +111,7 @@ func (f *File) ReadDir(n int) (out []fs.DirEntry, err error) {
 	return
 }
 
-//FS returns the File as a FS.
+// FS returns the File as a FS.
 func (f *File) FS() (*FS, error) {
 	if !f.IsDir() {
 		return nil, errors.New("File is not a directory")
@@ -126,22 +126,22 @@ func (f *File) FS() (*FS, error) {
 	}, nil
 }
 
-//IsDir Yep.
+// IsDir Yep.
 func (f File) IsDir() bool {
 	return f.i.Type == inode.Dir || f.i.Type == inode.EDir
 }
 
-//IsRegular yep.
+// IsRegular yep.
 func (f File) IsRegular() bool {
 	return f.i.Type == inode.Fil || f.i.Type == inode.EFil
 }
 
-//IsSymlink yep.
+// IsSymlink yep.
 func (f File) IsSymlink() bool {
 	return f.i.Type == inode.Sym || f.i.Type == inode.ESym
 }
 
-//SymlinkPath returns the symlink's target path. Is the File isn't a symlink, returns an empty string.
+// SymlinkPath returns the symlink's target path. Is the File isn't a symlink, returns an empty string.
 func (f File) SymlinkPath() string {
 	switch f.i.Type {
 	case inode.Sym:
@@ -159,8 +159,8 @@ func (f File) path() string {
 	return f.parent.path() + "/" + f.e.Name
 }
 
-//GetSymlinkFile returns the File the symlink is pointing to.
-//If not a symlink, or the target is unobtainable (such as it being outside the archive or it's absolute) returns nil
+// GetSymlinkFile returns the File the symlink is pointing to.
+// If not a symlink, or the target is unobtainable (such as it being outside the archive or it's absolute) returns nil
 func (f File) GetSymlinkFile() *File {
 	if !f.IsSymlink() {
 		return nil
@@ -175,7 +175,7 @@ func (f File) GetSymlinkFile() *File {
 	return sym.(*File)
 }
 
-//ExtractionOptions are available options on how to extract.
+// ExtractionOptions are available options on how to extract.
 type ExtractionOptions struct {
 	LogOutput          io.Writer   //Where error log should write. If nil, uses os.Stdout. Has no effect if verbose is false.
 	DereferenceSymlink bool        //Replace symlinks with the target file
@@ -184,21 +184,21 @@ type ExtractionOptions struct {
 	FolderPerm         fs.FileMode //The permissions used when creating the extraction folder
 }
 
-//DefaultOptions is the default ExtractionOptions.
+// DefaultOptions is the default ExtractionOptions.
 func DefaultOptions() ExtractionOptions {
 	return ExtractionOptions{
 		FolderPerm: 0755,
 	}
 }
 
-//ExtractTo extracts the File to the given folder with the default options.
-//If the File is a directory, it instead extracts the directory's contents to the folder.
+// ExtractTo extracts the File to the given folder with the default options.
+// If the File is a directory, it instead extracts the directory's contents to the folder.
 func (f File) ExtractTo(folder string) error {
 	return f.ExtractWithOptions(folder, DefaultOptions())
 }
 
-//ExtractSymlink extracts the File to the folder with the DereferenceSymlink option.
-//If the File is a directory, it instead extracts the directory's contents to the folder.
+// ExtractSymlink extracts the File to the folder with the DereferenceSymlink option.
+// If the File is a directory, it instead extracts the directory's contents to the folder.
 func (f File) ExtractSymlink(folder string) error {
 	return f.ExtractWithOptions(folder, ExtractionOptions{
 		DereferenceSymlink: true,
@@ -206,8 +206,8 @@ func (f File) ExtractSymlink(folder string) error {
 	})
 }
 
-//ExtractWithOptions extracts the File to the given folder with the given ExtrationOptions.
-//If the File is a directory, it instead extracts the directory's contents to the folder.
+// ExtractWithOptions extracts the File to the given folder with the given ExtrationOptions.
+// If the File is a directory, it instead extracts the directory's contents to the folder.
 func (f File) ExtractWithOptions(folder string, op ExtractionOptions) error {
 	if op.Verbose {
 		if op.LogOutput == nil {
@@ -220,13 +220,13 @@ func (f File) ExtractWithOptions(folder string, op ExtractionOptions) error {
 
 func (f File) realExtract(folder string, op ExtractionOptions) error {
 	err := os.MkdirAll(folder, op.FolderPerm)
+	folder = filepath.Clean(folder)
 	if err != nil && !os.IsExist(err) {
 		if op.Verbose {
 			log.Println("Error while creating extraction folder")
 		}
 		return err
 	}
-	folder = filepath.Clean(folder)
 	if f.IsDir() {
 		filFS, _ := f.FS()
 		var ents []directory.Entry

@@ -57,6 +57,21 @@ func preTest(dir string) (fil *os.File, err error) {
 	return
 }
 
+func TestMisc(t *testing.T) {
+	tmpDir := "testing"
+	fil, err := preTest(tmpDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rdr, err := squashfs.NewReader(fil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = rdr
+	// Put testing here
+	t.Fatal("UM")
+}
+
 func BenchmarkRace(b *testing.B) {
 	// tmpDir := b.TempDir()
 	tmpDir := "testing"

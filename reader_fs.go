@@ -12,8 +12,8 @@ import (
 	"github.com/CalebQ42/squashfs/internal/inode"
 )
 
-//FS is a fs.FS representation of a squashfs directory.
-//Implements fs.GlobFS, fs.ReadDirFS, fs.ReadFileFS, fs.StatFS, and fs.SubFS
+// FS is a fs.FS representation of a squashfs directory.
+// Implements fs.GlobFS, fs.ReadDirFS, fs.ReadFileFS, fs.StatFS, and fs.SubFS
 type FS struct {
 	*File
 	e []directory.Entry
@@ -39,8 +39,9 @@ func (r Reader) newFS(e directory.Entry, parent *FS) (*FS, error) {
 	}, nil
 }
 
-//Open opens the file at name. Returns a squashfs.File.
+// Open opens the file at name. Returns a squashfs.File.
 func (f FS) Open(name string) (fs.File, error) {
+	name = filepath.Clean(name)
 	if !fs.ValidPath(name) {
 		return nil, &fs.PathError{
 			Op:   "open",
@@ -48,7 +49,6 @@ func (f FS) Open(name string) (fs.File, error) {
 			Err:  fs.ErrInvalid,
 		}
 	}
-	name = filepath.Clean(name)
 	if name == "." || name == "" {
 		return f.File, nil
 	}
@@ -96,10 +96,11 @@ func (f FS) Open(name string) (fs.File, error) {
 	}
 }
 
-//Glob returns the name of the files at the given pattern.
-//All paths are relative to the FS.
-//Uses filepath.Match to compare names.
+// Glob returns the name of the files at the given pattern.
+// All paths are relative to the FS.
+// Uses filepath.Match to compare names.
 func (f FS) Glob(pattern string) (out []string, err error) {
+	pattern = filepath.Clean(pattern)
 	if !fs.ValidPath(pattern) {
 		return nil, &fs.PathError{
 			Op:   "glob",
@@ -107,7 +108,6 @@ func (f FS) Glob(pattern string) (out []string, err error) {
 			Err:  fs.ErrInvalid,
 		}
 	}
-	pattern = filepath.Clean(pattern)
 	split := strings.Split(pattern, "/")
 	for i := 0; i < len(f.e); i++ {
 		if match, _ := path.Match(split[0], f.e[i].Name); match {
@@ -156,9 +156,10 @@ func (f FS) Glob(pattern string) (out []string, err error) {
 	return
 }
 
-//ReadDir returns all the DirEntry returns all DirEntry's for the directory at name.
-//If name is not a directory, returns an error.
+// ReadDir returns all the DirEntry returns all DirEntry's for the directory at name.
+// If name is not a directory, returns an error.
 func (f FS) ReadDir(name string) ([]fs.DirEntry, error) {
+	name = filepath.Clean(name)
 	if !fs.ValidPath(name) {
 		return nil, &fs.PathError{
 			Op:   "readdir",
@@ -166,7 +167,6 @@ func (f FS) ReadDir(name string) ([]fs.DirEntry, error) {
 			Err:  fs.ErrInvalid,
 		}
 	}
-	name = filepath.Clean(name)
 	if name == "." || name == "" {
 		return f.File.ReadDir(-1)
 	}
@@ -234,7 +234,7 @@ func (f FS) ReadDir(name string) ([]fs.DirEntry, error) {
 	}
 }
 
-//ReadFile returns the data (in []byte) for the file at name.
+// ReadFile returns the data (in []byte) for the file at name.
 func (f FS) ReadFile(name string) ([]byte, error) {
 	fil, err := f.Open(name)
 	if err != nil {
@@ -256,8 +256,9 @@ func (f FS) ReadFile(name string) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-//Stat returns the fs.FileInfo for the file at name.
+// Stat returns the fs.FileInfo for the file at name.
 func (f FS) Stat(name string) (fs.FileInfo, error) {
+	name = filepath.Clean(strings.TrimPrefix(name, "/"))
 	if !fs.ValidPath(name) {
 		return nil, &fs.PathError{
 			Op:   "stat",
@@ -265,7 +266,6 @@ func (f FS) Stat(name string) (fs.FileInfo, error) {
 			Err:  fs.ErrInvalid,
 		}
 	}
-	name = filepath.Clean(strings.TrimPrefix(name, "/"))
 	if name == "." || name == "" {
 		return f.File.Stat()
 	}
@@ -325,8 +325,9 @@ func (f FS) Stat(name string) (fs.FileInfo, error) {
 	}
 }
 
-//Sub returns the FS at dir
+// Sub returns the FS at dir
 func (f FS) Sub(dir string) (fs.FS, error) {
+	dir = filepath.Clean(dir)
 	if !fs.ValidPath(dir) {
 		return nil, &fs.PathError{
 			Op:   "sub",
@@ -334,7 +335,6 @@ func (f FS) Sub(dir string) (fs.FS, error) {
 			Err:  fs.ErrInvalid,
 		}
 	}
-	dir = filepath.Clean(dir)
 	if dir == "." || dir == "" {
 		return f, nil
 	}
