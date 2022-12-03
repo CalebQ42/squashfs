@@ -39,8 +39,8 @@ func (r Reader) newFS(e directory.Entry, parent *FS) (*FS, error) {
 	}, nil
 }
 
-// Open opens the file at name. Returns a squashfs.File.
-func (f FS) Open(name string) (fs.File, error) {
+// Opens the file at name. Returns a squashfs.File.
+func (f FS) OpenFile(name string) (*File, error) {
 	name = filepath.Clean(name)
 	if !fs.ValidPath(name) {
 		return nil, &fs.PathError{
@@ -73,7 +73,7 @@ func (f FS) Open(name string) (fs.File, error) {
 					Err:  err,
 				}
 			}
-			out, err := newFS.Open(strings.Join(split[1:], "/"))
+			out, err := newFS.OpenFile(strings.Join(split[1:], "/"))
 			if err != nil {
 				err.(*fs.PathError).Path = name
 			}
@@ -94,6 +94,11 @@ func (f FS) Open(name string) (fs.File, error) {
 		Path: name,
 		Err:  fs.ErrNotExist,
 	}
+}
+
+// Opens the file at name. Returns a io/fs.File.
+func (f FS) Open(name string) (fs.File, error) {
+	return f.OpenFile(name)
 }
 
 // Glob returns the name of the files at the given pattern.

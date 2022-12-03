@@ -79,6 +79,91 @@ func (r FullReader) process(index int, offset int64, out chan outDat) {
 	}
 }
 
+func (r FullReader) ReadAt(p []byte, off int64) (n int, err error) {
+	out := make(chan outDat, len(r.sizes))
+	offset := r.start
+	num := len(r.sizes)
+	start := off / int64(r.blockSize)
+	end := len(p) / int(r.blockSize)
+	if end%int(r.blockSize) > 0 {
+		end++
+	}
+	if end > len(r.sizes) {
+		if r.fragRdr != nil {
+			end = len(r.sizes)
+		} else {
+			end = len(r.sizes) + 1
+		}
+	}
+	for i := 0; i < num; i++ {
+		if i < int(start) || i > end {
+			offset += uint64(realSize(r.sizes[i]))
+			continue
+		}
+		if i == num-1 && r.fragRdr != nil {
+			go func() {
+				rdr, e := r.fragRdr()
+				if err != nil {
+					out <- outDat{
+						i:   num - 1,
+						err: e,
+					}
+					return
+				}
+				dat, e := io.ReadAll(rdr)
+				out <- outDat{
+					i:    num - 1,
+					err:  e,
+					data: dat,
+				}
+				if clr, ok := rdr.(io.Closer); ok {
+					clr.Close()
+				}
+			}()
+			continue
+		}
+		go r.process(i, int64(offset), out)
+		offset += uint64(realSize(r.sizes[i]))
+	}
+	cache := make(map[int]outDat)
+	for cur := start; cur < int64(end); {
+		dat := <-out
+		if dat.err != nil {
+			err = dat.err
+			return
+		}
+		if dat.i != int(cur) {
+			cache[dat.i] = dat
+			continue
+		}
+		if cur == start {
+			dat.data = dat.data[off%int64(r.blockSize):]
+		}
+		for i := range dat.data {
+			p[n+i] = dat.data[i]
+		}
+		n += len(dat.data)
+		cur++
+		var ok bool
+		for {
+			dat, ok = cache[int(cur)]
+			if !ok {
+				break
+			}
+			for i := range dat.data {
+				p[n+i] = dat.data[i]
+			}
+			n += len(dat.data)
+			cur++
+			delete(cache, int(cur))
+		}
+	}
+	if n < len(p) {
+		err = io.EOF
+	}
+	return
+}
+
 func (r FullReader) WriteTo(w io.Writer) (n int64, err error) {
 	out := make(chan outDat, len(r.sizes))
 	offset := r.start
