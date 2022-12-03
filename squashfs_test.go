@@ -185,3 +185,23 @@ func TestSingleFile(t *testing.T) {
 	}
 	t.Fatal("HI")
 }
+
+func TestFuse(t *testing.T) {
+	tmpDir := "testing"
+	fil, err := preTest(tmpDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.Remove(filepath.Base(filePath))
+	rdr, err := squashfs.NewReader(fil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	con, err := rdr.Mount("testing/fuseTest")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer con.Close()
+	<-con.Ready
+	t.Fatal("testing")
+}

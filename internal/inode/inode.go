@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"io"
+	"io/fs"
 	"strconv"
 )
 
@@ -76,4 +77,67 @@ func Read(r io.Reader, blockSize uint32) (i Inode, err error) {
 		return i, errors.New("invalid inode type " + strconv.Itoa(int(i.Type)))
 	}
 	return
+}
+
+func (i Inode) Mode() (out fs.FileMode) {
+	out = fs.FileMode(i.Perm)
+	switch i.Data.(type) {
+	case Directory:
+		out |= fs.ModeDir
+	case EDirectory:
+		out |= fs.ModeDir
+	case Symlink:
+		out |= fs.ModeSymlink
+	case ESymlink:
+		out |= fs.ModeSymlink
+	case Device:
+		out |= fs.ModeDevice
+	case EDevice:
+		out |= fs.ModeDevice
+	case IPC:
+		out |= fs.ModeNamedPipe
+	case EIPC:
+		out |= fs.ModeNamedPipe
+	}
+	return
+}
+
+func (i Inode) LinkCount() uint32 {
+	switch i.Data.(type) {
+	case EFile:
+		return i.Data.(EFile).LinkCount
+	case Directory:
+		return i.Data.(Directory).LinkCount
+	case EDirectory:
+		return i.Data.(EDirectory).LinkCount
+	case Device:
+		return i.Data.(Device).LinkCount
+	case EDevice:
+		return i.Data.(EDevice).LinkCount
+	case IPC:
+		return i.Data.(IPC).LinkCount
+	case EIPC:
+		return i.Data.(EIPC).LinkCount
+	case Symlink:
+		return i.Data.(Symlink).LinkCount
+	case ESymlink:
+		return i.Data.(ESymlink).LinkCount
+	default:
+		return 0
+	}
+}
+
+func (i Inode) Size() uint64 {
+	switch i.Data.(type) {
+	case File:
+		return uint64(i.Data.(File).Size)
+	case EFile:
+		return i.Data.(EFile).Size
+	// case Directory:
+	// 	return uint64(i.Data.(Directory).Size)
+	// case EDirectory:
+	// 	return uint64(i.Data.(EDirectory).Size)
+	default:
+		return 0
+	}
 }

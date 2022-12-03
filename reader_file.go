@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/CalebQ42/squashfs/internal/data"
 	"github.com/CalebQ42/squashfs/internal/directory"
 	"github.com/CalebQ42/squashfs/internal/inode"
 )
@@ -18,7 +19,7 @@ import (
 type File struct {
 	i        inode.Inode
 	rdr      io.Reader
-	fullRdr  io.WriterTo
+	fullRdr  *data.FullReader
 	r        *Reader
 	parent   *FS
 	e        directory.Entry
@@ -35,7 +36,7 @@ func (r Reader) newFile(en directory.Entry, parent *FS) (*File, error) {
 		return nil, err
 	}
 	var rdr io.Reader
-	var full io.WriterTo
+	var full *data.FullReader
 	if i.Type == inode.Fil || i.Type == inode.EFil {
 		full, rdr, err = r.getReaders(i)
 		if err != nil {
@@ -66,6 +67,10 @@ func (f File) Read(p []byte) (int, error) {
 		return 0, fs.ErrClosed
 	}
 	return f.rdr.Read(p)
+}
+
+func (f File) ReadAt(p []byte, off int64) (int, error) {
+	return f.fullRdr.ReadAt(p, off)
 }
 
 // WriteTo writes all data from the file to the writer. This is multi-threaded.

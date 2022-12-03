@@ -29,6 +29,7 @@ type Entry struct {
 	BlockStart uint32
 	Type       uint16
 	Offset     uint16
+	Num        uint32
 }
 
 func readEntry(r io.Reader) (e entry, err error) {
@@ -72,6 +73,7 @@ func ReadEntries(rdr io.Reader, size uint32) (e []Entry, err error) {
 				BlockStart: h.InodeStart,
 				Type:       en.Type,
 				Offset:     en.Offset,
+				Num:        h.Num + uint32(en.NumOffset),
 			})
 		}
 	}
