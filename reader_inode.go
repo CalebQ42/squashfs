@@ -70,7 +70,7 @@ func (r Reader) getReaders(i inode.Inode) (full *data.FullReader, rdr *data.Read
 			}
 			fragRdr = io.LimitReader(fragRdr, int64(fragSize))
 			return fragRdr, nil
-		})
+		}, fragSize)
 		var fragRdr io.Reader
 		fragRdr, err = r.fragReader(fragInd)
 		if err != nil {

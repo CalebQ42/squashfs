@@ -2,6 +2,7 @@ package data
 
 import (
 	"io"
+	"sync"
 
 	"github.com/CalebQ42/squashfs/internal/decompress"
 	"github.com/CalebQ42/squashfs/internal/toreader"
@@ -26,9 +27,9 @@ func NewFullReader(r io.ReaderAt, start uint64, d decompress.Decompressor, block
 	}
 }
 
-func (r *FullReader) AddFragment(rdr func() (io.Reader, error)) {
+func (r *FullReader) AddFragment(rdr func() (io.Reader, error), size uint32) {
 	r.fragRdr = rdr
-	r.sizes = append(r.sizes, 0)
+	r.sizes = append(r.sizes, size)
 }
 
 type outDat struct {
@@ -37,50 +38,51 @@ type outDat struct {
 	i    int
 }
 
-func (r FullReader) process(index int, offset int64, out chan outDat) {
-	var err error
-	var dat []byte
-	var rdr io.ReadCloser
+func (r FullReader) process(index int, offset int64, od *outDat, out chan *outDat) {
+	defer func() {
+		out <- od
+	}()
+	od.i = index
 	size := realSize(r.sizes[index])
 	if size == 0 {
-		out <- outDat{
-			i:    index,
-			err:  nil,
-			data: make([]byte, r.blockSize),
-		}
+		od.err = nil
+		od.data = make([]byte, r.blockSize)
 		return
 	}
 	// rdr := io.LimitReader(toreader.NewReader(r.r, offset), int64(size))
 	if size == r.sizes[index] {
 		//Special workaround for zstd for increased performancce.
 		if zstd, ok := r.d.(*decompress.Zstd); ok {
-			dat = make([]byte, size)
-			_, err = r.r.ReadAt(dat, offset)
-			if err == nil {
-				dat, err = zstd.Decode(dat)
+			od.data = make([]byte, size)
+			_, od.err = r.r.ReadAt(od.data, offset)
+			if od.err == nil {
+				od.data, od.err = zstd.Decode(od.data)
 			}
 		} else {
-			rdr, err = r.d.Reader(io.LimitReader(toreader.NewReader(r.r, offset), int64(size)))
-			if err == nil {
-				dat, err = io.ReadAll(rdr)
+			var rdr io.ReadCloser
+			rdr, od.err = r.d.Reader(io.LimitReader(toreader.NewReader(r.r, offset), int64(size)))
+			if od.err != nil {
+				return
 			}
+			od.data = make([]byte, r.blockSize)
+			var read int
+			read, od.err = rdr.Read(od.data)
+			od.data = od.data[:read]
+			rdr.Close()
 		}
 	} else {
-		dat = make([]byte, size)
-		_, err = r.r.ReadAt(dat, offset)
-	}
-	out <- outDat{
-		i:    index,
-		err:  err,
-		data: dat,
-	}
-	if clr, ok := rdr.(io.Closer); ok {
-		clr.Close()
+		od.data = make([]byte, size)
+		_, od.err = r.r.ReadAt(od.data, offset)
 	}
 }
 
 func (r FullReader) ReadAt(p []byte, off int64) (n int, err error) {
-	out := make(chan outDat, len(r.sizes))
+	pol := &sync.Pool{
+		New: func() any {
+			return new(outDat)
+		},
+	}
+	out := make(chan *outDat, len(r.sizes))
 	offset := r.start
 	num := len(r.sizes)
 	start := off / int64(r.blockSize)
@@ -100,40 +102,42 @@ func (r FullReader) ReadAt(p []byte, off int64) (n int, err error) {
 			offset += uint64(realSize(r.sizes[i]))
 			continue
 		}
+		od := pol.Get().(*outDat)
 		if i == num-1 && r.fragRdr != nil {
 			go func() {
+				defer func() {
+					out <- od
+				}()
 				rdr, e := r.fragRdr()
 				if err != nil {
-					out <- outDat{
-						i:   num - 1,
-						err: e,
-					}
+					od.i = num - 1
+					od.err = e
 					return
 				}
-				dat, e := io.ReadAll(rdr)
-				out <- outDat{
-					i:    num - 1,
-					err:  e,
-					data: dat,
-				}
+				od.data = make([]byte, r.sizes[num-1])
+				_, e = rdr.Read(od.data)
+				od.i = num - 1
+				od.err = e
 				if clr, ok := rdr.(io.Closer); ok {
 					clr.Close()
 				}
 			}()
 			continue
 		}
-		go r.process(i, int64(offset), out)
+		go r.process(i, int64(offset), od, out)
 		offset += uint64(realSize(r.sizes[i]))
 	}
+	cur := start
 	cache := make(map[int]outDat)
-	for cur := start; cur < int64(end); {
-		dat := <-out
+	for dat := range out {
 		if dat.err != nil {
 			err = dat.err
+			pol.Put(dat)
 			return
 		}
 		if dat.i != int(cur) {
-			cache[dat.i] = dat
+			cache[dat.i] = *dat
+			pol.Put(dat)
 			continue
 		}
 		if cur == start {
@@ -144,16 +148,18 @@ func (r FullReader) ReadAt(p []byte, off int64) (n int, err error) {
 		}
 		n += len(dat.data)
 		cur++
+		pol.Put(dat)
 		var ok bool
+		var curDat outDat
 		for {
-			dat, ok = cache[int(cur)]
+			curDat, ok = cache[int(cur)]
 			if !ok {
 				break
 			}
-			for i := range dat.data {
-				p[n+i] = dat.data[i]
+			for i := range curDat.data {
+				p[n+i] = curDat.data[i]
 			}
-			n += len(dat.data)
+			n += len(curDat.data)
 			cur++
 			delete(cache, int(cur))
 		}
@@ -165,60 +171,70 @@ func (r FullReader) ReadAt(p []byte, off int64) (n int, err error) {
 }
 
 func (r FullReader) WriteTo(w io.Writer) (n int64, err error) {
-	out := make(chan outDat, len(r.sizes))
+	pol := &sync.Pool{
+		New: func() any {
+			return new(outDat)
+		},
+	}
+	out := make(chan *outDat, len(r.sizes))
 	offset := r.start
 	num := len(r.sizes)
 	for i := 0; i < num; i++ {
+		od := pol.Get().(*outDat)
 		if i == num-1 && r.fragRdr != nil {
 			go func() {
+				defer func() {
+					out <- od
+				}()
 				rdr, e := r.fragRdr()
 				if err != nil {
-					out <- outDat{
-						i:   num - 1,
-						err: e,
-					}
+					od.i = num - 1
+					od.err = e
 					return
 				}
-				dat, e := io.ReadAll(rdr)
-				out <- outDat{
-					i:    num - 1,
-					err:  e,
-					data: dat,
-				}
+				buf := make([]byte, r.sizes[num-1])
+				_, e = rdr.Read(buf)
+				od.i = num - 1
+				od.err = e
+				od.data = buf
 				if clr, ok := rdr.(io.Closer); ok {
 					clr.Close()
 				}
 			}()
 			continue
 		}
-		go r.process(i, int64(offset), out)
+		go r.process(i, int64(offset), od, out)
 		offset += uint64(realSize(r.sizes[i]))
 	}
+	var cur int
 	cache := make(map[int]outDat)
 	var tmpN int
-	for cur := 0; cur < num; {
-		dat := <-out
+	for dat := range out {
 		if dat.err != nil {
 			err = dat.err
+			pol.Put(dat)
 			return
 		}
 		if dat.i != cur {
-			cache[dat.i] = dat
+			cache[dat.i] = *dat
+			pol.Put(dat)
 			continue
 		}
 		tmpN, err = w.Write(dat.data)
 		n += int64(tmpN)
+		pol.Put(dat)
 		if err != nil {
 			return
 		}
 		cur++
 		var ok bool
+		var curDat outDat
 		for {
-			dat, ok = cache[cur]
+			curDat, ok = cache[cur]
 			if !ok {
 				break
 			}
-			tmpN, err = w.Write(dat.data)
+			tmpN, err = w.Write(curDat.data)
 			n += int64(tmpN)
 			if err != nil {
 				return

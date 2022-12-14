@@ -73,7 +73,6 @@ func TestMisc(t *testing.T) {
 }
 
 func BenchmarkRace(b *testing.B) {
-	// tmpDir := b.TempDir()
 	tmpDir := "testing"
 	fil, err := preTest(tmpDir)
 	if err != nil {
