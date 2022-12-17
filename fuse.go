@@ -10,12 +10,14 @@ import (
 	"github.com/CalebQ42/squashfs/internal/inode"
 )
 
+// Creates a fuse mount, then mounts the archive on a seperate goroutine.
+// If waiting for the mount to end, simply do <-con.Ready.
 func (r *Reader) Mount(mountpoint string) (con *fuse.Conn, err error) {
 	con, err = fuse.Mount(mountpoint, fuse.ReadOnly())
 	if err != nil {
 		return
 	}
-	err = fs.Serve(con, &squashFuse{r: r})
+	go fs.Serve(con, &squashFuse{r: r})
 	return
 }
 
