@@ -26,7 +26,7 @@ func realSize(siz uint16) uint16 {
 }
 
 func (r *Reader) advance() (err error) {
-	if !r.d.Resetable() {
+	if _, ok := r.d.(decompress.Resetable); !ok {
 		if clr, ok := r.cur.(io.Closer); ok {
 			clr.Close()
 		}
@@ -39,14 +39,14 @@ func (r *Reader) advance() (err error) {
 	size := realSize(raw)
 	r.cur = io.LimitReader(r.master, int64(size))
 	if size == raw {
-		if r.d.Resetable() {
+		if rs, ok := r.d.(decompress.Resetable); ok {
 			if r.comRdr == nil {
 				r.cur, err = r.d.Reader(r.cur)
 				if err != nil {
 					return
 				}
 			} else {
-				err = r.d.Reset(r.comRdr, r.cur)
+				err = rs.Reset(r.comRdr, r.cur)
 				r.cur = r.comRdr
 			}
 		} else {

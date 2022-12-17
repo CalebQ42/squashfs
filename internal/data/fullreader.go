@@ -49,27 +49,26 @@ func (r FullReader) process(index int, offset int64, od *outDat, out chan *outDa
 		od.data = make([]byte, r.blockSize)
 		return
 	}
-	// rdr := io.LimitReader(toreader.NewReader(r.r, offset), int64(size))
 	if size == r.sizes[index] {
-		//Special workaround for zstd for increased performancce.
-		if zstd, ok := r.d.(*decompress.Zstd); ok {
-			od.data = make([]byte, size)
-			_, od.err = r.r.ReadAt(od.data, offset)
-			if od.err == nil {
-				od.data, od.err = zstd.Decode(od.data)
-			}
-		} else {
-			var rdr io.ReadCloser
-			rdr, od.err = r.d.Reader(io.LimitReader(toreader.NewReader(r.r, offset), int64(size)))
+		if dec, ok := r.d.(decompress.Decoder); ok {
+			dat := make([]byte, size)
+			_, od.err = r.r.ReadAt(dat, offset)
 			if od.err != nil {
 				return
 			}
-			od.data = make([]byte, r.blockSize)
-			var read int
-			read, od.err = rdr.Read(od.data)
-			od.data = od.data[:read]
-			rdr.Close()
+			od.data, od.err = dec.Decode(dat, int(r.blockSize))
+			return
 		}
+		var rdr io.ReadCloser
+		rdr, od.err = r.d.Reader(io.LimitReader(toreader.NewReader(r.r, offset), int64(size)))
+		if od.err != nil {
+			return
+		}
+		od.data = make([]byte, r.blockSize)
+		var read int
+		read, od.err = rdr.Read(od.data)
+		od.data = od.data[:read]
+		rdr.Close()
 	} else {
 		od.data = make([]byte, size)
 		_, od.err = r.r.ReadAt(od.data, offset)
@@ -206,40 +205,59 @@ func (r FullReader) WriteTo(w io.Writer) (n int64, err error) {
 		go r.process(i, int64(offset), od, out)
 		offset += uint64(realSize(r.sizes[i]))
 	}
-	var cur int
-	cache := make(map[int]outDat)
-	var tmpN int
-	for dat := range out {
-		if dat.err != nil {
-			err = dat.err
-			pol.Put(dat)
-			return
-		}
-		if dat.i != cur {
-			cache[dat.i] = *dat
-			pol.Put(dat)
-			continue
-		}
-		tmpN, err = w.Write(dat.data)
-		n += int64(tmpN)
-		pol.Put(dat)
-		if err != nil {
-			return
-		}
-		cur++
-		var ok bool
-		var curDat outDat
-		for {
-			curDat, ok = cache[cur]
-			if !ok {
-				break
+	wt, ok := w.(io.WriterAt)
+	if !ok {
+		var cur int
+		cache := make(map[int]outDat)
+		var tmpN int
+		var dat *outDat
+		for cur < len(r.sizes) {
+			dat = <-out
+			defer pol.Put(dat)
+			if dat.err != nil {
+				err = dat.err
+				return
 			}
-			tmpN, err = w.Write(curDat.data)
+			if dat.i != cur {
+				cache[dat.i] = *dat
+				continue
+			}
+			tmpN, err = w.Write(dat.data)
 			n += int64(tmpN)
 			if err != nil {
 				return
 			}
 			cur++
+			var ok bool
+			var curDat outDat
+			for {
+				curDat, ok = cache[cur]
+				if !ok {
+					break
+				}
+				tmpN, err = w.Write(curDat.data)
+				n += int64(tmpN)
+				if err != nil {
+					return
+				}
+				cur++
+			}
+		}
+	} else {
+		var done int
+		var dat *outDat
+		for done < len(r.sizes) {
+			dat = <-out
+			defer pol.Put(dat)
+			if dat.err != nil {
+				err = dat.err
+				return
+			}
+			_, err = wt.WriteAt(dat.data, int64(dat.i*int(r.blockSize)))
+			if err != nil {
+				return
+			}
+			done++
 		}
 	}
 	return

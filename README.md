@@ -17,6 +17,4 @@ Thanks also to [distri's squashfs library](https://github.com/distr1/distri/tree
 
 ## Performance
 
-This library, decompressing the Firefox AppImage and using go tests, takes about twice as long as `unsquashfs` on my quad core laptop. (~1 second with the library and about half a second with `unsquashfs`).
-
-**My recents tests have shown the Firefox AppImage might be an outlier and this library might be considerably slower (4x ~ 6x time slower then `unsquashfs`)**
+Testing on a zstd compressed file, my library is anywhere from 5x ~ 7x slower then `unsquashfs`

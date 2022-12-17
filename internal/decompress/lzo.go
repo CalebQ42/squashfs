@@ -16,7 +16,3 @@ func (l Lzo) Reader(r io.Reader) (io.ReadCloser, error) {
 	}
 	return io.NopCloser(bytes.NewReader(cache)), nil
 }
-
-func (l Lzo) Resetable() bool { return false }
-
-func (l Lzo) Reset(old, src io.Reader) error { return ErrNotResetable }

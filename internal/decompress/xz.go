@@ -13,8 +13,6 @@ func (x Xz) Reader(r io.Reader) (io.ReadCloser, error) {
 	return io.NopCloser(rdr), err
 }
 
-func (x Xz) Resetable() bool { return true }
-
 func (x Xz) Reset(old, src io.Reader) error {
 	return old.(*xz.Reader).Reset(src)
 }

@@ -15,15 +15,13 @@ func (z Zstd) Reader(src io.Reader) (io.ReadCloser, error) {
 	return r.IOReadCloser(), err
 }
 
-func (z Zstd) Resetable() bool { return true }
-
 func (z Zstd) Reset(old, src io.Reader) error {
 	return old.(*zstd.Decoder).Reset(src)
 }
 
-func (z *Zstd) Decode(in []byte) (out []byte, err error) {
+func (z Zstd) Decode(in []byte, outSize int) ([]byte, error) {
 	if z.writeToReader == nil {
 		z.writeToReader, _ = zstd.NewReader(nil)
 	}
-	return z.writeToReader.DecodeAll(in, nil)
+	return z.writeToReader.DecodeAll(in, make([]byte, outSize))
 }

@@ -53,14 +53,14 @@ func (r *Reader) advance() (err error) {
 		} else {
 			r.cur = io.LimitReader(r.master, int64(size))
 			if size == r.blockSizes[0] {
-				if r.d.Resetable() {
+				if rs, ok := r.d.(decompress.Resetable); ok {
 					if r.comRdr == nil {
 						r.cur, err = r.d.Reader(r.cur)
 						if err != nil {
 							return
 						}
 					} else {
-						err = r.d.Reset(r.comRdr, r.cur)
+						err = rs.Reset(r.comRdr, r.cur)
 						r.cur = r.comRdr
 					}
 				} else {
