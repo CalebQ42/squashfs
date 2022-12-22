@@ -6,7 +6,8 @@ type ReaderAt struct {
 	d []byte
 }
 
-func NewReaderAt(r io.Reader) (ra ReaderAt, err error) {
+func NewReaderAt(r io.Reader) (ra *ReaderAt, err error) {
+	ra = new(ReaderAt)
 	ra.d, err = io.ReadAll(r)
 	return
 }

@@ -40,6 +40,10 @@ const (
 	ZSTDCompression
 )
 
+func NewReaderAtOffset(r io.ReaderAt, off int64) (*Reader, error) {
+	return NewReader(toreader.NewOffsetReader(r, off))
+}
+
 // Creates a new squashfs.Reader from the given io.Reader. NOTE: All data from the io.Reader will be read and stored in memory.
 func NewReaderFromReader(r io.Reader) (*Reader, error) {
 	rdr, err := toreader.NewReaderAt(r)
