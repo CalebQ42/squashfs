@@ -11,10 +11,8 @@ import (
 	"github.com/CalebQ42/squashfs/internal/inode"
 )
 
-// Mounts the archive to the given mountpoint using fuse3.
-// Blocks until the arhive is unmounted.
-// Hightly suggested to run in a goroutine.
-// Will take a moment before MountWait and Unmount will work correctly.
+// Mounts the archive to the given mountpoint using fuse3. Non-blocking.
+// If Unmount does not get called, the mount point must be unmounted using umount before the directory can be used again.
 func (r *Reader) Mount(mountpoint string) (err error) {
 	if r.con != nil {
 		return errors.New("squashfs archive already mounted")
@@ -23,14 +21,19 @@ func (r *Reader) Mount(mountpoint string) (err error) {
 	if err != nil {
 		return
 	}
-	err = fs.Serve(r.con, &squashFuse{r: r})
+	<-r.con.Ready
+	r.mountDone = make(chan struct{})
+	go func() {
+		fs.Serve(r.con, &squashFuse{r: r})
+		close(r.mountDone)
+	}()
 	return
 }
 
 // Blocks until the mount ends.
 func (r *Reader) MountWait() {
-	if r.con != nil {
-		<-r.con.Ready
+	if r.mountDone != nil {
+		<-r.mountDone
 	}
 }
 

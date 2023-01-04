@@ -18,6 +18,7 @@ import (
 type Reader struct {
 	*FS
 	con         *fuse.Conn
+	mountDone   chan struct{}
 	d           decompress.Decompressor
 	r           io.ReaderAt
 	fragEntries []fragEntry
