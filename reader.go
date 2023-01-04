@@ -7,6 +7,7 @@ import (
 	"math"
 	"time"
 
+	"github.com/CalebQ42/fuse"
 	"github.com/CalebQ42/squashfs/internal/decompress"
 	"github.com/CalebQ42/squashfs/internal/directory"
 	"github.com/CalebQ42/squashfs/internal/inode"
@@ -16,6 +17,7 @@ import (
 
 type Reader struct {
 	*FS
+	con         *fuse.Conn
 	d           decompress.Decompressor
 	r           io.ReaderAt
 	fragEntries []fragEntry

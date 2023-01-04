@@ -196,11 +196,11 @@ func TestFuse(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	con, err := rdr.Mount("testing/fuseTest")
+	err = rdr.Mount("testing/fuseTest")
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer con.Close()
-	<-con.Ready
+	defer rdr.Unmount()
+	rdr.MountWait()
 	t.Fatal("testing")
 }

@@ -3,6 +3,7 @@ package squashfs
 import (
 	"bytes"
 	"context"
+	"errors"
 	"io"
 
 	"github.com/CalebQ42/fuse"
@@ -10,15 +11,36 @@ import (
 	"github.com/CalebQ42/squashfs/internal/inode"
 )
 
-// Creates a fuse mount, then mounts the archive on a seperate goroutine.
-// If waiting for the mount to end, simply do <-con.Ready.
-func (r *Reader) Mount(mountpoint string) (con *fuse.Conn, err error) {
-	con, err = fuse.Mount(mountpoint, fuse.ReadOnly())
+// Mounts the archive to the given mountpoint using fuse3.
+// Blocks until the arhive is unmounted.
+// Hightly suggested to run in a goroutine.
+// Will take a moment before MountWait and Unmount will work correctly.
+func (r *Reader) Mount(mountpoint string) (err error) {
+	if r.con != nil {
+		return errors.New("squashfs archive already mounted")
+	}
+	r.con, err = fuse.Mount(mountpoint, fuse.ReadOnly())
 	if err != nil {
 		return
 	}
-	go fs.Serve(con, &squashFuse{r: r})
+	err = fs.Serve(r.con, &squashFuse{r: r})
 	return
+}
+
+// Blocks until the mount ends.
+func (r *Reader) MountWait() {
+	if r.con != nil {
+		<-r.con.Ready
+	}
+}
+
+// Unmounts the archive.
+func (r *Reader) Unmount() error {
+	if r.con != nil {
+		defer func() { r.con = nil }()
+		return r.con.Close()
+	}
+	return errors.New("squashfs archive is not mounted")
 }
 
 type squashFuse struct {
