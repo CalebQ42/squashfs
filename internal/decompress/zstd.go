@@ -19,9 +19,9 @@ func (z Zstd) Reset(old, src io.Reader) error {
 	return old.(*zstd.Decoder).Reset(src)
 }
 
-func (z Zstd) Decode(in []byte, outSize int) ([]byte, error) {
+func (z Zstd) Decode(in []byte) ([]byte, error) {
 	if z.writeToReader == nil {
 		z.writeToReader, _ = zstd.NewReader(nil)
 	}
-	return z.writeToReader.DecodeAll(in, make([]byte, outSize))
+	return z.writeToReader.DecodeAll(in, nil)
 }

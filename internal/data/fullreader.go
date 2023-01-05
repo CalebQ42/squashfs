@@ -56,7 +56,7 @@ func (r FullReader) process(index int, offset int64, out chan outDat) {
 			dat = make([]byte, size)
 			_, err = r.r.ReadAt(dat, offset)
 			if err == nil {
-				dat, err = dec.Decode(dat, int(r.blockSize))
+				dat, err = dec.Decode(dat)
 			}
 		} else {
 			rdr, err = r.d.Reader(io.LimitReader(toreader.NewReader(r.r, offset), int64(size)))

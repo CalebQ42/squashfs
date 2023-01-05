@@ -18,5 +18,5 @@ type Resetable interface {
 
 type Decoder interface {
 	//Decodes a chunk of data all at once.
-	Decode(in []byte, outSize int) ([]byte, error)
+	Decode(in []byte) ([]byte, error)
 }
