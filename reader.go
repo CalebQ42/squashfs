@@ -13,12 +13,15 @@ import (
 	"github.com/CalebQ42/squashfs/internal/inode"
 	"github.com/CalebQ42/squashfs/internal/metadata"
 	"github.com/CalebQ42/squashfs/internal/toreader"
+	fuse2 "github.com/seaweedfs/fuse"
 )
 
 type Reader struct {
 	*FS
 	con         *fuse.Conn
+	con2        *fuse2.Conn
 	mountDone   chan struct{}
+	mount2Done  chan struct{}
 	d           decompress.Decompressor
 	r           io.ReaderAt
 	fragEntries []fragEntry

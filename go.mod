@@ -11,4 +11,7 @@ require (
 	github.com/ulikunitz/xz v0.5.10
 )
 
-require golang.org/x/sys v0.2.0 // indirect
+require (
+	github.com/seaweedfs/fuse v1.2.2
+	golang.org/x/sys v0.2.0 // indirect
+)

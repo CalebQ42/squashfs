@@ -24,7 +24,7 @@ func (r *Reader) Mount(mountpoint string) (err error) {
 	<-r.con.Ready
 	r.mountDone = make(chan struct{})
 	go func() {
-		fs.Serve(r.con, &SquashFuse{r: r})
+		fs.Serve(r.con, squashFuse{r: r})
 		close(r.mountDone)
 	}()
 	return
@@ -46,16 +46,11 @@ func (r *Reader) Unmount() error {
 	return errors.New("squashfs archive is not mounted")
 }
 
-func (r *Reader) SquashFuse() SquashFuse {
-	return SquashFuse{r: r}
-}
-
-// A wrapper around squash.Reader that implements fuse/fs.FS
-type SquashFuse struct {
+type squashFuse struct {
 	r *Reader
 }
 
-func (s SquashFuse) Root() (fs.Node, error) {
+func (s squashFuse) Root() (fs.Node, error) {
 	return fileNode{File: s.r.FS.File}, nil
 }
 
@@ -94,7 +89,7 @@ func (f fileNode) Lookup(ctx context.Context, name string) (fs.Node, error) {
 	if err != nil {
 		return nil, fuse.ENOENT
 	}
-	return &fileNode{File: ret}, nil
+	return fileNode{File: ret}, nil
 }
 
 func (f fileNode) ReadAll(ctx context.Context) ([]byte, error) {
