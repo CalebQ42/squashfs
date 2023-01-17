@@ -24,7 +24,7 @@ func (r *Reader) Mount(mountpoint string) (err error) {
 	<-r.con.Ready
 	r.mountDone = make(chan struct{})
 	go func() {
-		fs.Serve(r.con, &squashFuse{r: r})
+		fs.Serve(r.con, &SquashFuse{r: r})
 		close(r.mountDone)
 	}()
 	return
@@ -46,19 +46,24 @@ func (r *Reader) Unmount() error {
 	return errors.New("squashfs archive is not mounted")
 }
 
-type squashFuse struct {
+func (r *Reader) SquashFuse() SquashFuse {
+	return SquashFuse{r: r}
+}
+
+// A wrapper around squash.Reader that implements fuse/fs.FS
+type SquashFuse struct {
 	r *Reader
 }
 
-func (s *squashFuse) Root() (fs.Node, error) {
-	return &fileNode{File: s.r.FS.File}, nil
+func (s SquashFuse) Root() (fs.Node, error) {
+	return fileNode{File: s.r.FS.File}, nil
 }
 
 type fileNode struct {
 	*File
 }
 
-func (f *fileNode) Attr(ctx context.Context, attr *fuse.Attr) error {
+func (f fileNode) Attr(ctx context.Context, attr *fuse.Attr) error {
 	attr.Blocks = f.r.s.Size / 512
 	if f.r.s.Size%512 > 0 {
 		attr.Blocks++
@@ -72,15 +77,15 @@ func (f *fileNode) Attr(ctx context.Context, attr *fuse.Attr) error {
 	return nil
 }
 
-func (f *fileNode) Id() uint64 {
+func (f fileNode) Id() uint64 {
 	return uint64(f.i.Num)
 }
 
-func (f *fileNode) Readlink(ctx context.Context, req *fuse.ReadlinkRequest) (string, error) {
+func (f fileNode) Readlink(ctx context.Context, req *fuse.ReadlinkRequest) (string, error) {
 	return f.SymlinkPath(), nil
 }
 
-func (f *fileNode) Lookup(ctx context.Context, name string) (fs.Node, error) {
+func (f fileNode) Lookup(ctx context.Context, name string) (fs.Node, error) {
 	asFS, err := f.FS()
 	if err != nil {
 		return nil, fuse.ENOTDIR
@@ -92,7 +97,7 @@ func (f *fileNode) Lookup(ctx context.Context, name string) (fs.Node, error) {
 	return &fileNode{File: ret}, nil
 }
 
-func (f *fileNode) ReadAll(ctx context.Context) ([]byte, error) {
+func (f fileNode) ReadAll(ctx context.Context) ([]byte, error) {
 	if f.IsRegular() {
 		var buf bytes.Buffer
 		_, err := f.WriteTo(&buf)
@@ -101,7 +106,7 @@ func (f *fileNode) ReadAll(ctx context.Context) ([]byte, error) {
 	return nil, fuse.ENODATA
 }
 
-func (f *fileNode) Read(ctx context.Context, req *fuse.ReadRequest, resp *fuse.ReadResponse) error {
+func (f fileNode) Read(ctx context.Context, req *fuse.ReadRequest, resp *fuse.ReadResponse) error {
 	if f.IsRegular() {
 		buf := make([]byte, req.Size)
 		n, err := f.File.ReadAt(buf, req.Offset)
@@ -113,7 +118,7 @@ func (f *fileNode) Read(ctx context.Context, req *fuse.ReadRequest, resp *fuse.R
 	return fuse.ENODATA
 }
 
-func (f *fileNode) ReadDirAll(ctx context.Context) (out []fuse.Dirent, err error) {
+func (f fileNode) ReadDirAll(ctx context.Context) (out []fuse.Dirent, err error) {
 	asFS, err := f.FS()
 	if err != nil {
 		return nil, fuse.ENOTDIR
