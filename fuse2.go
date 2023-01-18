@@ -21,7 +21,7 @@ func (r *Reader) MountFuse2(mountpoint string) (err error) {
 	if err != nil {
 		return
 	}
-	<-r.con.Ready
+	<-r.con2.Ready
 	r.mount2Done = make(chan struct{})
 	go func() {
 		fs.Serve(r.con2, squashFuse2{r: r})
