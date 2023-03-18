@@ -13,5 +13,5 @@ require (
 
 require (
 	github.com/seaweedfs/fuse v1.2.2
-	golang.org/x/sys v0.2.0 // indirect
+	golang.org/x/sys v0.6.0 // indirect
 )
