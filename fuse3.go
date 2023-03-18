@@ -98,7 +98,7 @@ func (f fileNode) ReadAll(ctx context.Context) ([]byte, error) {
 		_, err := f.WriteTo(&buf)
 		return buf.Bytes(), err
 	}
-	return nil, fuse.ENODATA
+	return nil, ENODATA
 }
 
 func (f fileNode) Read(ctx context.Context, req *fuse.ReadRequest, resp *fuse.ReadResponse) error {
@@ -110,7 +110,7 @@ func (f fileNode) Read(ctx context.Context, req *fuse.ReadRequest, resp *fuse.Re
 		}
 		return nil
 	}
-	return fuse.ENODATA
+	return ENODATA
 }
 
 func (f fileNode) ReadDirAll(ctx context.Context) (out []fuse.Dirent, err error) {
