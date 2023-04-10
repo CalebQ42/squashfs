@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"log"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -146,6 +147,20 @@ func (f File) IsSymlink() bool {
 	return f.i.Type == inode.Sym || f.i.Type == inode.ESym
 }
 
+func (f File) isDeviceOrFifo() bool {
+	return f.i.Type == inode.Char || f.i.Type == inode.Block || f.i.Type == inode.EChar || f.i.Type == inode.EBlock || f.i.Type == inode.Fifo || f.i.Type == inode.EFifo
+}
+
+func (f File) deviceDevices() (maj uint32, min uint32) {
+	var dev uint32
+	if f.i.Type == inode.Char || f.i.Type == inode.Block {
+		dev = f.i.Data.(inode.Device).Dev
+	} else if f.i.Type == inode.EChar || f.i.Type == inode.EBlock {
+		dev = f.i.Data.(inode.EDevice).Dev
+	}
+	return dev >> 8, dev & 0x000FF
+}
+
 // SymlinkPath returns the symlink's target path. Is the File isn't a symlink, returns an empty string.
 func (f File) SymlinkPath() string {
 	switch f.i.Type {
@@ -232,7 +247,8 @@ func (f File) realExtract(folder string, op ExtractionOptions) error {
 		}
 		return err
 	}
-	if f.IsDir() {
+	switch {
+	case f.IsDir():
 		filFS, _ := f.FS()
 		var ents []directory.Entry
 		ents, err = f.r.readDirectory(f.i)
@@ -276,8 +292,7 @@ func (f File) realExtract(folder string, op ExtractionOptions) error {
 				return err
 			}
 		}
-		return nil
-	} else if f.IsRegular() {
+	case f.IsRegular():
 		var fil *os.File
 		fil, err = os.Create(folder + "/" + f.e.Name)
 		if os.IsExist(err) {
@@ -302,8 +317,7 @@ func (f File) realExtract(folder string, op ExtractionOptions) error {
 			}
 			return err
 		}
-		return nil
-	} else if f.IsSymlink() {
+	case f.IsSymlink():
 		symPath := f.SymlinkPath()
 		if op.DereferenceSymlink {
 			fil := f.GetSymlinkFile()
@@ -350,7 +364,40 @@ func (f File) realExtract(folder string, op ExtractionOptions) error {
 			}
 			return err
 		}
-		return nil
+	case f.isDeviceOrFifo():
+		_, err = exec.LookPath("mknod")
+		if err != nil {
+			if op.Verbose {
+				log.Println("Extracting Fifo IPC or Device and mknod is not in PATH")
+			}
+			return err
+		}
+		var typ string
+		if f.i.Type == inode.Char || f.i.Type == inode.EChar {
+			typ = "c"
+		} else if f.i.Type == inode.Block || f.i.Type == inode.EBlock {
+			typ = "b"
+		} else { //Fifo IPC
+			typ = "p"
+		}
+		cmd := exec.Command("mknod", folder+"/"+f.e.Name, typ)
+		if typ != "p" {
+			maj, min := f.deviceDevices()
+			cmd.Args = append(cmd.Args, strconv.Itoa(int(maj)), strconv.Itoa(int(min)))
+		}
+		if op.Verbose {
+			cmd.Stdout = op.LogOutput
+			cmd.Stderr = op.LogOutput
+		}
+		err = cmd.Run()
+		if err != nil {
+			if op.Verbose {
+				log.Println("Error while running mknod for", folder+"/"+f.e.Name)
+			}
+			return err
+		}
+	default:
+		return errors.New("Unsupported file type. Inode type: " + strconv.Itoa(int(f.i.Type)))
 	}
-	return errors.New("Unsupported file type. Inode type: " + strconv.Itoa(int(f.i.Type)))
+	return nil
 }
