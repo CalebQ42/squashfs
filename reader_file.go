@@ -71,12 +71,18 @@ func (f File) Read(p []byte) (int, error) {
 }
 
 func (f File) ReadAt(p []byte, off int64) (int, error) {
+	if f.i.Type != inode.Fil && f.i.Type != inode.EFil {
+		return 0, ErrReadNotFile
+	}
 	return f.fullRdr.ReadAt(p, off)
 }
 
 // WriteTo writes all data from the file to the writer. This is multi-threaded.
 // The underlying reader is seperate from the one used with Read and can be reused.
 func (f File) WriteTo(w io.Writer) (int64, error) {
+	if f.i.Type != inode.Fil && f.i.Type != inode.EFil {
+		return 0, ErrReadNotFile
+	}
 	return f.fullRdr.WriteTo(w)
 }
 
@@ -90,7 +96,7 @@ func (f *File) Close() error {
 // If n <= 0 all fs.DirEntry's are returned.
 func (f *File) ReadDir(n int) (out []fs.DirEntry, err error) {
 	if !f.IsDir() {
-		return nil, errors.New("File is not a directory")
+		return nil, errors.New("file is not a directory")
 	}
 	ents, err := f.r.readDirectory(f.i)
 	if err != nil {
