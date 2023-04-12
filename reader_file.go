@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 
@@ -59,6 +60,21 @@ func (f File) Stat() (fs.FileInfo, error) {
 	return newFileInfo(f.e, f.i), nil
 }
 
+// Mode returns the file's fs.FileMode
+func (f File) Mode() fs.FileMode {
+	switch f.e.Type {
+	case inode.Dir:
+		return fs.FileMode(f.i.Perm) | fs.ModeDir
+	case inode.Char:
+		return fs.FileMode(f.i.Perm) | fs.ModeCharDevice
+	case inode.Block:
+		return fs.FileMode(f.i.Perm) | fs.ModeDevice
+	case inode.Sym:
+		return fs.FileMode(f.i.Perm) | fs.ModeSymlink
+	}
+	return fs.FileMode(f.i.Perm)
+}
+
 // Read reads the data from the file. Only works if file is a normal file.
 func (f File) Read(p []byte) (int, error) {
 	if f.i.Type != inode.Fil && f.i.Type != inode.EFil {
@@ -86,7 +102,7 @@ func (f File) WriteTo(w io.Writer) (int64, error) {
 	return f.fullRdr.WriteTo(w)
 }
 
-// Close simply nils the underlying reader. Here mostly to satisfy fs.File
+// Close simply nils the underlying reader.
 func (f *File) Close() error {
 	f.rdr = nil
 	return nil
@@ -204,10 +220,11 @@ func (f File) GetSymlinkFile() *File {
 // ExtractionOptions are available options on how to extract.
 type ExtractionOptions struct {
 	LogOutput          io.Writer   //Where error log should write. If nil, uses os.Stdout. Has no effect if verbose is false.
-	DereferenceSymlink bool        //Replace symlinks with the target file
-	UnbreakSymlink     bool        //Try to make sure symlinks remain unbroken when extracted, without changing the symlink
-	Verbose            bool        //Prints extra info to log on an error
-	FolderPerm         fs.FileMode //The permissions used when creating the extraction folder
+	DereferenceSymlink bool        //Replace symlinks with the target file.
+	UnbreakSymlink     bool        //Try to make sure symlinks remain unbroken when extracted, without changing the symlink.
+	Verbose            bool        //Prints extra info to log on an error.
+	IgnorePerm         bool        //ignore the file's permission and instead use FolderPerm.
+	FolderPerm         fs.FileMode //The permissions used when creating the extraction folder. Defaults to 0755.
 }
 
 // DefaultOptions is the default ExtractionOptions.
@@ -226,10 +243,9 @@ func (f File) ExtractTo(folder string) error {
 // ExtractSymlink extracts the File to the folder with the DereferenceSymlink option.
 // If the File is a directory, it instead extracts the directory's contents to the folder.
 func (f File) ExtractSymlink(folder string) error {
-	return f.ExtractWithOptions(folder, ExtractionOptions{
-		DereferenceSymlink: true,
-		FolderPerm:         0755,
-	})
+	op := DefaultOptions()
+	op.DereferenceSymlink = true
+	return f.ExtractWithOptions(folder, op)
 }
 
 // ExtractWithOptions extracts the File to the given folder with the given ExtrationOptions.
@@ -276,8 +292,11 @@ func (f File) realExtract(folder string, op ExtractionOptions) error {
 					return
 				}
 				if fil.IsDir() {
-					info, _ := fil.Stat()
-					err = os.Mkdir(filepath.Join(folder, fil.e.Name), info.Mode())
+					perm := f.Mode()
+					if op.IgnorePerm {
+						perm = (op.FolderPerm & fs.ModePerm) | (perm & fs.ModeType)
+					}
+					err = os.Mkdir(filepath.Join(folder, fil.e.Name), perm)
 					if err != nil {
 						if op.Verbose {
 							log.Println("Error while creating", filepath.Join(folder, fil.e.Name))
@@ -316,12 +335,18 @@ func (f File) realExtract(folder string, op ExtractionOptions) error {
 			}
 			return err
 		}
+		defer fil.Close()
 		_, err = io.Copy(fil, f)
 		if err != nil {
 			if op.Verbose {
 				log.Println("Error while copying data to", folder+"/"+f.e.Name)
 			}
 			return err
+		}
+		if op.IgnorePerm {
+			os.Chmod(fil.Name(), op.FolderPerm)
+		} else {
+			os.Chmod(fil.Name(), f.Mode())
 		}
 	case f.IsSymlink():
 		symPath := f.SymlinkPath()
@@ -370,7 +395,18 @@ func (f File) realExtract(folder string, op ExtractionOptions) error {
 			}
 			return err
 		}
+		if op.IgnorePerm {
+			os.Chmod(folder+"/"+f.e.Name, op.FolderPerm)
+		} else {
+			os.Chmod(folder+"/"+f.e.Name, f.Mode())
+		}
 	case f.isDeviceOrFifo():
+		if runtime.GOOS == "windows" {
+			if op.Verbose {
+				log.Println(folder+"/"+f.e.Name, "ignored since it's a device link and can't be created on Windows.")
+			}
+			return nil
+		}
 		_, err = exec.LookPath("mknod")
 		if err != nil {
 			if op.Verbose {
@@ -384,6 +420,12 @@ func (f File) realExtract(folder string, op ExtractionOptions) error {
 		} else if f.i.Type == inode.Block || f.i.Type == inode.EBlock {
 			typ = "b"
 		} else { //Fifo IPC
+			if runtime.GOOS == "darwin" {
+				if op.Verbose {
+					log.Println(folder+"/"+f.e.Name, "ignored since it's a Fifo file and can't be created on Darwin.")
+				}
+				return nil
+			}
 			typ = "p"
 		}
 		cmd := exec.Command("mknod", folder+"/"+f.e.Name, typ)
@@ -401,6 +443,15 @@ func (f File) realExtract(folder string, op ExtractionOptions) error {
 				log.Println("Error while running mknod for", folder+"/"+f.e.Name)
 			}
 			return err
+		}
+		if op.IgnorePerm {
+			os.Chmod(folder+"/"+f.e.Name, op.FolderPerm)
+		} else {
+			os.Chmod(folder+"/"+f.e.Name, f.Mode())
+		}
+	case f.e.Type == inode.Sock:
+		if op.Verbose {
+			log.Println(folder+"/"+f.e.Name, "ignored since it's a socket file.")
 		}
 	default:
 		return errors.New("Unsupported file type. Inode type: " + strconv.Itoa(int(f.i.Type)))
