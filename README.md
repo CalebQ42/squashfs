@@ -14,7 +14,22 @@ Thanks also to [distri's squashfs library](https://github.com/distr1/distri/tree
 ## Limitations
 
 * No Xattr parsing. This is simply because I haven't done any research on it and how to apply these in a pure go way.
+* Socket files are not extracted.
+  * From my research, it seems like a socket file would be useless if it could be created.
+* Fifo files are ignored on `darwin`
 
-## Performance
+## Issues
 
-Testing on a zstd compressed file, my library is anywhere from 5x ~ 7x slower then `unsquashfs`
+* Larger, more complex archives have significant issues when doing a full extraction.
+  * Seems to be mostly a problem with archives with many deep file trees.
+  * It seems to not only take exponentially longer per nested folder, but also will eat all your system's memory as it does so.
+  * Observed when tested Arch Linux's live iso's airootfs.sfs.
+  * Accessing files / folders without extracting is NOT be effected.
+* Significantly slower then `unsquashfs` (about 5 ~ 7 times slower on a ~100MB archive using zstd compression)
+  * This seems to be related to above along with the general optimization of `unsquashfs` and it's compression libraries.
+
+## Recommendations on Usage
+
+Due to the above issue and performance consideration, this library should only be used to access files within the archive without extraction, or to mount it via Fuse.
+
+* Neither of these use cases are largely effected by the issues above.
