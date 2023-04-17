@@ -18,7 +18,7 @@ import (
 )
 
 const (
-	squashfsURL  = "https://darkstorm.tech/LinuxPATest.sfs"
+	squashfsURL  = "https://darkstorm.tech/files/LinuxPATest.sfs"
 	squashfsName = "LinuxPATest.sfs"
 
 	filePath = "PortableApps/Notepad++Portable/App/DefaultData/Config/contextMenu.xml"
@@ -122,7 +122,13 @@ func TestExtractQuick(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = rdr.ExtractWithOptions(libPath, &squashfs.ExtractionOptions{Verbose: true})
+	os.RemoveAll(filepath.Join(tmpDir, "testLog.txt"))
+	logFil, _ := os.Create(filepath.Join(tmpDir, "testLog.txt"))
+	op := squashfs.DefaultOptions()
+	op.Verbose = true
+	op.IgnorePerm = true
+	op.LogOutput = logFil
+	err = rdr.ExtractWithOptions(libPath, op)
 	if err != nil {
 		t.Fatal(err)
 	}

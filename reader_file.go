@@ -15,6 +15,7 @@ import (
 	"github.com/CalebQ42/squashfs/internal/data"
 	"github.com/CalebQ42/squashfs/internal/directory"
 	"github.com/CalebQ42/squashfs/internal/inode"
+	"github.com/CalebQ42/squashfs/internal/threadmanager"
 )
 
 // File represents a file inside a squashfs archive.
@@ -219,25 +220,48 @@ func (f File) GetSymlinkFile() *File {
 
 // ExtractionOptions are available options on how to extract.
 type ExtractionOptions struct {
+	manager            *threadmanager.Manager
 	LogOutput          io.Writer   //Where error log should write.
 	DereferenceSymlink bool        //Replace symlinks with the target file.
 	UnbreakSymlink     bool        //Try to make sure symlinks remain unbroken when extracted, without changing the symlink.
 	Verbose            bool        //Prints extra info to log on an error.
-	IgnorePerm         bool        //Ignore file's permissions and instead use FolderPerm.
-	FolderPerm         fs.FileMode //Permission to use when making the root folder if it doesn't exist.
+	IgnorePerm         bool        //Ignore file's permissions and instead use Perm.
+	Perm               fs.FileMode //Permission to use when IgnorePerm. Defaults to 0755.
 	notFirst           bool
+}
+
+func DefaultOptions() *ExtractionOptions {
+	return &ExtractionOptions{
+		Perm: 0755,
+	}
 }
 
 // ExtractTo extracts the File to the given folder with the default options.
 // If the File is a directory, it instead extracts the directory's contents to the folder.
 func (f File) ExtractTo(folder string) error {
-	return f.realExtract(folder, &ExtractionOptions{})
+	return f.realExtract(folder, DefaultOptions())
+}
+
+// ExtractVerbose extracts the File to the folder with the Verbose option.
+func (f File) ExtractVerbose(folder string) error {
+	op := DefaultOptions()
+	op.Verbose = true
+	return f.realExtract(folder, op)
+}
+
+// ExtractIgnorePermissions extracts the File to the folder with the IgnorePerm option.
+func (f File) ExtractIgnorePermissions(folder string) error {
+	op := DefaultOptions()
+	op.IgnorePerm = true
+	return f.realExtract(folder, op)
 }
 
 // ExtractSymlink extracts the File to the folder with the DereferenceSymlink option.
 // If the File is a directory, it instead extracts the directory's contents to the folder.
 func (f File) ExtractSymlink(folder string) error {
-	return f.realExtract(folder, &ExtractionOptions{})
+	op := DefaultOptions()
+	op.DereferenceSymlink = true
+	return f.realExtract(folder, op)
 }
 
 // ExtractWithOptions extracts the File to the given folder with the given ExtrationOptions.
@@ -250,6 +274,9 @@ func (f File) ExtractWithOptions(folder string, op *ExtractionOptions) error {
 }
 
 func (f File) realExtract(folder string, op *ExtractionOptions) (err error) {
+	if op.manager == nil {
+		op.manager = threadmanager.NewManager(runtime.NumCPU())
+	}
 	extDir := folder + "/" + f.e.Name
 	if !op.notFirst {
 		op.notFirst = true
@@ -257,11 +284,7 @@ func (f File) realExtract(folder string, op *ExtractionOptions) (err error) {
 			extDir = folder
 			_, err = os.Open(folder)
 			if err != nil && os.IsNotExist(err) {
-				if op.IgnorePerm {
-					err = os.Mkdir(extDir, op.FolderPerm|(f.Mode()&fs.ModeType))
-				} else {
-					err = os.Mkdir(extDir, f.Mode())
-				}
+				err = os.Mkdir(extDir, op.Perm)
 			}
 			if err != nil {
 				if op.Verbose {
@@ -274,16 +297,18 @@ func (f File) realExtract(folder string, op *ExtractionOptions) (err error) {
 	switch {
 	case f.IsDir():
 		if folder != extDir && f.e.Name != "" {
-			if op.IgnorePerm {
-				err = os.Mkdir(extDir, op.FolderPerm|(f.Mode()&fs.ModeType))
-			} else {
-				err = os.Mkdir(extDir, f.Mode())
-			}
+			//First extract it with a permisive permission.
+			err = os.Mkdir(extDir, op.Perm)
 			if err != nil {
 				if op.Verbose {
 					log.Println("Error while making directory", extDir)
 				}
 				return
+			}
+			//Then set it to it's actual permissions once we're done with it
+			if !op.IgnorePerm {
+				defer os.Chmod(extDir, f.Mode())
+				defer os.Chown(extDir, int(f.r.ids[f.i.UidInd]), int(f.r.ids[f.i.GidInd]))
 			}
 		}
 		var filFS *FS
@@ -324,6 +349,8 @@ func (f File) realExtract(folder string, op *ExtractionOptions) (err error) {
 		//Then we extract the files.
 		for i = 0; i < len(files); i++ {
 			go func(index int) {
+				n := op.manager.Lock()
+				defer op.manager.Unlock(n)
 				subF, goErr := f.r.newFile(files[index], filFS)
 				if goErr != nil {
 					if op.Verbose {
@@ -368,9 +395,10 @@ func (f File) realExtract(folder string, op *ExtractionOptions) (err error) {
 			return err
 		}
 		if op.IgnorePerm {
-			os.Chmod(fil.Name(), op.FolderPerm|(f.Mode()&fs.ModeType))
+			os.Chmod(extDir, op.Perm|(f.Mode()&fs.ModeType))
 		} else {
-			os.Chmod(fil.Name(), f.Mode())
+			os.Chmod(extDir, f.Mode())
+			os.Chown(extDir, int(f.r.ids[f.i.UidInd]), int(f.r.ids[f.i.GidInd]))
 		}
 	case f.IsSymlink():
 		symPath := f.SymlinkPath()
@@ -420,9 +448,10 @@ func (f File) realExtract(folder string, op *ExtractionOptions) (err error) {
 			return err
 		}
 		if op.IgnorePerm {
-			os.Chmod(extDir, op.FolderPerm|(f.Mode()&fs.ModeType))
+			os.Chmod(extDir, op.Perm|(f.Mode()&fs.ModeType))
 		} else {
 			os.Chmod(extDir, f.Mode())
+			os.Chown(extDir, int(f.r.ids[f.i.UidInd]), int(f.r.ids[f.i.GidInd]))
 		}
 	case f.isDeviceOrFifo():
 		if runtime.GOOS == "windows" {
@@ -469,9 +498,10 @@ func (f File) realExtract(folder string, op *ExtractionOptions) (err error) {
 			return err
 		}
 		if op.IgnorePerm {
-			os.Chmod(extDir, op.FolderPerm|(f.Mode()&fs.ModeType))
+			os.Chmod(extDir, op.Perm|(f.Mode()&fs.ModeType))
 		} else {
 			os.Chmod(extDir, f.Mode())
+			os.Chown(extDir, int(f.r.ids[f.i.UidInd]), int(f.r.ids[f.i.GidInd]))
 		}
 	case f.e.Type == inode.Sock:
 		if op.Verbose {
