@@ -219,99 +219,107 @@ func (f File) GetSymlinkFile() *File {
 
 // ExtractionOptions are available options on how to extract.
 type ExtractionOptions struct {
-	LogOutput          io.Writer   //Where error log should write. If nil, uses os.Stdout. Has no effect if verbose is false.
+	LogOutput          io.Writer   //Where error log should write.
 	DereferenceSymlink bool        //Replace symlinks with the target file.
 	UnbreakSymlink     bool        //Try to make sure symlinks remain unbroken when extracted, without changing the symlink.
 	Verbose            bool        //Prints extra info to log on an error.
-	IgnorePerm         bool        //ignore the file's permission and instead use FolderPerm.
-	FolderPerm         fs.FileMode //The permissions used when creating the extraction folder. Defaults to 0755.
-}
-
-// DefaultOptions is the default ExtractionOptions.
-func DefaultOptions() ExtractionOptions {
-	return ExtractionOptions{
-		FolderPerm: 0755,
-	}
+	IgnorePerm         bool        //Ignore file's permissions and instead use FolderPerm.
+	FolderPerm         fs.FileMode //Permission to use when making the root folder if it doesn't exist.
+	notFirst           bool
 }
 
 // ExtractTo extracts the File to the given folder with the default options.
 // If the File is a directory, it instead extracts the directory's contents to the folder.
 func (f File) ExtractTo(folder string) error {
-	return f.ExtractWithOptions(folder, DefaultOptions())
+	return f.realExtract(folder, &ExtractionOptions{})
 }
 
 // ExtractSymlink extracts the File to the folder with the DereferenceSymlink option.
 // If the File is a directory, it instead extracts the directory's contents to the folder.
 func (f File) ExtractSymlink(folder string) error {
-	op := DefaultOptions()
-	op.DereferenceSymlink = true
-	return f.ExtractWithOptions(folder, op)
+	return f.realExtract(folder, &ExtractionOptions{})
 }
 
 // ExtractWithOptions extracts the File to the given folder with the given ExtrationOptions.
 // If the File is a directory, it instead extracts the directory's contents to the folder.
-func (f File) ExtractWithOptions(folder string, op ExtractionOptions) error {
-	if op.Verbose {
-		if op.LogOutput == nil {
-			op.LogOutput = os.Stdout
-		}
+func (f File) ExtractWithOptions(folder string, op *ExtractionOptions) error {
+	if op.Verbose && op.LogOutput != nil {
 		log.SetOutput(op.LogOutput)
 	}
 	return f.realExtract(folder, op)
 }
 
-func (f File) realExtract(folder string, op ExtractionOptions) error {
-	err := os.MkdirAll(folder, op.FolderPerm)
-	folder = filepath.Clean(folder)
-	if err != nil && !os.IsExist(err) {
-		if op.Verbose {
-			log.Println("Error while creating extraction folder")
+func (f File) realExtract(folder string, op *ExtractionOptions) (err error) {
+	extDir := folder + "/" + f.e.Name
+	if !op.notFirst {
+		op.notFirst = true
+		if f.IsDir() {
+			extDir = folder
+			_, err = os.Open(folder)
+			if err != nil && os.IsNotExist(err) {
+				if op.IgnorePerm {
+					err = os.Mkdir(extDir, op.FolderPerm|(f.Mode()&fs.ModeType))
+				} else {
+					err = os.Mkdir(extDir, f.Mode())
+				}
+			}
+			if err != nil {
+				if op.Verbose {
+					log.Println("Error while making", folder)
+				}
+				return
+			}
 		}
-		return err
 	}
 	switch {
 	case f.IsDir():
-		filFS, _ := f.FS()
-		var ents []directory.Entry
-		ents, err = f.r.readDirectory(f.i)
+		if folder != extDir && f.e.Name != "" {
+			if op.IgnorePerm {
+				err = os.Mkdir(extDir, op.FolderPerm|(f.Mode()&fs.ModeType))
+			} else {
+				err = os.Mkdir(extDir, f.Mode())
+			}
+			if err != nil {
+				if op.Verbose {
+					log.Println("Error while making directory", extDir)
+				}
+				return
+			}
+		}
+		var filFS *FS
+		filFS, err = f.FS()
 		if err != nil {
 			if op.Verbose {
-				log.Println("Error while reading children of", f.path())
+				log.Println("Error while converting", f.path(), "to FS")
 			}
 			return err
 		}
-		errChan := make(chan error)
-		for i := 0; i < len(ents); i++ {
-			go func(ent directory.Entry) {
-				fil, goErr := f.r.newFile(ent, filFS)
-				if goErr != nil {
-					if op.Verbose {
-						log.Println("Error while reading info for", filepath.Join(f.path(), ent.Name))
-					}
-					errChan <- goErr
-					return
-				}
-				if fil.IsDir() {
-					perm := f.Mode()
-					if op.IgnorePerm {
-						perm = (op.FolderPerm & fs.ModePerm) | (perm & fs.ModeType)
-					}
-					err = os.Mkdir(filepath.Join(folder, fil.e.Name), perm)
-					if err != nil {
-						if op.Verbose {
-							log.Println("Error while creating", filepath.Join(folder, fil.e.Name))
-						}
-						errChan <- err
-						return
-					}
-					errChan <- fil.realExtract(filepath.Join(folder, fil.e.Name), op)
-				} else {
-					errChan <- fil.realExtract(folder, op)
-				}
-				fil.Close()
-			}(ents[i])
+		errChan := make(chan error, len(filFS.e))
+		files := make([]directory.Entry, 0)
+		//Focus on making the folder tree first...
+		var i int
+		for i = 0; i < len(filFS.e); i++ {
+			if filFS.e[i].Type == inode.Fil {
+				files = append(files, filFS.e[i])
+			} else {
+				go func() {
+					errChan <- f.ExtractWithOptions(extDir, op)
+				}()
+			}
 		}
-		for i := 0; i < len(ents); i++ {
+		for i = 0; i < len(filFS.e)-len(files); i++ {
+			err = <-errChan
+			if err != nil {
+				return err
+			}
+		}
+		//Then we extract the files.
+		for i = 0; i < len(files); i++ {
+			go func() {
+				errChan <- f.ExtractWithOptions(extDir, op)
+			}()
+		}
+		for i = 0; i < len(files); i++ {
 			err = <-errChan
 			if err != nil {
 				return err
@@ -319,19 +327,19 @@ func (f File) realExtract(folder string, op ExtractionOptions) error {
 		}
 	case f.IsRegular():
 		var fil *os.File
-		fil, err = os.Create(folder + "/" + f.e.Name)
+		fil, err = os.Create(extDir)
 		if os.IsExist(err) {
-			os.Remove(folder + "/" + f.e.Name)
-			fil, err = os.Create(folder + "/" + f.e.Name)
+			os.Remove(extDir)
+			fil, err = os.Create(extDir)
 			if err != nil {
 				if op.Verbose {
-					log.Println("Error while creating", folder+"/"+f.e.Name)
+					log.Println("Error while creating", extDir)
 				}
 				return err
 			}
 		} else if err != nil {
 			if op.Verbose {
-				log.Println("Error while creating", folder+"/"+f.e.Name)
+				log.Println("Error while creating", extDir)
 			}
 			return err
 		}
@@ -339,12 +347,12 @@ func (f File) realExtract(folder string, op ExtractionOptions) error {
 		_, err = io.Copy(fil, f)
 		if err != nil {
 			if op.Verbose {
-				log.Println("Error while copying data to", folder+"/"+f.e.Name)
+				log.Println("Error while copying data to", extDir)
 			}
 			return err
 		}
 		if op.IgnorePerm {
-			os.Chmod(fil.Name(), op.FolderPerm)
+			os.Chmod(fil.Name(), op.FolderPerm|(f.Mode()&fs.ModeType))
 		} else {
 			os.Chmod(fil.Name(), f.Mode())
 		}
@@ -354,7 +362,7 @@ func (f File) realExtract(folder string, op ExtractionOptions) error {
 			fil := f.GetSymlinkFile()
 			if fil == nil {
 				if op.Verbose {
-					log.Println("Symlink path(", symPath, ") is unobtainable:", folder+"/"+f.e.Name)
+					log.Println("Symlink path(", symPath, ") is unobtainable:", extDir)
 				}
 				return errors.New("cannot get symlink target")
 			}
@@ -362,7 +370,7 @@ func (f File) realExtract(folder string, op ExtractionOptions) error {
 			err = fil.realExtract(folder, op)
 			if err != nil {
 				if op.Verbose {
-					log.Println("Error while extracting the symlink's file:", folder+"/"+f.e.Name)
+					log.Println("Error while extracting the symlink's file:", extDir)
 				}
 				return err
 			}
@@ -371,39 +379,39 @@ func (f File) realExtract(folder string, op ExtractionOptions) error {
 			fil := f.GetSymlinkFile()
 			if fil == nil {
 				if op.Verbose {
-					log.Println("Symlink path(", symPath, ") is unobtainable:", folder+"/"+f.e.Name)
+					log.Println("Symlink path(", symPath, ") is unobtainable:", extDir)
 				}
 				return errors.New("cannot get symlink target")
 			}
-			extractLoc := filepath.Clean(folder + "/" + filepath.Dir(symPath))
+			extractLoc := filepath.Join(folder, filepath.Dir(symPath))
 			err = fil.realExtract(extractLoc, op)
 			if err != nil {
 				if op.Verbose {
-					log.Println("Error while extracting ", folder+"/"+f.e.Name)
+					log.Println("Error while extracting ", extDir)
 				}
 				return err
 			}
 		}
-		err = os.Symlink(f.SymlinkPath(), folder+"/"+f.e.Name)
+		err = os.Symlink(f.SymlinkPath(), extDir)
 		if os.IsExist(err) {
-			os.Remove(folder + "/" + f.e.Name)
-			err = os.Symlink(f.SymlinkPath(), folder+"/"+f.e.Name)
+			os.Remove(extDir)
+			err = os.Symlink(f.SymlinkPath(), extDir)
 		}
 		if err != nil {
 			if op.Verbose {
-				log.Println("Error while making symlink:", folder+"/"+f.e.Name)
+				log.Println("Error while making symlink:", extDir)
 			}
 			return err
 		}
 		if op.IgnorePerm {
-			os.Chmod(folder+"/"+f.e.Name, op.FolderPerm)
+			os.Chmod(extDir, op.FolderPerm|(f.Mode()&fs.ModeType))
 		} else {
-			os.Chmod(folder+"/"+f.e.Name, f.Mode())
+			os.Chmod(extDir, f.Mode())
 		}
 	case f.isDeviceOrFifo():
 		if runtime.GOOS == "windows" {
 			if op.Verbose {
-				log.Println(folder+"/"+f.e.Name, "ignored since it's a device link and can't be created on Windows.")
+				log.Println(extDir, "ignored since it's a device link and can't be created on Windows.")
 			}
 			return nil
 		}
@@ -422,13 +430,13 @@ func (f File) realExtract(folder string, op ExtractionOptions) error {
 		} else { //Fifo IPC
 			if runtime.GOOS == "darwin" {
 				if op.Verbose {
-					log.Println(folder+"/"+f.e.Name, "ignored since it's a Fifo file and can't be created on Darwin.")
+					log.Println(extDir, "ignored since it's a Fifo file and can't be created on Darwin.")
 				}
 				return nil
 			}
 			typ = "p"
 		}
-		cmd := exec.Command("mknod", folder+"/"+f.e.Name, typ)
+		cmd := exec.Command("mknod", extDir, typ)
 		if typ != "p" {
 			maj, min := f.deviceDevices()
 			cmd.Args = append(cmd.Args, strconv.Itoa(int(maj)), strconv.Itoa(int(min)))
@@ -440,18 +448,18 @@ func (f File) realExtract(folder string, op ExtractionOptions) error {
 		err = cmd.Run()
 		if err != nil {
 			if op.Verbose {
-				log.Println("Error while running mknod for", folder+"/"+f.e.Name)
+				log.Println("Error while running mknod for", extDir)
 			}
 			return err
 		}
 		if op.IgnorePerm {
-			os.Chmod(folder+"/"+f.e.Name, op.FolderPerm)
+			os.Chmod(extDir, op.FolderPerm|(f.Mode()&fs.ModeType))
 		} else {
-			os.Chmod(folder+"/"+f.e.Name, f.Mode())
+			os.Chmod(extDir, f.Mode())
 		}
 	case f.e.Type == inode.Sock:
 		if op.Verbose {
-			log.Println(folder+"/"+f.e.Name, "ignored since it's a socket file.")
+			log.Println(extDir, "ignored since it's a socket file.")
 		}
 	default:
 		return errors.New("Unsupported file type. Inode type: " + strconv.Itoa(int(f.i.Type)))

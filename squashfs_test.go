@@ -106,7 +106,6 @@ func BenchmarkRace(b *testing.B) {
 }
 
 func TestExtractQuick(t *testing.T) {
-
 	//First, setup everything and extract the archive using the library and unsquashfs
 
 	// tmpDir := b.TempDir()
@@ -123,9 +122,7 @@ func TestExtractQuick(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	op := squashfs.DefaultOptions()
-	op.Verbose = true
-	err = rdr.ExtractWithOptions(libPath, op)
+	err = rdr.ExtractWithOptions(libPath, &squashfs.ExtractionOptions{Verbose: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -176,9 +173,7 @@ func TestSingleFile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	op := squashfs.DefaultOptions()
-	op.Verbose = true
-	err = f.(*squashfs.File).ExtractWithOptions("testing", op)
+	err = f.(*squashfs.File).ExtractWithOptions("testing", &squashfs.ExtractionOptions{Verbose: true})
 	if err != nil {
 		t.Fatal(err)
 	}
