@@ -302,9 +302,17 @@ func (f File) realExtract(folder string, op *ExtractionOptions) (err error) {
 			if filFS.e[i].Type == inode.Fil {
 				files = append(files, filFS.e[i])
 			} else {
-				go func() {
-					errChan <- f.ExtractWithOptions(extDir, op)
-				}()
+				go func(index int) {
+					subF, goErr := f.r.newFile(filFS.e[index], filFS)
+					if goErr != nil {
+						if op.Verbose {
+							log.Println("Error while resolving", extDir)
+						}
+						errChan <- goErr
+						return
+					}
+					errChan <- subF.ExtractWithOptions(extDir, op)
+				}(i)
 			}
 		}
 		for i = 0; i < len(filFS.e)-len(files); i++ {
@@ -315,9 +323,17 @@ func (f File) realExtract(folder string, op *ExtractionOptions) (err error) {
 		}
 		//Then we extract the files.
 		for i = 0; i < len(files); i++ {
-			go func() {
-				errChan <- f.ExtractWithOptions(extDir, op)
-			}()
+			go func(index int) {
+				subF, goErr := f.r.newFile(files[index], filFS)
+				if goErr != nil {
+					if op.Verbose {
+						log.Println("Error while resolving", extDir)
+					}
+					errChan <- goErr
+					return
+				}
+				errChan <- subF.ExtractWithOptions(extDir, op)
+			}(i)
 		}
 		for i = 0; i < len(files); i++ {
 			err = <-errChan
