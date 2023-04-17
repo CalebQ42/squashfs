@@ -292,6 +292,10 @@ func (f File) realExtract(folder string, op *ExtractionOptions) (err error) {
 				}
 				return
 			}
+			if !op.IgnorePerm {
+				defer os.Chmod(extDir, f.Mode())
+				defer os.Chown(extDir, int(f.r.ids[f.i.UidInd]), int(f.r.ids[f.i.GidInd]))
+			}
 		}
 	}
 	switch {
