@@ -102,7 +102,7 @@ func (r FullReader) ReadAt(p []byte, off int64) (n int, err error) {
 		if i == num-1 && r.fragRdr != nil {
 			go func() {
 				rdr, e := r.fragRdr()
-				if err != nil {
+				if e != nil {
 					out <- outDat{
 						i:   num - 1,
 						err: e,
