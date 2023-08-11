@@ -16,15 +16,17 @@ type Reader struct {
 	blockSizes []uint32
 	blockSize  uint32
 	resetable  bool
+	fileSize   uint64
 }
 
-func NewReader(r io.Reader, d decompress.Decompressor, blockSizes []uint32, blockSize uint32) *Reader {
+func NewReader(r io.Reader, d decompress.Decompressor, blockSizes []uint32, blockSize uint32, fileSize uint64) *Reader {
 	return &Reader{
 		d:          d,
 		master:     r,
 		blockSizes: blockSizes,
 		blockSize:  blockSize,
 		resetable:  true,
+		fileSize:   fileSize,
 	}
 }
 
@@ -49,7 +51,11 @@ func (r *Reader) advance() (err error) {
 	} else {
 		size := realSize(r.blockSizes[0])
 		if size == 0 {
-			r.cur = bytes.NewReader(make([]byte, r.blockSize))
+			outSize := r.blockSize
+			if r.fileSize < uint64(r.blockSize) {
+				outSize = uint32(r.fileSize)
+			}
+			r.cur = bytes.NewReader(make([]byte, outSize))
 		} else {
 			r.cur = io.LimitReader(r.master, int64(size))
 			if size == r.blockSizes[0] {

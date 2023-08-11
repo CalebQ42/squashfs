@@ -54,7 +54,7 @@ func (r Reader) getReaders(i inode.Inode) (full *data.FullReader, rdr *data.Read
 	} else {
 		return nil, nil, errors.New("getReaders called on non-file type")
 	}
-	rdr = data.NewReader(toreader.NewReader(r.r, int64(blockOffset)), r.d, blockSizes, r.s.BlockSize)
+	rdr = data.NewReader(toreader.NewReader(r.r, int64(blockOffset)), r.d, blockSizes, r.s.BlockSize, fileSize)
 	full = data.NewFullReader(r.r, uint64(blockOffset), r.d, blockSizes, r.s.BlockSize, fileSize)
 	if fragInd != 0xFFFFFFFF {
 		full.AddFragment(func() (io.Reader, error) {
