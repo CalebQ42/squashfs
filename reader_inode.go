@@ -36,23 +36,26 @@ func (r Reader) getReaders(i inode.Inode) (full *data.FullReader, rdr *data.Read
 	var blockSizes []uint32
 	var fragInd uint32
 	var fragSize uint32
+	var fileSize uint64
 	if i.Type == inode.Fil {
 		fragOffset = uint64(i.Data.(inode.File).FragOffset)
 		blockOffset = uint64(i.Data.(inode.File).BlockStart)
 		blockSizes = i.Data.(inode.File).BlockSizes
 		fragInd = i.Data.(inode.File).FragInd
 		fragSize = i.Data.(inode.File).Size % r.s.BlockSize
+		fileSize = uint64(i.Data.(inode.File).Size)
 	} else if i.Type == inode.EFil {
 		fragOffset = uint64(i.Data.(inode.EFile).FragOffset)
 		blockOffset = i.Data.(inode.EFile).BlockStart
 		blockSizes = i.Data.(inode.EFile).BlockSizes
 		fragInd = i.Data.(inode.EFile).FragInd
 		fragSize = uint32(i.Data.(inode.EFile).Size % uint64(r.s.BlockSize))
+		fileSize = i.Data.(inode.EFile).Size
 	} else {
 		return nil, nil, errors.New("getReaders called on non-file type")
 	}
 	rdr = data.NewReader(toreader.NewReader(r.r, int64(blockOffset)), r.d, blockSizes, r.s.BlockSize)
-	full = data.NewFullReader(r.r, uint64(blockOffset), r.d, blockSizes, r.s.BlockSize)
+	full = data.NewFullReader(r.r, uint64(blockOffset), r.d, blockSizes, r.s.BlockSize, fileSize)
 	if fragInd != 0xFFFFFFFF {
 		full.AddFragment(func() (io.Reader, error) {
 			var fragRdr io.Reader

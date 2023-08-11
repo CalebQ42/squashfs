@@ -14,15 +14,17 @@ type FullReader struct {
 	sizes     []uint32
 	blockSize uint32
 	start     uint64
+	fileSize  uint64
 }
 
-func NewFullReader(r io.ReaderAt, start uint64, d decompress.Decompressor, blockSizes []uint32, blockSize uint32) *FullReader {
+func NewFullReader(r io.ReaderAt, start uint64, d decompress.Decompressor, blockSizes []uint32, blockSize uint32, fileSize uint64) *FullReader {
 	return &FullReader{
 		r:         r,
 		start:     start,
 		blockSize: blockSize,
 		sizes:     blockSizes,
 		d:         d,
+		fileSize:  fileSize,
 	}
 }
 
@@ -43,10 +45,14 @@ func (r FullReader) process(index int, offset int64, out chan outDat) {
 	var rdr io.ReadCloser
 	size := realSize(r.sizes[index])
 	if size == 0 {
+		outSize := r.blockSize
+		if r.fileSize < uint64(r.blockSize) {
+			outSize = uint32(r.fileSize)
+		}
 		out <- outDat{
 			i:    index,
 			err:  nil,
-			data: make([]byte, r.blockSize),
+			data: make([]byte, outSize),
 		}
 		return
 	}

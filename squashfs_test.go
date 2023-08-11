@@ -19,7 +19,7 @@ import (
 
 const (
 	squashfsURL  = "https://darkstorm.tech/files/LinuxPATest.sfs"
-	squashfsName = "LinuxPATest.sfs"
+	squashfsName = "bug.sqfs"
 
 	filePath = "PortableApps/Notepad++Portable/App/DefaultData/Config/contextMenu.xml"
 )
