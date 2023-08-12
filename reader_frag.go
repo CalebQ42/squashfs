@@ -1,6 +1,7 @@
 package squashfs
 
 import (
+	"bytes"
 	"io"
 
 	"github.com/CalebQ42/squashfs/internal/toreader"
@@ -12,8 +13,11 @@ type fragEntry struct {
 	_     uint32
 }
 
-func (r Reader) fragReader(index uint32) (io.Reader, error) {
+func (r Reader) fragReader(index uint32, fragSize uint32) (io.Reader, error) {
 	realSize := r.fragEntries[index].Size &^ (1 << 24)
+	if realSize == 0 {
+		return bytes.NewReader(make([]byte, fragSize)), nil
+	}
 	rdr := io.LimitReader(toreader.NewReader(r.r, int64(r.fragEntries[index].Start)), int64(realSize))
 	if realSize != r.fragEntries[index].Size {
 		return rdr, nil

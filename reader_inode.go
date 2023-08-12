@@ -59,7 +59,7 @@ func (r Reader) getReaders(i inode.Inode) (full *data.FullReader, rdr *data.Read
 	if fragInd != 0xFFFFFFFF {
 		full.AddFragment(func() (io.Reader, error) {
 			var fragRdr io.Reader
-			fragRdr, err = r.fragReader(fragInd)
+			fragRdr, err = r.fragReader(fragInd, fragSize)
 			if err != nil {
 				return nil, err
 			}
@@ -75,7 +75,7 @@ func (r Reader) getReaders(i inode.Inode) (full *data.FullReader, rdr *data.Read
 			return fragRdr, nil
 		})
 		var fragRdr io.Reader
-		fragRdr, err = r.fragReader(fragInd)
+		fragRdr, err = r.fragReader(fragInd, fragSize)
 		if err != nil {
 			return nil, nil, err
 		}
