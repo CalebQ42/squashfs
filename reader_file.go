@@ -277,7 +277,7 @@ func (f File) realExtract(folder string, op *ExtractionOptions) (err error) {
 	if op.manager == nil {
 		op.manager = threadmanager.NewManager(runtime.NumCPU())
 	}
-	extDir := folder + "/" + f.e.Name
+	extDir := filepath.Join(folder, f.e.Name)
 	if !op.notFirst {
 		op.notFirst = true
 		if f.IsDir() {
