@@ -10,22 +10,22 @@ import (
 type Reader struct {
 	r         io.Reader
 	d         decompress.Decompressor
-	frag      io.Reader
+	frag      *Reader
 	sizes     []uint32
 	dat       []byte
 	curOffset uint16
 	curIndex  uint64
 }
 
-func NewReader(r io.Reader, d decompress.Decompressor, sizes []uint32) (*Reader, error) {
+func NewReader(r io.Reader, d decompress.Decompressor, sizes []uint32) *Reader {
 	return &Reader{
 		r:     r,
 		d:     d,
 		sizes: sizes,
-	}, nil
+	}
 }
 
-func (r *Reader) AddFrag(fragRdr io.Reader) {
+func (r *Reader) AddFrag(fragRdr *Reader) {
 	r.frag = fragRdr
 }
 
@@ -70,4 +70,12 @@ func (r *Reader) Read(b []byte) (int, error) {
 		curRead += toRead
 	}
 	return curRead, nil
+}
+
+func (r *Reader) Close() error {
+	if r.frag != nil {
+		return r.frag.Close()
+	}
+	r.dat = nil
+	return nil
 }

@@ -31,6 +31,7 @@ var (
 type Reader struct {
 	r           io.ReaderAt
 	d           decompress.Decompressor
+	root        *Directory
 	fragTable   []fragEntry
 	idTable     []uint32
 	exportTable []uint64
@@ -68,6 +69,10 @@ func NewReader(r io.ReaderAt) (rdr *Reader, err error) {
 		rdr.d = &decompress.Zstd{}
 	default:
 		return nil, errors.New("invalid compression type. possible corrupted archive")
+	}
+	rdr.root, err = rdr.directoryFromRef(rdr.sup.RootInodeRef, "")
+	if err != nil {
+		return nil, errors.Join(errors.New("failed to read root directory"), err)
 	}
 	return
 }
