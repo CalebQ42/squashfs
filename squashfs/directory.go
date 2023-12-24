@@ -2,6 +2,7 @@ package squashfs
 
 import (
 	"errors"
+	"fmt"
 	"io/fs"
 	"path/filepath"
 	"slices"
@@ -18,7 +19,12 @@ type Directory struct {
 	Entries []directory.Entry
 }
 
-func (r *Reader) directoryFromInode(i *inode.Inode, name string) (*Directory, error) {
+func (r *Reader) directoryFromRef(ref uint64, name string) (*Directory, error) {
+	i, err := r.inodeFromRef(ref)
+	if err != nil {
+		fmt.Println("yo")
+		return nil, err
+	}
 	var blockStart uint32
 	var size uint32
 	var offset uint16
@@ -34,8 +40,9 @@ func (r *Reader) directoryFromInode(i *inode.Inode, name string) (*Directory, er
 	default:
 		return nil, errors.New("not a directory")
 	}
-	dirRdr := metadata.NewReader(toreader.NewReader(r.r, int64(r.sup.DirTableStart)+int64(blockStart)), r.d)
-	_, err := dirRdr.Read(make([]byte, offset))
+	dirRdr := metadata.NewReader(toreader.NewReader(r.r, int64(r.Superblock.DirTableStart)+int64(blockStart)), r.d)
+	defer dirRdr.Close()
+	_, err = dirRdr.Read(make([]byte, offset))
 	if err != nil {
 		return nil, err
 	}
@@ -44,17 +51,9 @@ func (r *Reader) directoryFromInode(i *inode.Inode, name string) (*Directory, er
 		return nil, err
 	}
 	return &Directory{
-		Base:    *r.baseFromInode(i, name),
+		Base:    *r.BaseFromInode(i, name),
 		Entries: entries,
 	}, nil
-}
-
-func (r *Reader) directoryFromRef(ref uint64, name string) (*Directory, error) {
-	in, err := r.inodeFromRef(ref)
-	if err != nil {
-		return nil, err
-	}
-	return r.directoryFromInode(in, name)
 }
 
 func (d *Directory) Open(r *Reader, path string) (*Base, error) {
@@ -69,7 +68,7 @@ func (d *Directory) Open(r *Reader, path string) (*Base, error) {
 	if !found {
 		return nil, fs.ErrNotExist
 	}
-	b, err := r.baseFromEntry(d.Entries[i])
+	b, err := r.BaseFromEntry(d.Entries[i])
 	if err != nil {
 		return nil, err
 	}

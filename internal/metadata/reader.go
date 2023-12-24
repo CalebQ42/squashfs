@@ -60,3 +60,8 @@ func (r *Reader) Read(b []byte) (int, error) {
 	}
 	return curRead, nil
 }
+
+func (r *Reader) Close() error {
+	r.dat = nil
+	return nil
+}

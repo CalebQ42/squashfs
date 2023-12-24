@@ -4,13 +4,14 @@ import (
 	"encoding/binary"
 	"errors"
 	"io"
+	"math"
 	"sync"
 
 	"github.com/CalebQ42/squashfs/internal/decompress"
 	"github.com/CalebQ42/squashfs/internal/toreader"
 )
 
-type FragReaderConstructor func(io.ReaderAt, decompress.Decompressor) (*Reader, error)
+type FragReaderConstructor func() (io.Reader, error)
 
 type FullReader struct {
 	r              io.ReaderAt
@@ -19,16 +20,20 @@ type FullReader struct {
 	retPool        *sync.Pool
 	sizes          []uint32
 	initialOffset  int64
+	finalBlockSize uint64
+	blockSize      uint32
 	goroutineLimit uint16
 }
 
-func NewFullReader(r io.ReaderAt, initialOffset int64, d decompress.Decompressor, sizes []uint32) *FullReader {
+func NewFullReader(r io.ReaderAt, initialOffset int64, d decompress.Decompressor, sizes []uint32, finalBlockSize uint64, blockSize uint32) *FullReader {
 	return &FullReader{
 		r:              r,
 		d:              d,
 		sizes:          sizes,
 		initialOffset:  initialOffset,
 		goroutineLimit: 10,
+		finalBlockSize: finalBlockSize,
+		blockSize:      blockSize,
 		retPool: &sync.Pool{
 			New: func() any {
 				return &retValue{}
@@ -55,6 +60,16 @@ func (r *FullReader) process(index uint64, fileOffset uint64, retChan chan *retV
 	ret := r.retPool.Get().(*retValue)
 	ret.index = index
 	realSize := r.sizes[index] &^ (1 << 24)
+	if realSize == 0 {
+		if index == uint64(len(r.sizes))-1 && r.frag == nil {
+			ret.data = make([]byte, r.finalBlockSize)
+		} else {
+			ret.data = make([]byte, r.blockSize)
+		}
+		ret.err = nil
+		retChan <- ret
+		return
+	}
 	ret.data = make([]byte, realSize)
 	ret.err = binary.Read(toreader.NewReader(r.r, int64(r.initialOffset)+int64(fileOffset)), binary.LittleEndian, &ret.data)
 	if r.sizes[index] == realSize {
@@ -71,7 +86,7 @@ func (r *FullReader) WriteTo(w io.Writer) (int64, error) {
 	cache := make(map[uint64]*retValue)
 	var errCache []error
 	retChan := make(chan *retValue, r.goroutineLimit)
-	for i := uint64(0); i < uint64(len(r.sizes))/uint64(r.goroutineLimit); i++ {
+	for i := uint64(0); i < uint64(math.Ceil(float64(len(r.sizes))/float64(r.goroutineLimit))); i++ {
 		toProcess = uint16(len(r.sizes)) - (uint16(i) * r.goroutineLimit)
 		if toProcess > r.goroutineLimit {
 			toProcess = r.goroutineLimit
@@ -139,12 +154,17 @@ func (r *FullReader) WriteTo(w io.Writer) (int64, error) {
 		}
 	}
 	if r.frag != nil {
-		rdr, err := r.frag(r.r, r.d)
+		rdr, err := r.frag()
 		if err != nil {
 			return wrote, err
 		}
 		wr, err := io.Copy(w, rdr)
 		wrote += wr
+		if l, ok := rdr.(*io.LimitedReader); ok {
+			if cl, ok := l.R.(io.Closer); ok {
+				cl.Close()
+			}
+		}
 		if err != nil {
 			return wrote, err
 		}

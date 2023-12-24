@@ -24,57 +24,57 @@ type superblock struct {
 	ExportTableStart uint64
 }
 
-func (s superblock) checkMagic() bool {
+func (s superblock) ValidMagic() bool {
 	return s.Magic == 0x73717368
 }
 
-func (s superblock) checkBlockLog() bool {
+func (s superblock) ValidBlockLog() bool {
 	return s.BlockLog == uint16(math.Log2(float64(s.BlockSize)))
 }
 
-func (s superblock) checkVersion() bool {
+func (s superblock) ValidVersion() bool {
 	return s.VerMaj == 4 && s.VerMin == 0
 }
 
-func (s superblock) uncompressedInodes() bool {
+func (s superblock) UncompressedInodes() bool {
 	return s.Flags&0x1 == 0x1
 }
 
-func (s superblock) uncompressedData() bool {
+func (s superblock) UncompressedData() bool {
 	return s.Flags&0x2 == 0x2
 }
-func (s superblock) uncompressedFragments() bool {
+func (s superblock) UncompressedFragments() bool {
 	return s.Flags&0x8 == 0x8
 }
 
-func (s superblock) noFragments() bool {
+func (s superblock) NoFragments() bool {
 	return s.Flags&0x10 == 0x10
 }
 
-func (s superblock) alwaysFragment() bool {
+func (s superblock) AlwaysFragment() bool {
 	return s.Flags&0x20 == 0x20
 }
 
-func (s superblock) duplicates() bool {
+func (s superblock) Duplicates() bool {
 	return s.Flags&0x40 == 0x40
 }
 
-func (s superblock) exportable() bool {
+func (s superblock) Exportable() bool {
 	return s.Flags&0x80 == 0x80
 }
 
-func (s superblock) uncompressedXattrs() bool {
+func (s superblock) UncompressedXattrs() bool {
 	return s.Flags&0x100 == 0x100
 }
 
-func (s superblock) noXattrs() bool {
+func (s superblock) NoXattrs() bool {
 	return s.Flags&0x200 == 0x200
 }
 
-func (s superblock) compressionOptions() bool {
+func (s superblock) CompressionOptions() bool {
 	return s.Flags&0x400 == 0x400
 }
 
-func (s superblock) uncompressedIDs() bool {
+func (s superblock) UncompressedIDs() bool {
 	return s.Flags&0x800 == 0x800
 }

@@ -1,21 +1,18 @@
 package squashfs
 
 import (
+	"fmt"
 	"io"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"testing"
-
-	"github.com/CalebQ42/squashfs/squashfs/inode"
 )
 
 const (
 	squashfsURL  = "https://darkstorm.tech/files/LinuxPATest.sfs"
 	squashfsName = "LinuxPATest.sfs"
-
-	// filePath = "PortableApps/Notepad++Portable/App/DefaultData/Config/contextMenu.xml"
 )
 
 func preTest(dir string) (fil *os.File, err error) {
@@ -62,26 +59,74 @@ func TestReader(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = checkDir(rdr, rdr.root)
+	path := filepath.Join(tmpDir, "extractTest")
+	os.RemoveAll(path)
+	os.MkdirAll(path, 0777)
+	err = extractToDir(rdr, &rdr.Root.Base, path)
 	t.Fatal(err)
 }
 
-func checkDir(rdr *Reader, d *Directory) error {
-	for _, e := range d.Entries {
-		if e.InodeType == inode.Dir {
-			b, err := d.Open(rdr, e.Name)
+var singleFile = "PortableApps/CPU-X/CPU-X-v4.2.0-x86_64.AppImage"
+
+func TestSingleFile(t *testing.T) {
+	tmpDir := "../testing"
+	fil, err := preTest(tmpDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer fil.Close()
+	rdr, err := NewReader(fil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(tmpDir, "extractTest")
+	os.RemoveAll(path)
+	os.MkdirAll(path, 0777)
+	b, err := rdr.Root.Open(rdr, singleFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = extractToDir(rdr, b, path)
+	t.Fatal(err)
+}
+
+func extractToDir(rdr *Reader, b *Base, folder string) error {
+	path := filepath.Join(folder, b.Name)
+	if b.IsDir() {
+		d, err := b.ToDir(rdr)
+		if err != nil {
+			return err
+		}
+		err = os.MkdirAll(path, 0777)
+		if err != nil {
+			return err
+		}
+		var nestBast *Base
+		for _, e := range d.Entries {
+			nestBast, err = rdr.BaseFromEntry(e)
 			if err != nil {
 				return err
 			}
-			d, err := b.ToDir(rdr)
-			if err != nil {
-				return err
-			}
-			err = checkDir(rdr, d)
+			err = extractToDir(rdr, nestBast, path)
 			if err != nil {
 				return err
 			}
 		}
+	} else if b.IsRegular() {
+		_, full, err := b.GetRegFileReaders(rdr)
+		if err != nil {
+			fmt.Println("yo", path)
+			return err
+		}
+		fil, err := os.Create(path)
+		if err != nil {
+			return err
+		}
+		_, err = full.WriteTo(fil)
+		if err != nil {
+			return err
+		}
+		fmt.Println("Successfully extracted file:", b.Name)
 	}
 	return nil
 }
