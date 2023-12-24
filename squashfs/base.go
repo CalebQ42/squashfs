@@ -4,9 +4,10 @@ import (
 	"errors"
 	"io"
 
-	"github.com/CalebQ42/squashfs/internal/data"
+	"github.com/CalebQ42/squashfs/internal/decompress"
 	"github.com/CalebQ42/squashfs/internal/metadata"
 	"github.com/CalebQ42/squashfs/internal/toreader"
+	"github.com/CalebQ42/squashfs/squashfs/data"
 	"github.com/CalebQ42/squashfs/squashfs/directory"
 	"github.com/CalebQ42/squashfs/squashfs/inode"
 )
@@ -50,9 +51,9 @@ func (b *Base) IsRegular() bool {
 	return b.Inode.Type == inode.Fil || b.Inode.Type == inode.EFil
 }
 
-func (b *Base) GetRegFileReaders(r *Reader) (io.ReadCloser, error) {
+func (b *Base) GetRegFileReaders(r *Reader) (*data.Reader, *data.FullReader, error) {
 	if !b.IsRegular() {
-		return nil, errors.New("not a regular file")
+		return nil, nil, errors.New("not a regular file")
 	}
 	var blockStart uint64
 	var fragIndex uint32
@@ -69,19 +70,26 @@ func (b *Base) GetRegFileReaders(r *Reader) (io.ReadCloser, error) {
 		fragOffset = b.Inode.Data.(inode.EFile).FragOffset
 		sizes = b.Inode.Data.(inode.EFile).BlockSizes
 	}
-	var frag *data.Reader
-	if fragIndex != 0xFFFFFFFF {
+	frag := func(rdr io.ReaderAt, d decompress.Decompressor) (*data.Reader, error) {
 		ent, err := r.fragEntry(fragIndex)
 		if err != nil {
 			return nil, err
 		}
-		frag = data.NewReader(toreader.NewReader(r.r, int64(ent.start)), r.d, []uint32{ent.size})
+		frag := data.NewReader(toreader.NewReader(r.r, int64(ent.start)), r.d, []uint32{ent.size})
 		frag.Read(make([]byte, fragOffset))
+		return frag, nil
 	}
-	out := data.NewReader(toreader.NewReader(r.r, int64(blockStart)), r.d, sizes)
-	if frag != nil {
-		out.AddFrag(out)
+	outRdr := data.NewReader(toreader.NewReader(r.r, int64(blockStart)), r.d, sizes)
+	if fragIndex != 0xffffffff {
+		f, err := frag(r.r, r.d)
+		if err != nil {
+			return nil, nil, err
+		}
+		outRdr.AddFrag(f)
 	}
-	//TODO: implement and add full reader
-	return out, nil
+	outFull := data.NewFullReader(r.r, int64(blockStart), r.d, sizes)
+	if fragIndex != 0xffffffff {
+		outFull.AddFrag(frag)
+	}
+	return outRdr, outFull, nil
 }
