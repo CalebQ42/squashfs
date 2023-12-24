@@ -20,7 +20,7 @@ type Directory struct {
 }
 
 func (r *Reader) directoryFromRef(ref uint64, name string) (*Directory, error) {
-	i, err := r.inodeFromRef(ref)
+	i, err := r.InodeFromRef(ref)
 	if err != nil {
 		fmt.Println("yo")
 		return nil, err

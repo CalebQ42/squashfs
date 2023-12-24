@@ -5,7 +5,6 @@ import (
 	"errors"
 	"io"
 	"math"
-	"time"
 
 	"github.com/CalebQ42/squashfs/internal/decompress"
 	"github.com/CalebQ42/squashfs/internal/metadata"
@@ -77,11 +76,6 @@ func NewReader(r io.ReaderAt) (rdr *Reader, err error) {
 		return nil, errors.Join(errors.New("failed to read root directory"), err)
 	}
 	return
-}
-
-// Returns the last time the archive was modified.
-func (r *Reader) ModTime() time.Time {
-	return time.Unix(int64(r.Superblock.ModTime), 0)
 }
 
 // Get a uid/gid at the given index. Lazily populates the reader's Id table as necessary.
@@ -221,5 +215,5 @@ func (r *Reader) Inode(i uint32) (*inode.Inode, error) {
 	if err != nil {
 		return nil, err
 	}
-	return r.inodeFromRef(ref)
+	return r.InodeFromRef(ref)
 }

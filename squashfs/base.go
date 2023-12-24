@@ -21,10 +21,7 @@ func (r *Reader) BaseFromInode(i *inode.Inode, name string) *Base {
 }
 
 func (r *Reader) BaseFromEntry(e directory.Entry) (*Base, error) {
-	rdr := metadata.NewReader(toreader.NewReader(r.r, int64(r.Superblock.InodeTableStart)+int64(e.BlockStart)), r.d)
-	defer rdr.Close()
-	rdr.Read(make([]byte, e.Offset))
-	in, err := inode.Read(rdr, r.Superblock.BlockSize)
+	in, err := r.InodeFromEntry(e)
 	if err != nil {
 		return nil, err
 	}
@@ -32,7 +29,7 @@ func (r *Reader) BaseFromEntry(e directory.Entry) (*Base, error) {
 }
 
 func (r *Reader) BaseFromRef(ref uint64, name string) (*Base, error) {
-	in, err := r.inodeFromRef(ref)
+	in, err := r.InodeFromRef(ref)
 	if err != nil {
 		return nil, err
 	}
