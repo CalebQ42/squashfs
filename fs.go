@@ -91,13 +91,20 @@ func (f *FS) Open(name string) (fs.File, error) {
 		}
 	}
 	if name == "." || name == "" {
-		return &File{
-			b:      &f.d.Base,
-			r:      f.r,
-			parent: f.parent,
-		}, nil
+		return f.File(), nil
 	}
 	split := strings.Split(name, "/")
+	if split[0] == ".." {
+		if f.parent == nil { // root directory
+			return nil, &fs.PathError{
+				Op:   "open",
+				Path: name,
+				Err:  fs.ErrNotExist,
+			}
+		}
+	} else {
+		return f.parent.Open(strings.Join(split[1:], "/"))
+	}
 	i, found := slices.BinarySearchFunc(f.d.Entries, split[0], func(e directory.Entry, name string) int {
 		return strings.Compare(e.Name, name)
 	})
@@ -116,7 +123,7 @@ func (f *FS) Open(name string) (fs.File, error) {
 		return &File{
 			b:      b,
 			r:      f.r,
-			parent: f.parent,
+			parent: f,
 		}, nil
 	}
 	if !b.IsDir() {
@@ -149,11 +156,7 @@ func (f *FS) ReadDir(name string) ([]fs.DirEntry, error) {
 		}
 	}
 	if name == "." || name == "" {
-		return (&File{
-			b:      &f.d.Base,
-			parent: f.parent,
-			r:      f.r,
-		}).ReadDir(-1)
+		return f.File().ReadDir(-1)
 	}
 	fil, err := f.Open(name)
 	if err != nil {
@@ -196,11 +199,7 @@ func (f *FS) Stat(name string) (fs.FileInfo, error) {
 		}
 	}
 	if name == "." || name == "" {
-		return (&File{
-			b:      &f.d.Base,
-			parent: f.parent,
-			r:      f.r,
-		}).Stat()
+		return f.File().Stat()
 	}
 	fil, err := f.Open(name)
 	if err != nil {
@@ -236,6 +235,30 @@ func (f *FS) Sub(dir string) (fs.FS, error) {
 	return fil.(*File).FS()
 }
 
+// Extract the FS to the given folder. If the file is a folder, the folder's contents will be extracted to the folder.
+// Uses default extraction options.
+func (f *FS) Extract(folder string) error {
+	return f.File().Extract(folder)
+}
+
+// Extract the FS to the given folder. If the file is a folder, the folder's contents will be extracted to the folder.
+// Allows setting various extraction options via ExtractionOptions.
+func (f *FS) ExtractWithOptions(folder string, op *ExtractionOptions) error {
+	return f.File().ExtractWithOptions(folder, op)
+}
+
+// Returns the FS as a *File
+func (f *FS) File() *File {
+	return &File{
+		b:      &f.d.Base,
+		parent: f.parent,
+		r:      f.r,
+	}
+}
+
 func (f *FS) path() string {
+	if f.parent == nil {
+		return f.d.Name
+	}
 	return filepath.Join(f.parent.path(), f.d.Name)
 }
