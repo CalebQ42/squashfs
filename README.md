@@ -4,7 +4,7 @@
 
 A PURE Go library to read squashfs. There is currently no plans to add archive creation support as it will almost always be better to just call `mksquashfs`. I could see some possible use cases, but probably won't spend time on it unless it's requested (open a discussion if you want this feature).
 
-The library has two parts with this `github.com/CalebQ42/squashfs` being easy to use as it implements `io/fs` interfaces and doesn't expose unnecessary information. 95% this is the library you want. If you need lower level access to the information, use `github.com/CalebQ42/squashfs/squashfs` where far more information is exposed.
+The library has two parts with this `github.com/CalebQ42/squashfs` being easy to use as it implements `io/fs` interfaces and doesn't expose unnecessary information. 95% this is the library you want. If you need lower level access to the information, use `github.com/CalebQ42/squashfs/low` where far more information is exposed.
 
 Currently has support for reading squashfs files and extracting files and folders.
 

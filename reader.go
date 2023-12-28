@@ -4,21 +4,21 @@ import (
 	"io"
 	"time"
 
-	"github.com/CalebQ42/squashfs/squashfs"
+	squashfslow "github.com/CalebQ42/squashfs/low"
 )
 
 type Reader struct {
 	*FS
-	r *squashfs.Reader
+	Low *squashfslow.Reader
 }
 
 func NewReader(r io.ReaderAt) (*Reader, error) {
-	rdr, err := squashfs.NewReader(r)
+	rdr, err := squashfslow.NewReader(r)
 	if err != nil {
 		return nil, err
 	}
 	out := &Reader{
-		r: rdr,
+		Low: rdr,
 	}
 	out.FS = &FS{
 		d: rdr.Root,
@@ -28,5 +28,5 @@ func NewReader(r io.ReaderAt) (*Reader, error) {
 }
 
 func (r *Reader) ModTime() time.Time {
-	return time.Unix(int64(r.r.Superblock.ModTime), 0)
+	return time.Unix(int64(r.Low.Superblock.ModTime), 0)
 }

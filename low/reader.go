@@ -1,4 +1,4 @@
-package squashfs
+package squashfslow
 
 import (
 	"encoding/binary"
@@ -9,7 +9,7 @@ import (
 	"github.com/CalebQ42/squashfs/internal/decompress"
 	"github.com/CalebQ42/squashfs/internal/metadata"
 	"github.com/CalebQ42/squashfs/internal/toreader"
-	"github.com/CalebQ42/squashfs/squashfs/inode"
+	"github.com/CalebQ42/squashfs/low/inode"
 )
 
 // The types of compression supported by squashfs

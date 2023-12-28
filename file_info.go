@@ -4,8 +4,8 @@ import (
 	"io/fs"
 	"time"
 
-	"github.com/CalebQ42/squashfs/squashfs/directory"
-	"github.com/CalebQ42/squashfs/squashfs/inode"
+	"github.com/CalebQ42/squashfs/low/directory"
+	"github.com/CalebQ42/squashfs/low/inode"
 )
 
 type fileInfo struct {
@@ -17,7 +17,7 @@ type fileInfo struct {
 }
 
 func (r Reader) newFileInfo(e directory.Entry) (fileInfo, error) {
-	i, err := r.r.InodeFromEntry(e)
+	i, err := r.Low.InodeFromEntry(e)
 	if err != nil {
 		return fileInfo{}, err
 	}

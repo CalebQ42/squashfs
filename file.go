@@ -12,14 +12,14 @@ import (
 	"strconv"
 
 	"github.com/CalebQ42/squashfs/internal/routinemanager"
-	"github.com/CalebQ42/squashfs/squashfs"
-	"github.com/CalebQ42/squashfs/squashfs/data"
-	"github.com/CalebQ42/squashfs/squashfs/inode"
+	squashfslow "github.com/CalebQ42/squashfs/low"
+	"github.com/CalebQ42/squashfs/low/data"
+	"github.com/CalebQ42/squashfs/low/inode"
 )
 
 // File represents a file inside a squashfs archive.
 type File struct {
-	b        *squashfs.Base
+	b        *squashfslow.Base
 	full     *data.FullReader
 	rdr      *data.Reader
 	parent   *FS
@@ -28,7 +28,7 @@ type File struct {
 }
 
 // Creates a new *File from the given *squashfs.Base
-func (r *Reader) FileFromBase(b *squashfs.Base, parent *FS) *File {
+func (r *Reader) FileFromBase(b *squashfslow.Base, parent *FS) *File {
 	return &File{
 		b:      b,
 		parent: parent,
@@ -40,7 +40,7 @@ func (f *File) FS() (*FS, error) {
 	if !f.IsDir() {
 		return nil, errors.New("not a directory")
 	}
-	d, err := f.b.ToDir(f.r.r)
+	d, err := f.b.ToDir(f.r.Low)
 	if err != nil {
 		return nil, err
 	}
@@ -114,7 +114,7 @@ func (f *File) ReadDir(n int) ([]fs.DirEntry, error) {
 	if !f.IsDir() {
 		return nil, errors.New("file is not a directory")
 	}
-	d, err := f.b.ToDir(f.r.r)
+	d, err := f.b.ToDir(f.r.Low)
 	if err != nil {
 		return nil, err
 	}
@@ -173,7 +173,7 @@ func (f *File) WriteTo(w io.Writer) (int64, error) {
 
 func (f *File) initializeReaders() error {
 	var err error
-	f.rdr, f.full, err = f.b.GetRegFileReaders(f.r.r)
+	f.rdr, f.full, err = f.b.GetRegFileReaders(f.r.Low)
 	return err
 }
 
@@ -218,7 +218,7 @@ func (f *File) ExtractWithOptions(path string, op *ExtractionOptions) error {
 	}
 	switch f.b.Inode.Type {
 	case inode.Dir, inode.EDir:
-		d, err := f.b.ToDir(f.r.r)
+		d, err := f.b.ToDir(f.r.Low)
 		if err != nil {
 			if op.Verbose {
 				log.Println("Failed to create squashfs.Directory for", path)
@@ -227,14 +227,14 @@ func (f *File) ExtractWithOptions(path string, op *ExtractionOptions) error {
 		}
 		errChan := make(chan error, len(d.Entries))
 		for i := range d.Entries {
-			b, err := f.r.r.BaseFromEntry(d.Entries[i])
+			b, err := f.r.Low.BaseFromEntry(d.Entries[i])
 			if err != nil {
 				if op.Verbose {
 					log.Println("Failed to get squashfs.Base from entry for", path)
 				}
 				return errors.Join(errors.New("failed to get base from entry: "+path), err)
 			}
-			go func(b *squashfs.Base, path string) {
+			go func(b *squashfslow.Base, path string) {
 				i := op.manager.Lock()
 				if b.IsDir() {
 					extDir := filepath.Join(path, b.Name)
@@ -285,7 +285,7 @@ func (f *File) ExtractWithOptions(path string, op *ExtractionOptions) error {
 			return errors.Join(errors.New("failed to create file: "+path), err)
 		}
 		defer outFil.Close()
-		full, err := f.b.GetFullReader(f.r.r)
+		full, err := f.b.GetFullReader(f.r.Low)
 		if err != nil {
 			if op.Verbose {
 				log.Println("Failed to create full reader for", path)
@@ -406,7 +406,7 @@ func (f *File) ExtractWithOptions(path string, op *ExtractionOptions) error {
 	if op.IgnorePerm {
 		return nil
 	}
-	uid, err := f.b.Uid(f.r.r)
+	uid, err := f.b.Uid(f.r.Low)
 	if err != nil {
 		if op.Verbose {
 			log.Println("Failed to get uid for", path)
@@ -414,7 +414,7 @@ func (f *File) ExtractWithOptions(path string, op *ExtractionOptions) error {
 		}
 		return nil
 	}
-	gid, err := f.b.Gid(f.r.r)
+	gid, err := f.b.Gid(f.r.Low)
 	if err != nil {
 		if op.Verbose {
 			log.Println("Failed to get gid for", path)

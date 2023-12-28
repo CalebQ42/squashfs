@@ -1,4 +1,4 @@
-package squashfs_test
+package squashfslow_test
 
 import (
 	"fmt"
@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/CalebQ42/squashfs/squashfs"
+	squashfslow "github.com/CalebQ42/squashfs/low"
 )
 
 const (
@@ -57,7 +57,7 @@ func TestReader(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer fil.Close()
-	rdr, err := squashfs.NewReader(fil)
+	rdr, err := squashfslow.NewReader(fil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -77,7 +77,7 @@ func TestSingleFile(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer fil.Close()
-	rdr, err := squashfs.NewReader(fil)
+	rdr, err := squashfslow.NewReader(fil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -92,7 +92,7 @@ func TestSingleFile(t *testing.T) {
 	t.Fatal(err)
 }
 
-func extractToDir(rdr *squashfs.Reader, b *squashfs.Base, folder string) error {
+func extractToDir(rdr *squashfslow.Reader, b *squashfslow.Base, folder string) error {
 	path := filepath.Join(folder, b.Name)
 	if b.IsDir() {
 		d, err := b.ToDir(rdr)
@@ -103,7 +103,7 @@ func extractToDir(rdr *squashfs.Reader, b *squashfs.Base, folder string) error {
 		if err != nil {
 			return err
 		}
-		var nestBast *squashfs.Base
+		var nestBast *squashfslow.Base
 		for _, e := range d.Entries {
 			nestBast, err = rdr.BaseFromEntry(e)
 			if err != nil {

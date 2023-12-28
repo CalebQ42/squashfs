@@ -1,4 +1,4 @@
-package squashfs
+package squashfslow
 
 import "math"
 

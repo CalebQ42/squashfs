@@ -1,4 +1,4 @@
-package squashfs
+package squashfslow
 
 import (
 	"errors"
@@ -9,8 +9,8 @@ import (
 
 	"github.com/CalebQ42/squashfs/internal/metadata"
 	"github.com/CalebQ42/squashfs/internal/toreader"
-	"github.com/CalebQ42/squashfs/squashfs/directory"
-	"github.com/CalebQ42/squashfs/squashfs/inode"
+	"github.com/CalebQ42/squashfs/low/directory"
+	"github.com/CalebQ42/squashfs/low/inode"
 )
 
 type Directory struct {

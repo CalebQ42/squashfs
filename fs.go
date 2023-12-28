@@ -8,20 +8,20 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/CalebQ42/squashfs/squashfs"
-	"github.com/CalebQ42/squashfs/squashfs/directory"
+	squashfslow "github.com/CalebQ42/squashfs/low"
+	"github.com/CalebQ42/squashfs/low/directory"
 )
 
 // FS is a fs.FS representation of a squashfs directory.
 // Implements fs.GlobFS, fs.ReadDirFS, fs.ReadFileFS, fs.StatFS, and fs.SubFS
 type FS struct {
-	d      *squashfs.Directory
+	d      *squashfslow.Directory
 	r      *Reader
 	parent *FS
 }
 
 // Creates a new *FS from the given squashfs.directory
-func (r *Reader) FSFromDirectory(d *squashfs.Directory, parent *FS) *FS {
+func (r *Reader) FSFromDirectory(d *squashfslow.Directory, parent *FS) *FS {
 	return &FS{
 		d:      d,
 		r:      r,
@@ -124,7 +124,7 @@ func (f *FS) Open(name string) (fs.File, error) {
 			Err:  fs.ErrNotExist,
 		}
 	}
-	b, err := f.r.r.BaseFromEntry(f.d.Entries[i])
+	b, err := f.r.Low.BaseFromEntry(f.d.Entries[i])
 	if err != nil {
 		return nil, err
 	}
@@ -142,7 +142,7 @@ func (f *FS) Open(name string) (fs.File, error) {
 			Err:  fs.ErrNotExist,
 		}
 	}
-	d, err := b.ToDir(f.r.r)
+	d, err := b.ToDir(f.r.Low)
 	if err != nil {
 		return nil, err
 	}

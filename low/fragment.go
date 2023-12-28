@@ -1,4 +1,4 @@
-package squashfs
+package squashfslow
 
 type fragEntry struct {
 	Start uint64
