@@ -2,7 +2,6 @@ package squashfs
 
 import (
 	"errors"
-	"fmt"
 	"io/fs"
 	"path/filepath"
 	"slices"
@@ -22,7 +21,6 @@ type Directory struct {
 func (r *Reader) directoryFromRef(ref uint64, name string) (*Directory, error) {
 	i, err := r.InodeFromRef(ref)
 	if err != nil {
-		fmt.Println("yo")
 		return nil, err
 	}
 	var blockStart uint32

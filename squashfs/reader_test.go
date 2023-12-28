@@ -1,4 +1,4 @@
-package squashfs
+package squashfs_test
 
 import (
 	"fmt"
@@ -8,6 +8,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"testing"
+
+	"github.com/CalebQ42/squashfs/squashfs"
 )
 
 const (
@@ -55,7 +57,7 @@ func TestReader(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer fil.Close()
-	rdr, err := NewReader(fil)
+	rdr, err := squashfs.NewReader(fil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -75,7 +77,7 @@ func TestSingleFile(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer fil.Close()
-	rdr, err := NewReader(fil)
+	rdr, err := squashfs.NewReader(fil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -90,7 +92,7 @@ func TestSingleFile(t *testing.T) {
 	t.Fatal(err)
 }
 
-func extractToDir(rdr *Reader, b *Base, folder string) error {
+func extractToDir(rdr *squashfs.Reader, b *squashfs.Base, folder string) error {
 	path := filepath.Join(folder, b.Name)
 	if b.IsDir() {
 		d, err := b.ToDir(rdr)
@@ -101,7 +103,7 @@ func extractToDir(rdr *Reader, b *Base, folder string) error {
 		if err != nil {
 			return err
 		}
-		var nestBast *Base
+		var nestBast *squashfs.Base
 		for _, e := range d.Entries {
 			nestBast, err = rdr.BaseFromEntry(e)
 			if err != nil {
@@ -115,7 +117,6 @@ func extractToDir(rdr *Reader, b *Base, folder string) error {
 	} else if b.IsRegular() {
 		_, full, err := b.GetRegFileReaders(rdr)
 		if err != nil {
-			fmt.Println("yo", path)
 			return err
 		}
 		fil, err := os.Create(path)

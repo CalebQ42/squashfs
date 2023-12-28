@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"math"
+	"runtime"
 	"sync"
 
 	"github.com/CalebQ42/squashfs/internal/decompress"
@@ -31,7 +32,7 @@ func NewFullReader(r io.ReaderAt, initialOffset int64, d decompress.Decompressor
 		d:              d,
 		sizes:          sizes,
 		initialOffset:  initialOffset,
-		goroutineLimit: 10,
+		goroutineLimit: uint16(runtime.NumCPU()),
 		finalBlockSize: finalBlockSize,
 		blockSize:      blockSize,
 		retPool: &sync.Pool{

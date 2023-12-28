@@ -27,6 +27,15 @@ type File struct {
 	dirsRead int
 }
 
+// Creates a new *File from the given *squashfs.Base
+func (r *Reader) FileFromBase(b *squashfs.Base, parent *FS) *File {
+	return &File{
+		b:      b,
+		parent: parent,
+		r:      r,
+	}
+}
+
 func (f *File) FS() (*FS, error) {
 	if !f.IsDir() {
 		return nil, errors.New("not a directory")
@@ -179,6 +188,9 @@ func (f *File) deviceDevices() (maj uint32, min uint32) {
 }
 
 func (f *File) path() string {
+	if f.parent == nil {
+		return f.b.Name
+	}
 	return filepath.Join(f.parent.path(), f.b.Name)
 }
 
@@ -193,7 +205,16 @@ func (f *File) Extract(folder string) error {
 func (f *File) ExtractWithOptions(path string, op *ExtractionOptions) error {
 	if op.manager == nil {
 		op.manager = routinemanager.NewManager(op.SimultaneousFiles)
-		log.SetOutput(op.LogOutput)
+		if op.LogOutput != nil {
+			log.SetOutput(op.LogOutput)
+		}
+		err := os.MkdirAll(path, 0777)
+		if err != nil {
+			if op.Verbose {
+				log.Println("Failed to create initial directory", path)
+			}
+			return err
+		}
 	}
 	switch f.b.Inode.Type {
 	case inode.Dir, inode.EDir:
@@ -205,7 +226,6 @@ func (f *File) ExtractWithOptions(path string, op *ExtractionOptions) error {
 			return errors.Join(errors.New("failed to create squashfs.Directory: "+path), err)
 		}
 		errChan := make(chan error, len(d.Entries))
-		files := len(d.Entries)
 		for i := range d.Entries {
 			b, err := f.r.r.BaseFromEntry(d.Entries[i])
 			if err != nil {
@@ -214,37 +234,39 @@ func (f *File) ExtractWithOptions(path string, op *ExtractionOptions) error {
 				}
 				return errors.Join(errors.New("failed to get base from entry: "+path), err)
 			}
-			if b.IsDir() {
-				files--
-				extDir := filepath.Join(path, b.Name)
-				err = os.Mkdir(extDir, 0777)
-				if err != nil {
-					if op.Verbose {
-						log.Println("Failed to create directory", path)
+			go func(b *squashfs.Base, path string) {
+				i := op.manager.Lock()
+				if b.IsDir() {
+					extDir := filepath.Join(path, b.Name)
+					err = os.Mkdir(extDir, 0777)
+					op.manager.Unlock(i)
+					if err != nil {
+						if op.Verbose {
+							log.Println("Failed to create directory", path)
+						}
+						errChan <- errors.Join(errors.New("failed to create directory: "+path), err)
+						return
 					}
-					return errors.Join(errors.New("failed to create directory: "+path), err)
-				}
-				err = f.ExtractWithOptions(extDir, op)
-				if err != nil {
-					if op.Verbose {
-						log.Println("Failed to extract directory", path)
+					err = f.r.FileFromBase(b, f.r.FSFromDirectory(d, f.parent)).ExtractWithOptions(extDir, op)
+					if err != nil {
+						if op.Verbose {
+							log.Println("Failed to extract directory", path)
+						}
+						errChan <- errors.Join(errors.New("failed to extract directory: "+path), err)
+						return
 					}
-					return errors.Join(errors.New("failed to extract directory: "+path), err)
+					errChan <- nil
+				} else {
+					fil := f.r.FileFromBase(b, f.r.FSFromDirectory(d, f.parent))
+					err = fil.ExtractWithOptions(path, op)
+					op.manager.Unlock(i)
+					fil.Close()
+					errChan <- err
 				}
-			} else {
-				fil := &File{
-					b: b,
-					r: f.r,
-				}
-				go func(fil *File, folder string) {
-					i := op.manager.Lock()
-					defer op.manager.Unlock(i)
-					errChan <- fil.ExtractWithOptions(folder, op)
-				}(fil, path)
-			}
+			}(b, path)
 		}
 		var errCache []error
-		for i := 0; i < files; i++ {
+		for i := 0; i < len(d.Entries); i++ {
 			err := <-errChan
 			if err != nil {
 				errCache = append(errCache, err)
@@ -277,9 +299,6 @@ func (f *File) ExtractWithOptions(path string, op *ExtractionOptions) error {
 				log.Println("Failed to write file", path)
 			}
 			return errors.Join(errors.New("failed to write file: "+path), err)
-		}
-		if op.Verbose {
-			log.Println(f.path(), "extracted to", path)
 		}
 	case inode.Sym, inode.ESym:
 		symPath := f.SymlinkPath()

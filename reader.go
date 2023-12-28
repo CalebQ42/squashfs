@@ -17,12 +17,14 @@ func NewReader(r io.ReaderAt) (*Reader, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Reader{
+	out := &Reader{
 		r: rdr,
-		FS: &FS{
-			d: rdr.Root,
-		},
-	}, nil
+	}
+	out.FS = &FS{
+		d: rdr.Root,
+		r: out,
+	}
+	return out, nil
 }
 
 func (r *Reader) ModTime() time.Time {

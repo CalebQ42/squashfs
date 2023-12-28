@@ -20,6 +20,15 @@ type FS struct {
 	parent *FS
 }
 
+// Creates a new *FS from the given squashfs.directory
+func (r *Reader) FSFromDirectory(d *squashfs.Directory, parent *FS) *FS {
+	return &FS{
+		d:      d,
+		r:      r,
+		parent: parent,
+	}
+}
+
 // Glob returns the name of the files at the given pattern.
 // All paths are relative to the FS.
 // Uses filepath.Match to compare names.
@@ -101,9 +110,9 @@ func (f *FS) Open(name string) (fs.File, error) {
 				Path: name,
 				Err:  fs.ErrNotExist,
 			}
+		} else {
+			return f.parent.Open(strings.Join(split[1:], "/"))
 		}
-	} else {
-		return f.parent.Open(strings.Join(split[1:], "/"))
 	}
 	i, found := slices.BinarySearchFunc(f.d.Entries, split[0], func(e directory.Entry, name string) int {
 		return strings.Compare(e.Name, name)
@@ -137,11 +146,7 @@ func (f *FS) Open(name string) (fs.File, error) {
 	if err != nil {
 		return nil, err
 	}
-	return (&FS{
-		d:      d,
-		r:      f.r,
-		parent: f,
-	}).Open(strings.Join(split[1:], "/"))
+	return f.r.FSFromDirectory(d, f).Open(strings.Join(split[1:], "/"))
 }
 
 // Returns all DirEntry's for the directory at name.
