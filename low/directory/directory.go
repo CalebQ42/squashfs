@@ -24,6 +24,7 @@ type Entry struct {
 	BlockStart uint32
 	Offset     uint16
 	InodeType  uint16
+	Num        uint32
 }
 
 func ReadDirectory(r io.Reader, size uint32) (out []Entry, err error) {
@@ -53,6 +54,7 @@ func ReadDirectory(r io.Reader, size uint32) (out []Entry, err error) {
 				Offset:     de.Offset,
 				Name:       string(nameTmp),
 				InodeType:  de.InodeType,
+				Num:        h.Num + uint32(de.NumOffset),
 			})
 		}
 	}
