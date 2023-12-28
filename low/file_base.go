@@ -11,44 +11,44 @@ import (
 	"github.com/CalebQ42/squashfs/low/inode"
 )
 
-type Base struct {
+type FileBase struct {
 	Inode *inode.Inode
 	Name  string
 }
 
-func (r *Reader) BaseFromInode(i *inode.Inode, name string) *Base {
-	return &Base{Inode: i, Name: name}
+func (r *Reader) BaseFromInode(i *inode.Inode, name string) *FileBase {
+	return &FileBase{Inode: i, Name: name}
 }
 
-func (r *Reader) BaseFromEntry(e directory.Entry) (*Base, error) {
+func (r *Reader) BaseFromEntry(e directory.Entry) (*FileBase, error) {
 	in, err := r.InodeFromEntry(e)
 	if err != nil {
 		return nil, err
 	}
-	return &Base{Inode: in, Name: e.Name}, nil
+	return &FileBase{Inode: in, Name: e.Name}, nil
 }
 
-func (r *Reader) BaseFromRef(ref uint64, name string) (*Base, error) {
+func (r *Reader) BaseFromRef(ref uint64, name string) (*FileBase, error) {
 	in, err := r.InodeFromRef(ref)
 	if err != nil {
 		return nil, err
 	}
-	return &Base{Inode: in, Name: name}, nil
+	return &FileBase{Inode: in, Name: name}, nil
 }
 
-func (b *Base) Uid(r *Reader) (uint32, error) {
+func (b *FileBase) Uid(r *Reader) (uint32, error) {
 	return r.Id(b.Inode.UidInd)
 }
 
-func (b *Base) Gid(r *Reader) (uint32, error) {
+func (b *FileBase) Gid(r *Reader) (uint32, error) {
 	return r.Id(b.Inode.GidInd)
 }
 
-func (b *Base) IsDir() bool {
+func (b *FileBase) IsDir() bool {
 	return b.Inode.Type == inode.Dir || b.Inode.Type == inode.EDir
 }
 
-func (b *Base) ToDir(r *Reader) (*Directory, error) {
+func (b *FileBase) ToDir(r *Reader) (*Directory, error) {
 	var blockStart uint32
 	var size uint32
 	var offset uint16
@@ -75,16 +75,16 @@ func (b *Base) ToDir(r *Reader) (*Directory, error) {
 		return nil, err
 	}
 	return &Directory{
-		Base:    *b,
-		Entries: entries,
+		FileBase: *b,
+		Entries:  entries,
 	}, nil
 }
 
-func (b *Base) IsRegular() bool {
+func (b *FileBase) IsRegular() bool {
 	return b.Inode.Type == inode.Fil || b.Inode.Type == inode.EFil
 }
 
-func (b *Base) GetRegFileReaders(r *Reader) (*data.Reader, *data.FullReader, error) {
+func (b *FileBase) GetRegFileReaders(r *Reader) (*data.Reader, *data.FullReader, error) {
 	if !b.IsRegular() {
 		return nil, nil, errors.New("not a regular file")
 	}
@@ -130,7 +130,7 @@ func (b *Base) GetRegFileReaders(r *Reader) (*data.Reader, *data.FullReader, err
 	return outRdr, outFull, nil
 }
 
-func (b *Base) GetFullReader(r *Reader) (*data.FullReader, error) {
+func (b *FileBase) GetFullReader(r *Reader) (*data.FullReader, error) {
 	if !b.IsRegular() {
 		return nil, errors.New("not a regular file")
 	}
@@ -165,4 +165,39 @@ func (b *Base) GetFullReader(r *Reader) (*data.FullReader, error) {
 		})
 	}
 	return outFull, nil
+}
+
+func (b *FileBase) GetReader(r *Reader) (*data.Reader, error) {
+	if !b.IsRegular() {
+		return nil, errors.New("not a regular file")
+	}
+	var blockStart uint64
+	var fragIndex uint32
+	var fragOffset uint32
+	var fragSize uint64
+	var sizes []uint32
+	if b.Inode.Type == inode.Fil {
+		blockStart = uint64(b.Inode.Data.(inode.File).BlockStart)
+		fragIndex = b.Inode.Data.(inode.File).FragInd
+		fragOffset = b.Inode.Data.(inode.File).FragOffset
+		sizes = b.Inode.Data.(inode.File).BlockSizes
+		fragSize = uint64(b.Inode.Data.(inode.File).Size % r.Superblock.BlockSize)
+	} else {
+		blockStart = b.Inode.Data.(inode.EFile).BlockStart
+		fragIndex = b.Inode.Data.(inode.EFile).FragInd
+		fragOffset = b.Inode.Data.(inode.EFile).FragOffset
+		sizes = b.Inode.Data.(inode.EFile).BlockSizes
+		fragSize = b.Inode.Data.(inode.EFile).Size % uint64(r.Superblock.BlockSize)
+	}
+	outRdr := data.NewReader(toreader.NewReader(r.r, int64(blockStart)), r.d, sizes, fragSize, r.Superblock.BlockSize)
+	if fragIndex != 0xffffffff {
+		ent, err := r.fragEntry(fragIndex)
+		if err != nil {
+			return nil, err
+		}
+		frag := data.NewReader(toreader.NewReader(r.r, int64(ent.Start)), r.d, []uint32{ent.Size}, uint64(r.Superblock.BlockSize), r.Superblock.BlockSize)
+		frag.Read(make([]byte, fragOffset))
+		outRdr.AddFrag(io.LimitReader(frag, int64(fragSize)))
+	}
+	return outRdr, nil
 }

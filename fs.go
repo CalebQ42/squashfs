@@ -255,7 +255,7 @@ func (f *FS) ExtractWithOptions(folder string, op *ExtractionOptions) error {
 // Returns the FS as a *File
 func (f *FS) File() *File {
 	return &File{
-		b:      &f.d.Base,
+		b:      &f.d.FileBase,
 		parent: f.parent,
 		r:      f.r,
 	}

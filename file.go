@@ -19,7 +19,7 @@ import (
 
 // File represents a file inside a squashfs archive.
 type File struct {
-	b        *squashfslow.Base
+	b        *squashfslow.FileBase
 	full     *data.FullReader
 	rdr      *data.Reader
 	parent   *FS
@@ -28,7 +28,7 @@ type File struct {
 }
 
 // Creates a new *File from the given *squashfs.Base
-func (r *Reader) FileFromBase(b *squashfslow.Base, parent *FS) *File {
+func (r *Reader) FileFromBase(b *squashfslow.FileBase, parent *FS) *File {
 	return &File{
 		b:      b,
 		parent: parent,
@@ -234,7 +234,7 @@ func (f *File) ExtractWithOptions(path string, op *ExtractionOptions) error {
 				}
 				return errors.Join(errors.New("failed to get base from entry: "+path), err)
 			}
-			go func(b *squashfslow.Base, path string) {
+			go func(b *squashfslow.FileBase, path string) {
 				i := op.manager.Lock()
 				if b.IsDir() {
 					extDir := filepath.Join(path, b.Name)

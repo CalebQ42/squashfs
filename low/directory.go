@@ -14,7 +14,7 @@ import (
 )
 
 type Directory struct {
-	Base
+	FileBase
 	Entries []directory.Entry
 }
 
@@ -49,15 +49,15 @@ func (r *Reader) directoryFromRef(ref uint64, name string) (*Directory, error) {
 		return nil, err
 	}
 	return &Directory{
-		Base:    *r.BaseFromInode(i, name),
-		Entries: entries,
+		FileBase: *r.BaseFromInode(i, name),
+		Entries:  entries,
 	}, nil
 }
 
-func (d *Directory) Open(r *Reader, path string) (*Base, error) {
+func (d *Directory) Open(r *Reader, path string) (*FileBase, error) {
 	path = filepath.Clean(path)
 	if path == "." || path == "" {
-		return &d.Base, nil
+		return &d.FileBase, nil
 	}
 	split := strings.Split(path, "/")
 	i, found := slices.BinarySearchFunc(d.Entries, split[0], func(e directory.Entry, name string) int {
