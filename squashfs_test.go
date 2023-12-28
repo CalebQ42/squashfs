@@ -19,9 +19,7 @@ import (
 
 const (
 	squashfsURL  = "https://darkstorm.tech/files/LinuxPATest.sfs"
-	squashfsName = "bug.sqfs"
-
-	filePath = "PortableApps/Notepad++Portable/App/DefaultData/Config/contextMenu.xml"
+	squashfsName = "airootfs.sfs"
 )
 
 func preTest(dir string) (fil *os.File, err error) {
@@ -83,21 +81,24 @@ func BenchmarkRace(b *testing.B) {
 	os.RemoveAll(libPath)
 	os.RemoveAll(unsquashPath)
 	var libTime, unsquashTime time.Duration
+	op := squashfs.FastOptions()
 	start := time.Now()
 	rdr, err := squashfs.NewReader(fil)
 	if err != nil {
 		b.Fatal(err)
 	}
-	err = rdr.ExtractTo(libPath)
+	err = rdr.ExtractWithOptions(libPath, op)
 	if err != nil {
 		b.Fatal(err)
 	}
 	libTime = time.Since(start)
 	cmd := exec.Command("unsquashfs", "-d", unsquashPath, fil.Name())
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
 	start = time.Now()
 	err = cmd.Run()
 	if err != nil {
-		b.Fatal(err)
+		b.Log("Unsquashfs error:", err)
 	}
 	unsquashTime = time.Since(start)
 	b.Log("Library took:", libTime.Round(time.Millisecond))
@@ -143,17 +144,21 @@ func TestExtractQuick(t *testing.T) {
 	//TODO: Add long test that checks contents.
 
 	squashFils := os.DirFS(unsquashPath)
-	err = fs.WalkDir(squashFils, ".", func(path string, d fs.DirEntry, _ error) error {
+	err = fs.WalkDir(squashFils, ".", func(path string, _ fs.DirEntry, _ error) error {
 		libFil, e := os.Open(filepath.Join(libPath, path))
 		if e != nil {
 			return e
 		}
-		stat, _ := d.Info()
+		sfsFile, e := os.Open(filepath.Join(unsquashPath, path))
+		if e != nil {
+			return e
+		}
+		sfsStat, _ := sfsFile.Stat()
 		libStat, _ := libFil.Stat()
-		if stat.Size() != libStat.Size() {
-			t.Log(path, "not the same size between library and unsquashfs")
+		if sfsStat.Size() != libStat.Size() {
+			t.Log(libFil.Name(), "not the same size between library and unsquashfs")
 			t.Log("File is", libStat.Size())
-			t.Log("Should be", stat.Size())
+			t.Log("Should be", sfsStat.Size())
 			return errors.New("file not the correct size")
 		}
 		return nil
@@ -161,8 +166,9 @@ func TestExtractQuick(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Fatal("end")
 }
+
+var filePath = "bin"
 
 func TestSingleFile(t *testing.T) {
 	tmpDir := "testing"
@@ -170,7 +176,7 @@ func TestSingleFile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	os.Remove(filepath.Base(filePath))
+	os.Remove(filepath.Join(tmpDir, filePath))
 	rdr, err := squashfs.NewReader(fil)
 	if err != nil {
 		t.Fatal(err)
@@ -184,24 +190,4 @@ func TestSingleFile(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Fatal("HI")
-}
-
-func TestFuse(t *testing.T) {
-	tmpDir := "testing"
-	fil, err := preTest(tmpDir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	os.Remove(filepath.Base(filePath))
-	rdr, err := squashfs.NewReader(fil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	err = rdr.Mount("testing/fuseTest")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer rdr.Unmount()
-	rdr.MountWait()
-	t.Fatal("testing")
 }

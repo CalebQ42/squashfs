@@ -39,7 +39,8 @@ type Inode struct {
 	Data any
 }
 
-func Read(r io.Reader, blockSize uint32) (i Inode, err error) {
+func Read(r io.Reader, blockSize uint32) (i *Inode, err error) {
+	i = new(Inode)
 	err = binary.Read(r, binary.LittleEndian, &i.Header)
 	if err != nil {
 		return
