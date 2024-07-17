@@ -88,7 +88,7 @@ func TestSingleFile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = extractToDir(rdr, b, path)
+	err = extractToDir(rdr, &b, path)
 	t.Fatal(err)
 }
 
@@ -103,13 +103,13 @@ func extractToDir(rdr *squashfslow.Reader, b *squashfslow.FileBase, folder strin
 		if err != nil {
 			return err
 		}
-		var nestBast *squashfslow.FileBase
+		var nestBast squashfslow.FileBase
 		for _, e := range d.Entries {
 			nestBast, err = rdr.BaseFromEntry(e)
 			if err != nil {
 				return err
 			}
-			err = extractToDir(rdr, nestBast, path)
+			err = extractToDir(rdr, &nestBast, path)
 			if err != nil {
 				return err
 			}

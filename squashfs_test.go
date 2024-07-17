@@ -67,7 +67,7 @@ func TestMisc(t *testing.T) {
 	}
 	_ = rdr
 	// Put testing here
-	t.Fatal("UM")
+	// t.Fatal("UM")
 }
 
 func BenchmarkRace(b *testing.B) {
@@ -82,6 +82,7 @@ func BenchmarkRace(b *testing.B) {
 	os.RemoveAll(unsquashPath)
 	var libTime, unsquashTime time.Duration
 	op := squashfs.FastOptions()
+	op.IgnorePerm = true
 	start := time.Now()
 	rdr, err := squashfs.NewReader(fil)
 	if err != nil {
@@ -101,9 +102,9 @@ func BenchmarkRace(b *testing.B) {
 		b.Log("Unsquashfs error:", err)
 	}
 	unsquashTime = time.Since(start)
-	b.Log("Library took:", libTime.Round(time.Millisecond))
-	b.Log("unsquashfs took:", unsquashTime.Round(time.Millisecond))
-	b.Log("unsquashfs is", strconv.FormatFloat(float64(libTime.Milliseconds())/float64(unsquashTime.Milliseconds()), 'f', 2, 64), "times faster")
+	// b.Log("Library took:", libTime.Round(time.Millisecond))
+	// b.Log("unsquashfs took:", unsquashTime.Round(time.Millisecond))
+	b.Fatal("unsquashfs is", strconv.FormatFloat(float64(libTime.Milliseconds())/float64(unsquashTime.Milliseconds()), 'f', 2, 64), "times faster")
 }
 
 func TestExtractQuick(t *testing.T) {

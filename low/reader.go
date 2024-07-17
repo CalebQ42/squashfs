@@ -32,7 +32,7 @@ var (
 type Reader struct {
 	r           io.ReaderAt
 	d           decompress.Decompressor
-	Root        *Directory
+	Root        Directory
 	fragTable   []fragEntry
 	idTable     []uint32
 	exportTable []uint64
@@ -210,10 +210,10 @@ func (r *Reader) inodeRef(i uint32) (uint64, error) {
 	return r.exportTable[i], nil
 }
 
-func (r *Reader) Inode(i uint32) (*inode.Inode, error) {
+func (r *Reader) Inode(i uint32) (inode.Inode, error) {
 	ref, err := r.inodeRef(i)
 	if err != nil {
-		return nil, err
+		return inode.Inode{}, err
 	}
 	return r.InodeFromRef(ref)
 }

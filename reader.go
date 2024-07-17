@@ -9,7 +9,7 @@ import (
 
 type Reader struct {
 	*FS
-	Low *squashfslow.Reader
+	Low squashfslow.Reader
 }
 
 func NewReader(r io.ReaderAt) (*Reader, error) {
@@ -18,7 +18,7 @@ func NewReader(r io.ReaderAt) (*Reader, error) {
 		return nil, err
 	}
 	out := &Reader{
-		Low: rdr,
+		Low: *rdr,
 	}
 	out.FS = &FS{
 		d: rdr.Root,
