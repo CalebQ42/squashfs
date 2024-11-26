@@ -1,4 +1,4 @@
-package squashfslow_test
+package squashfslow
 
 import (
 	"fmt"
@@ -8,13 +8,11 @@ import (
 	"os/exec"
 	"path/filepath"
 	"testing"
-
-	squashfslow "github.com/CalebQ42/squashfs/low"
 )
 
 const (
 	squashfsURL  = "https://darkstorm.tech/files/LinuxPATest.sfs"
-	squashfsName = "LinuxPATest.sfs"
+	squashfsName = "airootfs.sfs"
 )
 
 func preTest(dir string) (fil *os.File, err error) {
@@ -50,6 +48,21 @@ func preTest(dir string) (fil *os.File, err error) {
 	return
 }
 
+func TestMisc(t *testing.T) {
+	tmpDir := "../testing"
+	fil, err := preTest(tmpDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer fil.Close()
+	rdr, err := NewReader(fil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Log(rdr.Superblock.FragCount)
+	t.Fatal(rdr.fragEntry(1233))
+}
+
 func TestReader(t *testing.T) {
 	tmpDir := "../testing"
 	fil, err := preTest(tmpDir)
@@ -57,7 +70,7 @@ func TestReader(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer fil.Close()
-	rdr, err := squashfslow.NewReader(fil)
+	rdr, err := NewReader(fil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -77,7 +90,7 @@ func TestSingleFile(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer fil.Close()
-	rdr, err := squashfslow.NewReader(fil)
+	rdr, err := NewReader(fil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -92,7 +105,7 @@ func TestSingleFile(t *testing.T) {
 	t.Fatal(err)
 }
 
-func extractToDir(rdr *squashfslow.Reader, b *squashfslow.FileBase, folder string) error {
+func extractToDir(rdr *Reader, b *FileBase, folder string) error {
 	path := filepath.Join(folder, b.Name)
 	if b.IsDir() {
 		d, err := b.ToDir(rdr)
@@ -103,7 +116,7 @@ func extractToDir(rdr *squashfslow.Reader, b *squashfslow.FileBase, folder strin
 		if err != nil {
 			return err
 		}
-		var nestBast squashfslow.FileBase
+		var nestBast FileBase
 		for _, e := range d.Entries {
 			nestBast, err = rdr.BaseFromEntry(e)
 			if err != nil {

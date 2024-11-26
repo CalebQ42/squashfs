@@ -3,6 +3,7 @@ package squashfslow
 import (
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"io"
 	"math"
 
@@ -88,7 +89,7 @@ func (r *Reader) Id(i uint16) (uint32, error) {
 	// Populate the id table as needed
 	var blockNum uint32
 	if i != 0 { // If i == 0, we go negatives causing issues with uint32s
-		blockNum = uint32(math.Ceil(float64(i)/2048)) - 1
+		blockNum = uint32(math.Ceil(float64(i+1)/2048)) - 1
 	} else {
 		blockNum = 0
 	}
@@ -131,10 +132,11 @@ func (r *Reader) fragEntry(i uint32) (fragEntry, error) {
 	// Populate the fragment table as needed
 	var blockNum uint32
 	if i != 0 { // If i == 0, we go negatives causing issues with uint32s
-		blockNum = uint32(math.Ceil(float64(i)/512)) - 1
+		blockNum = uint32(math.Ceil(float64(i+1)/512)) - 1
 	} else {
 		blockNum = 0
 	}
+	fmt.Println(blockNum)
 	blocksRead := len(r.fragTable) / 512
 	blocksToRead := int(blockNum) - blocksRead + 1
 
@@ -177,7 +179,7 @@ func (r *Reader) inodeRef(i uint32) (uint64, error) {
 	// Populate the export table as needed
 	var blockNum uint32
 	if i != 0 { // If i == 0, we go negatives causing issues with uint32s
-		blockNum = uint32(math.Ceil(float64(i)/1024)) - 1
+		blockNum = uint32(math.Ceil(float64(i+1)/1024)) - 1
 	} else {
 		blockNum = 0
 	}
