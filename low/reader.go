@@ -123,45 +123,25 @@ func (r *Reader) Id(i uint16) (uint32, error) {
 
 // Get a fragment entry at the given index. Lazily populates the reader's fragment table as necessary.
 func (r *Reader) fragEntry(i uint32) (fragEntry, error) {
-	if len(r.fragTable) > int(i) {
-		return r.fragTable[i], nil
-	} else if i >= r.Superblock.FragCount {
-		return fragEntry{}, errors.New("fragment out of bounds")
-	}
-	// Populate the fragment table as needed
-	var blockNum uint32
-	if i != 0 { // If i == 0, we go negatives causing issues with uint32s
-		blockNum = uint32(math.Ceil(float64(i)/512)) - 1
-	} else {
-		blockNum = 0
-	}
-	blocksRead := len(r.fragTable) / 512
-	blocksToRead := int(blockNum) - blocksRead + 1
+	return readPagedItems(int(i), 512, &r.fragTable, int(r.Superblock.FragCount),
+		func(startBlock, fragsToRead int) ([]fragEntry, error) {
+			// get the offset of the next block of fragments
+			var offset uint64
+			err := binary.Read(toreader.NewReader(r.r, int64(r.Superblock.FragTableStart)+int64(8*startBlock)), binary.LittleEndian, &offset)
+			if err != nil {
+				return nil, err
+			}
 
-	var offset uint64
-	var fragsToRead uint32
-	var fragsTmp []fragEntry
-	var err error
-	var rdr *metadata.Reader
-	for i := blocksRead; i < int(blocksRead)+blocksToRead; i++ {
-		err = binary.Read(toreader.NewReader(r.r, int64(r.Superblock.FragTableStart)+int64(8*i)), binary.LittleEndian, &offset)
-		if err != nil {
-			return fragEntry{}, err
-		}
-		fragsToRead = r.Superblock.FragCount - uint32(len(r.fragTable))
-		if fragsToRead > 512 {
-			fragsToRead = 512
-		}
-		fragsTmp = make([]fragEntry, fragsToRead)
-		rdr = metadata.NewReader(toreader.NewReader(r.r, int64(offset)), r.d)
-		err = binary.Read(rdr, binary.LittleEndian, &fragsTmp)
-		rdr.Close()
-		if err != nil {
-			return fragEntry{}, err
-		}
-		r.fragTable = append(r.fragTable, fragsTmp...)
-	}
-	return r.fragTable[i], nil
+			fragsTmp := make([]fragEntry, fragsToRead)
+			rdr := metadata.NewReader(toreader.NewReader(r.r, int64(offset)), r.d)
+			defer rdr.Close()
+			err = binary.Read(rdr, binary.LittleEndian, &fragsTmp)
+			if err != nil {
+				return nil, err
+			}
+
+			return fragsTmp, nil
+		})
 }
 
 // Get an inode reference at the given index. Lazily populates the reader's export table as necessary.

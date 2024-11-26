@@ -65,7 +65,9 @@ func TestReader(t *testing.T) {
 	os.RemoveAll(path)
 	os.MkdirAll(path, 0777)
 	err = extractToDir(rdr, &rdr.Root.FileBase, path)
-	t.Fatal(err)
+	if err != nil {
+		t.Fatal(err)
+	}
 }
 
 var singleFile = "PortableApps/CPU-X/CPU-X-v4.2.0-x86_64.AppImage"
@@ -89,7 +91,9 @@ func TestSingleFile(t *testing.T) {
 		t.Fatal(err)
 	}
 	err = extractToDir(rdr, &b, path)
-	t.Fatal(err)
+	if err != nil {
+		t.Fatal(err)
+	}
 }
 
 func extractToDir(rdr *squashfslow.Reader, b *squashfslow.FileBase, folder string) error {
