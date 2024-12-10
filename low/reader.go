@@ -3,7 +3,6 @@ package squashfslow
 import (
 	"encoding/binary"
 	"errors"
-	"fmt"
 	"io"
 	"math"
 
@@ -136,7 +135,6 @@ func (r *Reader) fragEntry(i uint32) (fragEntry, error) {
 	} else {
 		blockNum = 0
 	}
-	fmt.Println(blockNum)
 	blocksRead := len(r.fragTable) / 512
 	blocksToRead := int(blockNum) - blocksRead + 1
 
