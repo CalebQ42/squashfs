@@ -26,9 +26,10 @@ func (r Reader) newFileInfo(e directory.Entry) (fileInfo, error) {
 
 func newFileInfo(name string, i *inode.Inode) fileInfo {
 	var size int64
-	if i.Type == inode.Fil {
+	switch i.Type {
+	case inode.Fil:
 		size = int64(i.Data.(inode.File).Size)
-	} else if i.Type == inode.EFil {
+	case inode.EFil:
 		size = int64(i.Data.(inode.EFile).Size)
 	}
 	return fileInfo{

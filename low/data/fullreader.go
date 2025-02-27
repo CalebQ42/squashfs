@@ -88,10 +88,7 @@ func (r *FullReader) WriteTo(w io.Writer) (int64, error) {
 	var errCache []error
 	retChan := make(chan *retValue, r.goroutineLimit)
 	for i := uint64(0); i < uint64(math.Ceil(float64(len(r.sizes))/float64(r.goroutineLimit))); i++ {
-		toProcess = uint16(len(r.sizes)) - (uint16(i) * r.goroutineLimit)
-		if toProcess > r.goroutineLimit {
-			toProcess = r.goroutineLimit
-		}
+		toProcess = min(uint16(len(r.sizes))-(uint16(i)*r.goroutineLimit), r.goroutineLimit)
 		// Start all the goroutines
 		for j := uint16(0); j < toProcess; j++ {
 			go r.process((i*uint64(r.goroutineLimit))+uint64(j), curOffset, retChan)
