@@ -1,4 +1,4 @@
-package squashfs_test
+package squashfs
 
 //Actually proper tests go here.
 
@@ -13,13 +13,11 @@ import (
 	"strconv"
 	"testing"
 	"time"
-
-	"github.com/CalebQ42/squashfs"
 )
 
 const (
 	squashfsURL  = "https://darkstorm.tech/files/LinuxPATest.sfs"
-	squashfsName = "airootfs.sfs"
+	squashfsName = "LinuxPATest.sfs"
 )
 
 func preTest(dir string) (fil *os.File, err error) {
@@ -61,7 +59,7 @@ func TestMisc(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	rdr, err := squashfs.NewReader(fil)
+	rdr, err := NewReader(fil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -81,10 +79,10 @@ func BenchmarkRace(b *testing.B) {
 	os.RemoveAll(libPath)
 	os.RemoveAll(unsquashPath)
 	var libTime, unsquashTime time.Duration
-	op := squashfs.FastOptions()
+	op := FastOptions()
 	op.IgnorePerm = true
 	start := time.Now()
-	rdr, err := squashfs.NewReader(fil)
+	rdr, err := NewReader(fil)
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -104,13 +102,13 @@ func BenchmarkRace(b *testing.B) {
 	unsquashTime = time.Since(start)
 	// b.Log("Library took:", libTime.Round(time.Millisecond))
 	// b.Log("unsquashfs took:", unsquashTime.Round(time.Millisecond))
-	b.Fatal("unsquashfs is", strconv.FormatFloat(float64(libTime.Milliseconds())/float64(unsquashTime.Milliseconds()), 'f', 2, 64), "times faster")
+	b.Log("unsquashfs is", strconv.FormatFloat(float64(libTime.Milliseconds())/float64(unsquashTime.Milliseconds()), 'f', 2, 64), "times faster")
 }
 
 func TestExtractQuick(t *testing.T) {
 	//First, setup everything and extract the archive using the library and unsquashfs
 
-	// tmpDir := b.TempDir()
+	// tmpDir := bTempDir()
 	tmpDir := "testing"
 	fil, err := preTest(tmpDir)
 	if err != nil {
@@ -120,13 +118,13 @@ func TestExtractQuick(t *testing.T) {
 	unsquashPath := filepath.Join(tmpDir, "ExtractSquashfs")
 	os.RemoveAll(libPath)
 	os.RemoveAll(unsquashPath)
-	rdr, err := squashfs.NewReader(fil)
+	rdr, err := NewReader(fil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	os.RemoveAll(filepath.Join(tmpDir, "testLog.txt"))
 	logFil, _ := os.Create(filepath.Join(tmpDir, "testLog.txt"))
-	op := squashfs.DefaultOptions()
+	op := DefaultOptions()
 	op.Verbose = true
 	op.IgnorePerm = true
 	op.LogOutput = logFil
@@ -178,7 +176,7 @@ func TestSingleFile(t *testing.T) {
 		t.Fatal(err)
 	}
 	os.Remove(filepath.Join(tmpDir, filePath))
-	rdr, err := squashfs.NewReader(fil)
+	rdr, err := NewReader(fil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -186,9 +184,15 @@ func TestSingleFile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = f.(*squashfs.File).ExtractWithOptions("testing", &squashfs.ExtractionOptions{Verbose: true})
+	err = f.(*File).ExtractWithOptions("testing", &ExtractionOptions{Verbose: true})
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Fatal("HI")
+}
+
+func TestStuff(t *testing.T) {
+	fil, _ := os.Create("testing/stuff.txt")
+	_, err := fil.WriteAt([]byte("Yo"), 1024)
+	t.Fatal(err)
 }

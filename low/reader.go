@@ -188,10 +188,7 @@ func (r *Reader) inodeRef(i uint32) (uint64, error) {
 		if err != nil {
 			return 0, err
 		}
-		refsToRead = r.Superblock.InodeCount - uint32(len(r.exportTable))
-		if refsToRead > 1024 {
-			refsToRead = 1024
-		}
+		refsToRead = min(r.Superblock.InodeCount-uint32(len(r.exportTable)), 1024)
 		refsTmp = make([]uint64, refsToRead)
 		rdr = metadata.NewReader(toreader.NewReader(r.r, int64(offset)), r.d)
 		err = binary.Read(rdr, binary.LittleEndian, &refsTmp)
