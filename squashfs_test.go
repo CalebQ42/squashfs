@@ -100,8 +100,8 @@ func BenchmarkRace(b *testing.B) {
 		b.Log("Unsquashfs error:", err)
 	}
 	unsquashTime = time.Since(start)
-	// b.Log("Library took:", libTime.Round(time.Millisecond))
-	// b.Log("unsquashfs took:", unsquashTime.Round(time.Millisecond))
+	b.Log("Library took:", libTime.Round(time.Millisecond))
+	b.Log("unsquashfs took:", unsquashTime.Round(time.Millisecond))
 	b.Log("unsquashfs is", strconv.FormatFloat(float64(libTime.Milliseconds())/float64(unsquashTime.Milliseconds()), 'f', 2, 64), "times faster")
 }
 
@@ -124,7 +124,7 @@ func TestExtractQuick(t *testing.T) {
 	}
 	os.RemoveAll(filepath.Join(tmpDir, "testLog.txt"))
 	logFil, _ := os.Create(filepath.Join(tmpDir, "testLog.txt"))
-	op := DefaultOptions()
+	op := FastOptions()
 	op.Verbose = true
 	op.IgnorePerm = true
 	op.LogOutput = logFil
@@ -167,7 +167,7 @@ func TestExtractQuick(t *testing.T) {
 	}
 }
 
-var filePath = "bin"
+var filePath = "Start.exe"
 
 func TestSingleFile(t *testing.T) {
 	tmpDir := "testing"
@@ -184,15 +184,11 @@ func TestSingleFile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = f.(*File).ExtractWithOptions("testing", &ExtractionOptions{Verbose: true})
+	op := DefaultOptions()
+	op.Verbose = true
+	err = f.(*File).ExtractWithOptions("testing", op)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Fatal("HI")
-}
-
-func TestStuff(t *testing.T) {
-	fil, _ := os.Create("testing/stuff.txt")
-	_, err := fil.WriteAt([]byte("Yo"), 1024)
-	t.Fatal(err)
 }

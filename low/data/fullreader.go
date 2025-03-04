@@ -9,7 +9,6 @@ import (
 	"sync"
 
 	"github.com/CalebQ42/squashfs/internal/decompress"
-	"github.com/CalebQ42/squashfs/internal/routinemanager"
 	"github.com/CalebQ42/squashfs/internal/toreader"
 )
 
@@ -43,6 +42,9 @@ func (r *FullReader) AddFrag(frag FragReaderConstructor) {
 }
 
 func (r *FullReader) SetGoroutineLimit(limit uint16) {
+	if limit <= 0 {
+		r.goroutineLimit = 1
+	}
 	r.goroutineLimit = limit
 }
 
@@ -75,9 +77,9 @@ func (r FullReader) process(index uint64, fileOffset uint64, pool *sync.Pool, re
 }
 
 func (r FullReader) WriteTo(w io.Writer) (int64, error) {
-	if wa, is := w.(io.WriterAt); is {
-		return r.writeToWriteAt(wa)
-	}
+	// if wa, is := w.(io.WriterAt); is {
+	// 	return r.writeToWriteAt(wa)
+	// }
 	var curIndex uint64
 	var curOffset uint64
 	var toProcess uint16
@@ -173,74 +175,74 @@ func (r FullReader) WriteTo(w io.Writer) (int64, error) {
 	return wrote, nil
 }
 
-func (r FullReader) writeToWriteAt(w io.WriterAt) (out int64, outErr error) {
-	wait := sync.WaitGroup{}
-	wait.Add(len(r.sizes))
-	mgr := routinemanager.NewManager(r.goroutineLimit)
-	curOffset := r.initialOffset
-	for i := uint64(0); i < uint64(len(r.sizes)); i++ {
-		go func(index uint64, fileOffset int64) {
-			lckNum := mgr.Lock()
-			defer mgr.Unlock(lckNum)
-			defer wait.Done()
-			realSize := r.sizes[index] &^ (1 << 24)
-			if realSize == 0 {
-				if index == uint64(len(r.sizes))-1 && r.frag == nil {
-					_, err := w.WriteAt([]byte{0}, int64((uint64(r.blockSize)*index)+r.finalBlockSize)-1)
-					if err != nil {
-						outErr = errors.Join(outErr, err)
-						return
-					}
-					out = max(out, int64((uint64(r.blockSize)*index)+r.finalBlockSize))
-				}
-				return
-			}
-			data := make([]byte, realSize)
-			err := binary.Read(toreader.NewReader(r.r, int64(r.initialOffset)+int64(fileOffset)), binary.LittleEndian, &data)
-			if err != nil {
-				outErr = errors.Join(outErr, err)
-				return
-			}
-			if r.sizes[index] == realSize {
-				data, err = r.d.Decompress(data)
-			}
-			if err != nil {
-				outErr = errors.Join(outErr, err)
-				return
-			}
-			_, err = w.WriteAt(data, int64(uint64(r.blockSize)*index))
-			if err != nil {
-				outErr = errors.Join(outErr, err)
-				return
-			}
-			out = max(out, int64(uint64(r.blockSize)*(index+1)))
-		}(i, curOffset)
-		curOffset += int64(r.sizes[i]) &^ (1 << 24)
-	}
-	if r.frag != nil {
-		wait.Add(1)
-		go func() {
-			lckNum := mgr.Lock()
-			defer mgr.Unlock(lckNum)
-			defer wait.Done()
-			rdr, err := r.frag()
-			if err != nil {
-				outErr = errors.Join(outErr, err)
-				return
-			}
-			dat, err := io.ReadAll(rdr)
-			if err != nil {
-				outErr = errors.Join(outErr, err)
-				return
-			}
-			_, err = w.WriteAt(dat, int64(int(r.blockSize)*len(r.sizes)))
-			if err != nil {
-				outErr = errors.Join(outErr, err)
-				return
-			}
-			out = int64(int(r.blockSize)*len(r.sizes)) + int64(r.finalBlockSize)
-		}()
-	}
-	wait.Wait()
-	return
-}
+// func (r FullReader) writeToWriteAt(w io.WriterAt) (out int64, outErr error) {
+// 	wait := &sync.WaitGroup{}
+// 	wait.Add(len(r.sizes))
+// 	mgr := routinemanager.NewManager(r.goroutineLimit)
+// 	curOffset := r.initialOffset
+// 	for i := uint64(0); i < uint64(len(r.sizes)); i++ {
+// 		go func(index uint64, fileOffset int64) {
+// 			lckNum := mgr.Lock()
+// 			defer mgr.Unlock(lckNum)
+// 			defer wait.Done()
+// 			realSize := r.sizes[index] &^ (1 << 24)
+// 			if realSize == 0 {
+// 				if index == uint64(len(r.sizes))-1 && r.frag == nil {
+// 					_, err := w.WriteAt([]byte{0}, int64((uint64(r.blockSize)*index)+r.finalBlockSize)-1)
+// 					if err != nil {
+// 						outErr = errors.Join(outErr, err)
+// 						return
+// 					}
+// 					out = max(out, int64((uint64(r.blockSize)*index)+r.finalBlockSize))
+// 				}
+// 				return
+// 			}
+// 			data := make([]byte, realSize)
+// 			err := binary.Read(toreader.NewReader(r.r, int64(fileOffset)), binary.LittleEndian, &data)
+// 			if err != nil {
+// 				outErr = errors.Join(outErr, err)
+// 				return
+// 			}
+// 			if r.sizes[index] == realSize {
+// 				data, err = r.d.Decompress(data)
+// 			}
+// 			if err != nil {
+// 				outErr = errors.Join(outErr, err)
+// 				return
+// 			}
+// 			_, err = w.WriteAt(data, int64(uint64(r.blockSize)*index))
+// 			if err != nil {
+// 				outErr = errors.Join(outErr, err)
+// 				return
+// 			}
+// 			out = max(out, int64(uint64(r.blockSize)*(index+1)))
+// 		}(i, curOffset)
+// 		curOffset += int64(r.sizes[i]) &^ (1 << 24)
+// 	}
+// 	if r.frag != nil {
+// 		wait.Add(1)
+// 		go func() {
+// 			lckNum := mgr.Lock()
+// 			defer mgr.Unlock(lckNum)
+// 			defer wait.Done()
+// 			rdr, err := r.frag()
+// 			if err != nil {
+// 				outErr = errors.Join(outErr, err)
+// 				return
+// 			}
+// 			dat, err := io.ReadAll(rdr)
+// 			if err != nil {
+// 				outErr = errors.Join(outErr, err)
+// 				return
+// 			}
+// 			_, err = w.WriteAt(dat, int64(int(r.blockSize)*len(r.sizes)))
+// 			if err != nil {
+// 				outErr = errors.Join(outErr, err)
+// 				return
+// 			}
+// 			out = int64(int(r.blockSize)*len(r.sizes)) + int64(r.finalBlockSize)
+// 		}()
+// 	}
+// 	wait.Wait()
+// 	return
+// }
