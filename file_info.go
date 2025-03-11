@@ -53,6 +53,9 @@ func (f fileInfo) Mode() fs.FileMode {
 	if f.IsDir() {
 		return fs.FileMode(f.perm | uint32(fs.ModeDir))
 	}
+	if f.IsSymlink() {
+		return fs.FileMode(f.perm | uint32(fs.ModeSymlink))
+	}
 	return fs.FileMode(f.perm)
 }
 
@@ -62,6 +65,10 @@ func (f fileInfo) ModTime() time.Time {
 
 func (f fileInfo) IsDir() bool {
 	return f.fileType == inode.Dir || f.fileType == inode.EDir
+}
+
+func (f fileInfo) IsSymlink() bool {
+	return f.fileType == inode.Sym || f.fileType == inode.ESym
 }
 
 func (f fileInfo) Sys() any {
