@@ -10,6 +10,8 @@ import (
 
 type FileInfo struct {
 	name     string
+	uid      uint32
+	gid      uint32
 	size     int64
 	target   string
 	perm     uint32
@@ -18,14 +20,22 @@ type FileInfo struct {
 }
 
 func (r Reader) newFileInfo(e directory.Entry) (FileInfo, error) {
-	i, err := r.Low.InodeFromEntry(e)
+	b, err := r.Low.BaseFromEntry(e)
 	if err != nil {
 		return FileInfo{}, err
 	}
-	return newFileInfo(e.Name, &i), nil
+	uid, err := b.Uid(&r.Low)
+	if err != nil {
+		return FileInfo{}, err
+	}
+	gid, err := b.Gid(&r.Low)
+	if err != nil {
+		return FileInfo{}, err
+	}
+	return newFileInfo(e.Name, uid, gid, &b.Inode), nil
 }
 
-func newFileInfo(name string, i *inode.Inode) FileInfo {
+func newFileInfo(name string, uid, gid uint32, i *inode.Inode) FileInfo {
 	var size int64
 	var target string
 	switch i.Type {
@@ -40,6 +50,8 @@ func newFileInfo(name string, i *inode.Inode) FileInfo {
 	}
 	return FileInfo{
 		name:     name,
+		uid:      uid,
+		gid:      gid,
 		size:     size,
 		target:   target,
 		perm:     uint32(i.Perm),
@@ -50,6 +62,14 @@ func newFileInfo(name string, i *inode.Inode) FileInfo {
 
 func (f FileInfo) Name() string {
 	return f.name
+}
+
+func (f FileInfo) Uid() int {
+	return int(f.uid)
+}
+
+func (f FileInfo) Gid() int {
+	return int(f.gid)
 }
 
 func (f FileInfo) Size() int64 {

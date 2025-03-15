@@ -5,19 +5,43 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"os/user"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/CalebQ42/squashfs"
 )
 
-func printEntry(root, path string, d fs.DirEntry) {
+func userName(uid int, numeric bool) string {
+	us := strconv.Itoa(uid)
+	if numeric {
+		return us
+	}
+	if u, err := user.LookupId(us); err == nil {
+		return u.Username
+	}
+	return us
+}
+
+func groupName(gid int, numeric bool) string {
+	gs := strconv.Itoa(gid)
+	if numeric {
+		return gs
+	}
+	if g, err := user.LookupGroupId(gs); err == nil {
+		return g.Name
+	}
+	return gs
+}
+
+func printEntry(root, path string, d fs.DirEntry, numeric bool) {
 	fi, _ := d.Info()
 	sfi := fi.(squashfs.FileInfo)
-	owner := fmt.Sprintf("%d/%d",
-		sfi.Uid(),
-		sfi.Gid())
+	owner := fmt.Sprintf("%s/%s",
+		userName(sfi.Uid(), numeric),
+		groupName(sfi.Gid(), numeric))
 	link := ""
 	if sfi.IsSymlink() {
 		link = " -> " + sfi.SymlinkPath()
@@ -33,6 +57,7 @@ func main() {
 	verbose := flag.Bool("v", false, "Verbose")
 	list := flag.Bool("l", false, "List")
 	long := flag.Bool("ll", false, "List with attributes")
+	numeric := flag.Bool("lln", false, "List with attributes and numeric ids")
 	ignore := flag.Bool("ip", false, "Ignore Permissions and extract all files/folders with 0755")
 	flag.Parse()
 	if len(flag.Args()) < 2 {
@@ -47,14 +72,14 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	if *list || *long {
+	if *list || *long || *numeric {
 		root := flag.Arg(1)
 		fs.WalkDir(r, ".", func(path string, d fs.DirEntry, err error) error {
 			if err != nil {
 				panic(err)
 			}
-			if *long {
-				printEntry(root, path, d)
+			if *long || *numeric {
+				printEntry(root, path, d, *numeric)
 			} else {
 				fmt.Println(filepath.Join(root, path))
 			}
