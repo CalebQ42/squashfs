@@ -11,6 +11,7 @@ import (
 
 func main() {
 	verbose := flag.Bool("v", false, "Verbose")
+	offset := flag.Int64("o", 0, "Offset")
 	ignore := flag.Bool("ip", false, "Ignore Permissions and extract all files/folders with 0755")
 	flag.Parse()
 	if len(flag.Args()) < 2 {
@@ -21,7 +22,7 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	r, err := squashfs.NewReader(f)
+	r, err := squashfs.NewReaderAtOffset(f, *offset)
 	if err != nil {
 		panic(err)
 	}
