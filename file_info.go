@@ -11,6 +11,7 @@ import (
 type FileInfo struct {
 	name     string
 	size     int64
+	target   string
 	perm     uint32
 	modTime  uint32
 	fileType uint16
@@ -26,15 +27,21 @@ func (r Reader) newFileInfo(e directory.Entry) (FileInfo, error) {
 
 func newFileInfo(name string, i *inode.Inode) FileInfo {
 	var size int64
+	var target string
 	switch i.Type {
 	case inode.Fil:
 		size = int64(i.Data.(inode.File).Size)
 	case inode.EFil:
 		size = int64(i.Data.(inode.EFile).Size)
+	case inode.Sym:
+		target = string(i.Data.(inode.Symlink).Target)
+	case inode.ESym:
+		target = string(i.Data.(inode.ESymlink).Target)
 	}
 	return FileInfo{
 		name:     name,
 		size:     size,
+		target:   target,
 		perm:     uint32(i.Perm),
 		modTime:  i.ModTime,
 		fileType: i.Type,
@@ -47,6 +54,10 @@ func (f FileInfo) Name() string {
 
 func (f FileInfo) Size() int64 {
 	return f.size
+}
+
+func (f FileInfo) SymlinkPath() string {
+	return f.target
 }
 
 func (f FileInfo) Mode() fs.FileMode {
