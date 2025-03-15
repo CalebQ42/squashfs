@@ -8,7 +8,7 @@ import (
 	"github.com/CalebQ42/squashfs/low/inode"
 )
 
-type fileInfo struct {
+type FileInfo struct {
 	name     string
 	size     int64
 	perm     uint32
@@ -16,15 +16,15 @@ type fileInfo struct {
 	fileType uint16
 }
 
-func (r Reader) newFileInfo(e directory.Entry) (fileInfo, error) {
+func (r Reader) newFileInfo(e directory.Entry) (FileInfo, error) {
 	i, err := r.Low.InodeFromEntry(e)
 	if err != nil {
-		return fileInfo{}, err
+		return FileInfo{}, err
 	}
 	return newFileInfo(e.Name, &i), nil
 }
 
-func newFileInfo(name string, i *inode.Inode) fileInfo {
+func newFileInfo(name string, i *inode.Inode) FileInfo {
 	var size int64
 	switch i.Type {
 	case inode.Fil:
@@ -32,7 +32,7 @@ func newFileInfo(name string, i *inode.Inode) fileInfo {
 	case inode.EFil:
 		size = int64(i.Data.(inode.EFile).Size)
 	}
-	return fileInfo{
+	return FileInfo{
 		name:     name,
 		size:     size,
 		perm:     uint32(i.Perm),
@@ -41,15 +41,15 @@ func newFileInfo(name string, i *inode.Inode) fileInfo {
 	}
 }
 
-func (f fileInfo) Name() string {
+func (f FileInfo) Name() string {
 	return f.name
 }
 
-func (f fileInfo) Size() int64 {
+func (f FileInfo) Size() int64 {
 	return f.size
 }
 
-func (f fileInfo) Mode() fs.FileMode {
+func (f FileInfo) Mode() fs.FileMode {
 	switch f.fileType {
 	case inode.Dir, inode.EDir:
 		return fs.FileMode(f.perm | uint32(fs.ModeDir))
@@ -65,31 +65,31 @@ func (f fileInfo) Mode() fs.FileMode {
 	return fs.FileMode(f.perm)
 }
 
-func (f fileInfo) ModTime() time.Time {
+func (f FileInfo) ModTime() time.Time {
 	return time.Unix(int64(f.modTime), 0)
 }
 
-func (f fileInfo) IsDir() bool {
+func (f FileInfo) IsDir() bool {
 	return f.fileType == inode.Dir || f.fileType == inode.EDir
 }
 
-func (f fileInfo) IsSymlink() bool {
+func (f FileInfo) IsSymlink() bool {
 	return f.fileType == inode.Sym || f.fileType == inode.ESym
 }
 
-func (f fileInfo) IsDevice() bool {
+func (f FileInfo) IsDevice() bool {
 	return f.fileType == inode.Block || f.fileType == inode.EBlock ||
 		f.fileType == inode.Char || f.fileType == inode.EChar
 }
 
-func (f fileInfo) IsFifo() bool {
+func (f FileInfo) IsFifo() bool {
 	return f.fileType == inode.Fifo || f.fileType == inode.EFifo
 }
 
-func (f fileInfo) IsSocket() bool {
+func (f FileInfo) IsSocket() bool {
 	return f.fileType == inode.Sock || f.fileType == inode.ESock
 }
 
-func (f fileInfo) Sys() any {
+func (f FileInfo) Sys() any {
 	return nil
 }

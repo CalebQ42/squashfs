@@ -127,7 +127,7 @@ func (f *File) ReadDir(n int) ([]fs.DirEntry, error) {
 		}
 	}
 	var out []fs.DirEntry
-	var fi fileInfo
+	var fi FileInfo
 	for _, e := range d.Entries[start:end] {
 		fi, err = f.r.newFileInfo(e)
 		if err != nil {
