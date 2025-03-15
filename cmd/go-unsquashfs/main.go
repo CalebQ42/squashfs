@@ -58,6 +58,7 @@ func main() {
 	list := flag.Bool("l", false, "List")
 	long := flag.Bool("ll", false, "List with attributes")
 	numeric := flag.Bool("lln", false, "List with attributes and numeric ids")
+	offset := flag.Int64("o", 0, "Offset")
 	ignore := flag.Bool("ip", false, "Ignore Permissions and extract all files/folders with 0755")
 	flag.Parse()
 	if len(flag.Args()) < 2 {
@@ -68,7 +69,7 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	r, err := squashfs.NewReader(f)
+	r, err := squashfs.NewReaderAtOffset(f, *offset)
 	if err != nil {
 		panic(err)
 	}
