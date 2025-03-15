@@ -127,7 +127,7 @@ func (f *File) ReadDir(n int) ([]fs.DirEntry, error) {
 		}
 	}
 	var out []fs.DirEntry
-	var fi fileInfo
+	var fi FileInfo
 	for _, e := range d.Entries[start:end] {
 		fi, err = f.r.newFileInfo(e)
 		if err != nil {
@@ -142,7 +142,15 @@ func (f *File) ReadDir(n int) ([]fs.DirEntry, error) {
 
 // Returns the file's fs.FileInfo
 func (f *File) Stat() (fs.FileInfo, error) {
-	return newFileInfo(f.b.Name, &f.b.Inode), nil
+	uid, err := f.b.Uid(&f.r.Low)
+	if err != nil {
+		return nil, err
+	}
+	gid, err := f.b.Gid(&f.r.Low)
+	if err != nil {
+		return nil, err
+	}
+	return newFileInfo(f.b.Name, uid, gid, &f.b.Inode), nil
 }
 
 // SymlinkPath returns the symlink's target path. Is the File isn't a symlink, returns an empty string.
