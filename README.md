@@ -11,6 +11,10 @@ Currently has support for reading squashfs files and extracting files and folder
 Special thanks to <https://dr-emann.github.io/squashfs/> for some VERY important information in an easy to understand format.
 Thanks also to [distri's squashfs library](https://github.com/distr1/distri/tree/master/internal/squashfs) as I referenced it to figure some things out (and double check others).
 
+## Build tags
+
+This library has two optional build tags. `no_gpl` disables the ability to read archives with lzo compression due to the library's gpl license. `no_obsolete` removes "obsolete" compression types for a reduced size; currently this only disable lzma compression.
+
 ## FUSE
 
 As of `v1.0`, FUSE capabilities has been moved to [a separate library](https://github.com/CalebQ42/squashfuse).

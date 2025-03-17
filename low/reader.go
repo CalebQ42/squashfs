@@ -55,21 +55,9 @@ func NewReader(r io.ReaderAt) (rdr *Reader, err error) {
 	if !rdr.Superblock.ValidVersion() {
 		return nil, ErrorVersion
 	}
-	switch rdr.Superblock.CompType {
-	case ZlibCompression:
-		rdr.d = decompress.Zlib{}
-	case LZMACompression:
-		rdr.d = decompress.Lzma{}
-	case LZOCompression:
-		rdr.d = decompress.Lzo{}
-	case XZCompression:
-		rdr.d = decompress.Xz{}
-	case LZ4Compression:
-		rdr.d = decompress.Lz4{}
-	case ZSTDCompression:
-		rdr.d = &decompress.Zstd{}
-	default:
-		return nil, errors.New("invalid compression type. possible corrupted archive")
+	rdr.d, err = decompress.GetDecompressor(rdr.Superblock.CompType)
+	if err != nil {
+		return nil, err
 	}
 	rdr.Root, err = rdr.directoryFromRef(rdr.Superblock.RootInodeRef, "")
 	if err != nil {
