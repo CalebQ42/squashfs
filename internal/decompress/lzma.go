@@ -1,4 +1,4 @@
-//go:build !no_lzma
+//go:build !no_obsolete
 
 package decompress
 

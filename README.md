@@ -13,7 +13,7 @@ Thanks also to [distri's squashfs library](https://github.com/distr1/distri/tree
 
 ## Build tags
 
-This library has two optional build tags. `no_gpl` disables the ability to read archives with lzo compression due to the library's gpl license. `no_obsolete` removes "obsolete" compression types for a reduced size; currently this only disable lzma compression.
+This library has two optional build tags. `no_gpl` disables the ability to read archives with lzo compression due to the library's gpl license. `no_obsolete` removes "obsolete" compression types for a reduced compilation size; currently this only disable lzma compression since it's superseded by xz.
 
 ## FUSE
 

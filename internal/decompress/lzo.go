@@ -1,4 +1,4 @@
-//go:build !no_lzo
+//go:build !no_gpl
 
 package decompress
 
