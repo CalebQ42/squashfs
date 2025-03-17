@@ -1,3 +1,4 @@
+//go:build !no_lzo
 package decompress
 
 import (

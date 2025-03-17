@@ -1,3 +1,4 @@
+//go:build !no_lzma
 package decompress
 
 import (
