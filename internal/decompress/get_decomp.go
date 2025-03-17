@@ -1,3 +1,5 @@
+//go:build !no_gpl && !no_obsolete
+
 package decompress
 
 import "errors"

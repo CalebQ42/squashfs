@@ -1,4 +1,4 @@
-//go:build no_obsolete
+//go:build no_obsolete && !no_gpl
 
 package decompress
 
