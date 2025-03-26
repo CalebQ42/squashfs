@@ -36,6 +36,9 @@ func groupName(gid int, numeric bool) string {
 	return gs
 }
 
+// lookup path from inode num
+var lookup = map[uint]string{}
+
 func printEntry(root, path string, d fs.DirEntry, numeric bool) {
 	fi, _ := d.Info()
 	sfi := fi.(squashfs.FileInfo)
@@ -46,9 +49,18 @@ func printEntry(root, path string, d fs.DirEntry, numeric bool) {
 	if sfi.IsSymlink() {
 		link = " -> " + sfi.SymlinkPath()
 	}
+	size := fi.Size()
+	inode := sfi.Inode()
+	if p, ok := lookup[inode]; ok {
+		link = " link to " + filepath.Join(root, p)
+		size = 0
+	} else {
+		// insert first
+		lookup[inode] = path
+	}
 	fmt.Printf("%s %s %*d %s %s%s\n",
 		strings.ToLower(fi.Mode().String()),
-		owner, 26-len(owner), fi.Size(),
+		owner, 26-len(owner), size,
 		fi.ModTime().Format("2006-01-02 15:04"),
 		filepath.Join(root, path), link)
 }
