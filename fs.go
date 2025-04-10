@@ -21,11 +21,11 @@ type FS struct {
 }
 
 // Creates a new *FS from the given squashfs.directory
-func (r *Reader) FSFromDirectory(d squashfslow.Directory, parent *FS) *FS {
-	return &FS{
+func (r *Reader) FSFromDirectory(d squashfslow.Directory, parent FS) FS {
+	return FS{
 		d:      d,
 		r:      r,
-		parent: parent,
+		parent: &parent,
 	}
 }
 
@@ -90,7 +90,7 @@ func (f *FS) Glob(pattern string) (out []string, err error) {
 }
 
 // Opens the file at name. Returns a *File as an fs.File.
-func (f *FS) Open(name string) (fs.File, error) {
+func (f FS) Open(name string) (fs.File, error) {
 	name = filepath.Clean(name)
 	if !fs.ValidPath(name) {
 		return nil, &fs.PathError{
@@ -142,7 +142,7 @@ func (f *FS) Open(name string) (fs.File, error) {
 			Err:  fs.ErrNotExist,
 		}
 	}
-	d, err := b.ToDir(&f.r.Low)
+	d, err := b.ToDir(f.r.Low)
 	if err != nil {
 		return nil, err
 	}
@@ -151,7 +151,7 @@ func (f *FS) Open(name string) (fs.File, error) {
 
 // Returns all DirEntry's for the directory at name.
 // If name is not a directory, returns an error.
-func (f *FS) ReadDir(name string) ([]fs.DirEntry, error) {
+func (f FS) ReadDir(name string) ([]fs.DirEntry, error) {
 	name = filepath.Clean(name)
 	if !fs.ValidPath(name) {
 		return nil, &fs.PathError{
@@ -171,7 +171,7 @@ func (f *FS) ReadDir(name string) ([]fs.DirEntry, error) {
 }
 
 // Returns the contents of the file at name.
-func (f *FS) ReadFile(name string) (out []byte, err error) {
+func (f FS) ReadFile(name string) (out []byte, err error) {
 	name = filepath.Clean(name)
 	if !fs.ValidPath(name) {
 		return nil, &fs.PathError{
@@ -194,7 +194,7 @@ func (f *FS) ReadFile(name string) (out []byte, err error) {
 }
 
 // Returns the fs.FileInfo for the file at name.
-func (f *FS) Stat(name string) (fs.FileInfo, error) {
+func (f FS) Stat(name string) (fs.FileInfo, error) {
 	name = filepath.Clean(name)
 	if !fs.ValidPath(name) {
 		return nil, &fs.PathError{
@@ -214,7 +214,7 @@ func (f *FS) Stat(name string) (fs.FileInfo, error) {
 }
 
 // Returns the FS at dir
-func (f *FS) Sub(dir string) (fs.FS, error) {
+func (f FS) Sub(dir string) (fs.FS, error) {
 	dir = filepath.Clean(dir)
 	if !fs.ValidPath(dir) {
 		return nil, &fs.PathError{
@@ -242,26 +242,32 @@ func (f *FS) Sub(dir string) (fs.FS, error) {
 
 // Extract the FS to the given folder. If the file is a folder, the folder's contents will be extracted to the folder.
 // Uses default extraction options.
-func (f *FS) Extract(folder string) error {
+func (f FS) Extract(folder string) error {
 	return f.File().Extract(folder)
 }
 
 // Extract the FS to the given folder. If the file is a folder, the folder's contents will be extracted to the folder.
 // Allows setting various extraction options via ExtractionOptions.
-func (f *FS) ExtractWithOptions(folder string, op *ExtractionOptions) error {
+func (f FS) ExtractWithOptions(folder string, op *ExtractionOptions) error {
 	return f.File().ExtractWithOptions(folder, op)
 }
 
 // Returns the FS as a *File
-func (f *FS) File() *File {
+func (f FS) File() *File {
+	if f.parent != nil {
+		return &File{
+			b:      f.d.FileBase,
+			parent: *f.parent,
+			r:      f.r,
+		}
+	}
 	return &File{
-		b:      f.d.FileBase,
-		parent: f.parent,
-		r:      f.r,
+		b: f.d.FileBase,
+		r: f.r,
 	}
 }
 
-func (f *FS) path() string {
+func (f FS) path() string {
 	if f.parent == nil {
 		return f.d.Name
 	}

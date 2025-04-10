@@ -18,7 +18,7 @@ type Directory struct {
 	Entries []directory.Entry
 }
 
-func (r *Reader) directoryFromRef(ref uint64, name string) (Directory, error) {
+func (r Reader) directoryFromRef(ref uint64, name string) (Directory, error) {
 	i, err := r.InodeFromRef(ref)
 	if err != nil {
 		return Directory{}, err
@@ -54,7 +54,7 @@ func (r *Reader) directoryFromRef(ref uint64, name string) (Directory, error) {
 	}, nil
 }
 
-func (d *Directory) Open(r *Reader, path string) (FileBase, error) {
+func (d Directory) Open(r Reader, path string) (FileBase, error) {
 	path = filepath.Clean(path)
 	if path == "." || path == "" {
 		return d.FileBase, nil

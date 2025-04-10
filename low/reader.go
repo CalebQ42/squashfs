@@ -39,21 +39,20 @@ type Reader struct {
 	Superblock  superblock
 }
 
-func NewReader(r io.ReaderAt) (rdr *Reader, err error) {
-	rdr = new(Reader)
+func NewReader(r io.ReaderAt) (rdr Reader, err error) {
 	rdr.r = r
 	err = binary.Read(toreader.NewReader(r, 0), binary.LittleEndian, &rdr.Superblock)
 	if err != nil {
-		return nil, errors.Join(errors.New("failed to read superblock"), err)
+		return rdr, errors.Join(errors.New("failed to read superblock"), err)
 	}
 	if !rdr.Superblock.ValidMagic() {
-		return nil, ErrorMagic
+		return rdr, ErrorMagic
 	}
 	if !rdr.Superblock.ValidBlockLog() {
-		return nil, ErrorLog
+		return rdr, ErrorLog
 	}
 	if !rdr.Superblock.ValidVersion() {
-		return nil, ErrorVersion
+		return rdr, ErrorVersion
 	}
 	switch rdr.Superblock.CompType {
 	case ZlibCompression:
@@ -61,12 +60,12 @@ func NewReader(r io.ReaderAt) (rdr *Reader, err error) {
 	case LZMACompression:
 		rdr.d, err = decompress.NewLzma()
 		if err != nil {
-			return nil, err
+			return rdr, err
 		}
 	case LZOCompression:
 		rdr.d, err = decompress.NewLzo()
 		if err != nil {
-			return nil, err
+			return rdr, err
 		}
 	case XZCompression:
 		rdr.d = decompress.Xz{}
@@ -75,11 +74,11 @@ func NewReader(r io.ReaderAt) (rdr *Reader, err error) {
 	case ZSTDCompression:
 		rdr.d = decompress.Zstd{}
 	default:
-		return nil, errors.New("invalid compression type. possible corrupted archive")
+		return rdr, errors.New("invalid compression type. possible corrupted archive")
 	}
 	rdr.Root, err = rdr.directoryFromRef(rdr.Superblock.RootInodeRef, "")
 	if err != nil {
-		return nil, errors.Join(errors.New("failed to read root directory"), err)
+		return rdr, errors.Join(errors.New("failed to read root directory"), err)
 	}
 	return
 }
@@ -207,7 +206,7 @@ func (r *Reader) inodeRef(i uint32) (uint64, error) {
 	return r.exportTable[i], nil
 }
 
-func (r *Reader) Inode(i uint32) (inode.Inode, error) {
+func (r Reader) Inode(i uint32) (inode.Inode, error) {
 	ref, err := r.inodeRef(i)
 	if err != nil {
 		return inode.Inode{}, err

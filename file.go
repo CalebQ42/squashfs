@@ -19,49 +19,47 @@ import (
 
 // File represents a file inside a squashfs archive.
 type File struct {
-	full     *data.FullReader
-	rdr      *data.Reader
-	parent   *FS
+	full     data.FullReader
+	rdr      data.Reader
+	rdrInit  bool
+	parent   FS
 	r        *Reader
 	b        squashfslow.FileBase
 	dirsRead int
 }
 
 // Creates a new *File from the given *squashfs.Base
-func (r *Reader) FileFromBase(b squashfslow.FileBase, parent *FS) *File {
-	return &File{
+func (r *Reader) FileFromBase(b squashfslow.FileBase, parent FS) File {
+	return File{
 		b:      b,
 		parent: parent,
 		r:      r,
 	}
 }
 
-func (f *File) FS() (*FS, error) {
+func (f File) FS() (FS, error) {
 	if !f.IsDir() {
-		return nil, errors.New("not a directory")
+		return FS{}, errors.New("not a directory")
 	}
-	d, err := f.b.ToDir(&f.r.Low)
+	d, err := f.b.ToDir(f.r.Low)
 	if err != nil {
-		return nil, err
+		return FS{}, err
 	}
-	return &FS{d: d, parent: f.parent, r: f.r}, nil
+	return FS{d: d, parent: &f.parent, r: f.r}, nil
 }
 
 // Closes the underlying readers.
 // Further calls to Read and WriteTo will re-create the readers.
 // Never returns an error.
 func (f *File) Close() error {
-	if f.rdr != nil {
-		return f.rdr.Close()
-	}
-	f.rdr = nil
-	f.full = nil
+	f.rdr.Close()
+	f.full.Close()
 	return nil
 }
 
 // Returns the file the symlink points to.
 // If the file isn't a symlink, or points to a file outside the archive, returns nil.
-func (f *File) GetSymlinkFile() fs.File {
+func (f File) GetSymlinkFile() fs.File {
 	if !f.IsSymlink() {
 		return nil
 	}
@@ -76,21 +74,21 @@ func (f *File) GetSymlinkFile() fs.File {
 }
 
 // Returns whether the file is a directory.
-func (f *File) IsDir() bool {
+func (f File) IsDir() bool {
 	return f.b.IsDir()
 }
 
 // Returns whether the file is a regular file.
-func (f *File) IsRegular() bool {
+func (f File) IsRegular() bool {
 	return f.b.IsRegular()
 }
 
 // Returns whether the file is a symlink.
-func (f *File) IsSymlink() bool {
+func (f File) IsSymlink() bool {
 	return f.b.Inode.Type == inode.Sym || f.b.Inode.Type == inode.ESym
 }
 
-func (f *File) Mode() fs.FileMode {
+func (f File) Mode() fs.FileMode {
 	return f.b.Inode.Mode()
 }
 
@@ -99,7 +97,7 @@ func (f *File) Read(b []byte) (int, error) {
 	if !f.IsRegular() {
 		return 0, errors.New("file is not a regular file")
 	}
-	if f.rdr == nil {
+	if !f.rdrInit {
 		err := f.initializeReaders()
 		if err != nil {
 			return 0, err
@@ -114,7 +112,7 @@ func (f *File) ReadDir(n int) ([]fs.DirEntry, error) {
 	if !f.IsDir() {
 		return nil, errors.New("file is not a directory")
 	}
-	d, err := f.b.ToDir(&f.r.Low)
+	d, err := f.b.ToDir(f.r.Low)
 	if err != nil {
 		return nil, err
 	}
@@ -141,7 +139,7 @@ func (f *File) ReadDir(n int) ([]fs.DirEntry, error) {
 }
 
 // Returns the file's fs.FileInfo
-func (f *File) Stat() (fs.FileInfo, error) {
+func (f File) Stat() (fs.FileInfo, error) {
 	uid, err := f.b.Uid(&f.r.Low)
 	if err != nil {
 		return nil, err
@@ -154,7 +152,7 @@ func (f *File) Stat() (fs.FileInfo, error) {
 }
 
 // SymlinkPath returns the symlink's target path. Is the File isn't a symlink, returns an empty string.
-func (f *File) SymlinkPath() string {
+func (f File) SymlinkPath() string {
 	switch f.b.Inode.Type {
 	case inode.Sym:
 		return string(f.b.Inode.Data.(inode.Symlink).Target)
@@ -170,7 +168,7 @@ func (f *File) WriteTo(w io.Writer) (int64, error) {
 	if !f.IsRegular() {
 		return 0, errors.New("file is not a regular file")
 	}
-	if f.full == nil {
+	if !f.rdrInit {
 		err := f.initializeReaders()
 		if err != nil {
 			return 0, err
@@ -181,11 +179,17 @@ func (f *File) WriteTo(w io.Writer) (int64, error) {
 
 func (f *File) initializeReaders() error {
 	var err error
-	f.rdr, f.full, err = f.b.GetRegFileReaders(&f.r.Low)
+	f.rdr, f.full, err = f.b.GetRegFileReaders(f.r.Low)
+	if err == nil {
+		f.rdrInit = true
+	} else {
+		f.rdr.Close()
+		f.full.Close()
+	}
 	return err
 }
 
-func (f *File) deviceDevices() (maj uint32, min uint32) {
+func (f File) deviceDevices() (maj uint32, min uint32) {
 	var dev uint32
 	switch f.b.Inode.Type {
 	case inode.Char, inode.Block:
@@ -196,8 +200,8 @@ func (f *File) deviceDevices() (maj uint32, min uint32) {
 	return dev >> 8, dev & 0x000FF
 }
 
-func (f *File) path() string {
-	if f.parent == nil {
+func (f File) path() string {
+	if f.parent.d.Name == "" {
 		return f.b.Name
 	}
 	return filepath.Join(f.parent.path(), f.b.Name)
@@ -205,13 +209,13 @@ func (f *File) path() string {
 
 // Extract the file to the given folder. If the file is a folder, the folder's contents will be extracted to the folder.
 // Uses default extraction options.
-func (f *File) Extract(folder string) error {
+func (f File) Extract(folder string) error {
 	return f.ExtractWithOptions(folder, DefaultOptions())
 }
 
 // Extract the file to the given folder. If the file is a folder, the folder's contents will be extracted to the folder.
 // Allows setting various extraction options via ExtractionOptions.
-func (f *File) ExtractWithOptions(path string, op *ExtractionOptions) error {
+func (f File) ExtractWithOptions(path string, op *ExtractionOptions) error {
 	if op.manager == nil {
 		op.manager = routinemanager.NewManager(op.SimultaneousFiles)
 		if op.LogOutput != nil {
@@ -227,7 +231,7 @@ func (f *File) ExtractWithOptions(path string, op *ExtractionOptions) error {
 	}
 	switch f.b.Inode.Type {
 	case inode.Dir, inode.EDir:
-		d, err := f.b.ToDir(&f.r.Low)
+		d, err := f.b.ToDir(f.r.Low)
 		if err != nil {
 			if op.Verbose {
 				log.Println("Failed to create squashfs.Directory for", path)
