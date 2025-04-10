@@ -130,7 +130,7 @@ func (b FileBase) GetRegFileReaders(r Reader) (data.Reader, data.FullReader, err
 	return outRdr, outFull, nil
 }
 
-func (b *FileBase) GetFullReader(r *Reader) (data.FullReader, error) {
+func (b FileBase) GetFullReader(r *Reader) (data.FullReader, error) {
 	if !b.IsRegular() {
 		return data.FullReader{}, errors.New("not a regular file")
 	}
@@ -167,7 +167,7 @@ func (b *FileBase) GetFullReader(r *Reader) (data.FullReader, error) {
 	return outFull, nil
 }
 
-func (b *FileBase) GetReader(r *Reader) (data.Reader, error) {
+func (b FileBase) GetReader(r *Reader) (data.Reader, error) {
 	if !b.IsRegular() {
 		return data.Reader{}, errors.New("not a regular file")
 	}

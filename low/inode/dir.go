@@ -13,7 +13,7 @@ type Directory struct {
 	ParentNum  uint32
 }
 
-type eDirectoryInit struct {
+type EDirectory struct {
 	LinkCount  uint32
 	Size       uint32
 	BlockStart uint32
@@ -21,42 +21,55 @@ type eDirectoryInit struct {
 	IndCount   uint16
 	Offset     uint16
 	XattrInd   uint32
-}
-
-type EDirectory struct {
-	eDirectoryInit
-	Indexes []DirectoryIndex
-}
-
-type directoryIndexInit struct {
-	Ind      uint32
-	Start    uint32
-	NameSize uint32
+	Indexes    []DirectoryIndex
 }
 
 type DirectoryIndex struct {
-	directoryIndexInit
-	Name []byte
+	Ind      uint32
+	Start    uint32
+	NameSize uint32
+	Name     []byte
 }
 
 func ReadDir(r io.Reader) (d Directory, err error) {
-	err = binary.Read(r, binary.LittleEndian, &d)
+	dat := make([]byte, 16)
+	_, err = r.Read(dat)
+	if err != nil {
+		return
+	}
+	d.BlockStart = binary.LittleEndian.Uint32(dat)
+	d.LinkCount = binary.LittleEndian.Uint32(dat[4:])
+	d.Size = binary.LittleEndian.Uint16(dat[8:])
+	d.Offset = binary.LittleEndian.Uint16(dat[10:])
+	d.ParentNum = binary.LittleEndian.Uint32(dat[12:])
 	return
 }
 
 func ReadEDir(r io.Reader) (d EDirectory, err error) {
-	err = binary.Read(r, binary.LittleEndian, &d.eDirectoryInit)
+	dat := make([]byte, 24)
+	_, err = r.Read(dat)
 	if err != nil {
 		return
 	}
+	d.LinkCount = binary.LittleEndian.Uint32(dat)
+	d.Size = binary.LittleEndian.Uint32(dat[4:])
+	d.BlockStart = binary.LittleEndian.Uint32(dat[8:])
+	d.ParentNum = binary.LittleEndian.Uint32(dat[12:])
+	d.IndCount = binary.LittleEndian.Uint16(dat[16:])
+	d.Offset = binary.LittleEndian.Uint16(dat[18:])
+	d.XattrInd = binary.LittleEndian.Uint32(dat[20:])
 	d.Indexes = make([]DirectoryIndex, d.IndCount)
-	for i := range d.Indexes {
-		err = binary.Read(r, binary.LittleEndian, &d.Indexes[i].directoryIndexInit)
+	for i := range d.IndCount {
+		dat = make([]byte, 12)
+		_, err = r.Read(dat)
 		if err != nil {
 			return
 		}
+		d.Indexes[i].Ind = binary.LittleEndian.Uint32(dat)
+		d.Indexes[i].Start = binary.LittleEndian.Uint32(dat[4:])
+		d.Indexes[i].NameSize = binary.LittleEndian.Uint32(dat[8:])
 		d.Indexes[i].Name = make([]byte, d.Indexes[i].NameSize+1)
-		err = binary.Read(r, binary.LittleEndian, &d.Indexes[i].Name)
+		_, err = r.Read(d.Indexes[i].Name)
 		if err != nil {
 			return
 		}

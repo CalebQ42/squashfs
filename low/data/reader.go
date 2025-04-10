@@ -1,7 +1,6 @@
 package data
 
 import (
-	"encoding/binary"
 	"io"
 	"io/fs"
 
@@ -56,7 +55,7 @@ func (r *Reader) advance() error {
 		return nil
 	}
 	r.dat = make([]byte, realSize)
-	err = binary.Read(r.r, binary.LittleEndian, &r.dat)
+	_, err = r.r.Read(r.dat)
 	if err != nil {
 		return err
 	}

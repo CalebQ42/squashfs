@@ -1,7 +1,6 @@
 package data
 
 import (
-	"encoding/binary"
 	"errors"
 	"io"
 	"io/fs"
@@ -10,7 +9,6 @@ import (
 	"sync"
 
 	"github.com/CalebQ42/squashfs/internal/decompress"
-	"github.com/CalebQ42/squashfs/internal/toreader"
 )
 
 type FragReaderConstructor func() (io.Reader, error)
@@ -80,7 +78,7 @@ func (r FullReader) process(index uint64, fileOffset uint64, pool *sync.Pool, re
 		return
 	}
 	ret.data = make([]byte, realSize)
-	ret.err = binary.Read(toreader.NewReader(r.r, int64(r.initialOffset)+int64(fileOffset)), binary.LittleEndian, &ret.data)
+	_, ret.err = r.r.ReadAt(ret.data, r.initialOffset+int64(fileOffset))
 	if r.sizes[index] == realSize {
 		ret.data, ret.err = r.d.Decompress(ret.data)
 	}
