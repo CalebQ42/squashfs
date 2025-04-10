@@ -14,8 +14,8 @@ type Reader struct {
 	curOffset uint16
 }
 
-func NewReader(r io.Reader, d decompress.Decompressor) *Reader {
-	return &Reader{
+func NewReader(r io.Reader, d decompress.Decompressor) Reader {
+	return Reader{
 		r: r,
 		d: d,
 	}

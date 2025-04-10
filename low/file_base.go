@@ -70,7 +70,7 @@ func (b FileBase) ToDir(r Reader) (Directory, error) {
 	if err != nil {
 		return Directory{}, err
 	}
-	entries, err := directory.ReadDirectory(dirRdr, size)
+	entries, err := directory.ReadDirectory(&dirRdr, size)
 	if err != nil {
 		return Directory{}, err
 	}

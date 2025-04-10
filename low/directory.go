@@ -44,7 +44,7 @@ func (r Reader) directoryFromRef(ref uint64, name string) (Directory, error) {
 	if err != nil {
 		return Directory{}, err
 	}
-	entries, err := directory.ReadDirectory(dirRdr, size)
+	entries, err := directory.ReadDirectory(&dirRdr, size)
 	if err != nil {
 		return Directory{}, err
 	}
