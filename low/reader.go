@@ -39,21 +39,20 @@ type Reader struct {
 	Superblock  superblock
 }
 
-func NewReader(r io.ReaderAt) (rdr *Reader, err error) {
-	rdr = new(Reader)
+func NewReader(r io.ReaderAt) (rdr Reader, err error) {
 	rdr.r = r
 	err = binary.Read(toreader.NewReader(r, 0), binary.LittleEndian, &rdr.Superblock)
 	if err != nil {
-		return nil, errors.Join(errors.New("failed to read superblock"), err)
+		return rdr, errors.Join(errors.New("failed to read superblock"), err)
 	}
 	if !rdr.Superblock.ValidMagic() {
-		return nil, ErrorMagic
+		return rdr, ErrorMagic
 	}
 	if !rdr.Superblock.ValidBlockLog() {
-		return nil, ErrorLog
+		return rdr, ErrorLog
 	}
 	if !rdr.Superblock.ValidVersion() {
-		return nil, ErrorVersion
+		return rdr, ErrorVersion
 	}
 	switch rdr.Superblock.CompType {
 	case ZlibCompression:
@@ -61,25 +60,25 @@ func NewReader(r io.ReaderAt) (rdr *Reader, err error) {
 	case LZMACompression:
 		rdr.d, err = decompress.NewLzma()
 		if err != nil {
-			return nil, err
+			return rdr, err
 		}
 	case LZOCompression:
 		rdr.d, err = decompress.NewLzo()
 		if err != nil {
-			return nil, err
+			return rdr, err
 		}
 	case XZCompression:
-		rdr.d = decompress.Xz{}
+		rdr.d = decompress.NewXz()
 	case LZ4Compression:
-		rdr.d = decompress.Lz4{}
+		rdr.d = decompress.NewLz4()
 	case ZSTDCompression:
 		rdr.d = decompress.Zstd{}
 	default:
-		return nil, errors.New("invalid compression type. possible corrupted archive")
+		return rdr, errors.New("invalid compression type. possible corrupted archive")
 	}
 	rdr.Root, err = rdr.directoryFromRef(rdr.Superblock.RootInodeRef, "")
 	if err != nil {
-		return nil, errors.Join(errors.New("failed to read root directory"), err)
+		return rdr, errors.Join(errors.New("failed to read root directory"), err)
 	}
 	return
 }
@@ -105,7 +104,8 @@ func (r *Reader) Id(i uint16) (uint32, error) {
 	var idsToRead uint16
 	var idsTmp []uint32
 	var err error
-	var rdr *metadata.Reader
+	var rdr metadata.Reader
+	// We can *maybe* have a slight speed increase by manually decoding instead of using reflection via binary.Read
 	for i := blocksRead; i < int(blocksRead)+blocksToRead; i++ {
 		err = binary.Read(toreader.NewReader(r.r, int64(r.Superblock.IdTableStart)+int64(8*i)), binary.LittleEndian, &offset)
 		if err != nil {
@@ -114,7 +114,7 @@ func (r *Reader) Id(i uint16) (uint32, error) {
 		idsToRead = min(r.Superblock.IdCount-uint16(len(r.idTable)), 2048)
 		idsTmp = make([]uint32, idsToRead)
 		rdr = metadata.NewReader(toreader.NewReader(r.r, int64(offset)), r.d)
-		err = binary.Read(rdr, binary.LittleEndian, &idsTmp)
+		err = binary.Read(&rdr, binary.LittleEndian, &idsTmp)
 		rdr.Close()
 		if err != nil {
 			return 0, err
@@ -145,7 +145,8 @@ func (r *Reader) fragEntry(i uint32) (fragEntry, error) {
 	var fragsToRead uint32
 	var fragsTmp []fragEntry
 	var err error
-	var rdr *metadata.Reader
+	var rdr metadata.Reader
+	// We can *maybe* have a slight speed increase by manually decoding instead of using reflection via binary.Read
 	for i := blocksRead; i < int(blocksRead)+blocksToRead; i++ {
 		err = binary.Read(toreader.NewReader(r.r, int64(r.Superblock.FragTableStart)+int64(8*i)), binary.LittleEndian, &offset)
 		if err != nil {
@@ -154,7 +155,7 @@ func (r *Reader) fragEntry(i uint32) (fragEntry, error) {
 		fragsToRead = min(r.Superblock.FragCount-uint32(len(r.fragTable)), 512)
 		fragsTmp = make([]fragEntry, fragsToRead)
 		rdr = metadata.NewReader(toreader.NewReader(r.r, int64(offset)), r.d)
-		err = binary.Read(rdr, binary.LittleEndian, &fragsTmp)
+		err = binary.Read(&rdr, binary.LittleEndian, &fragsTmp)
 		rdr.Close()
 		if err != nil {
 			return fragEntry{}, err
@@ -188,7 +189,8 @@ func (r *Reader) inodeRef(i uint32) (uint64, error) {
 	var refsToRead uint32
 	var refsTmp []uint64
 	var err error
-	var rdr *metadata.Reader
+	var rdr metadata.Reader
+	// We can *maybe* have a slight speed increase by manually decoding instead of using reflection via binary.Read
 	for i := blocksRead; i < int(blocksRead)+blocksToRead; i++ {
 		err = binary.Read(toreader.NewReader(r.r, int64(r.Superblock.ExportTableStart)+int64(8*i)), binary.LittleEndian, &offset)
 		if err != nil {
@@ -197,7 +199,7 @@ func (r *Reader) inodeRef(i uint32) (uint64, error) {
 		refsToRead = min(r.Superblock.InodeCount-uint32(len(r.exportTable)), 1024)
 		refsTmp = make([]uint64, refsToRead)
 		rdr = metadata.NewReader(toreader.NewReader(r.r, int64(offset)), r.d)
-		err = binary.Read(rdr, binary.LittleEndian, &refsTmp)
+		err = binary.Read(&rdr, binary.LittleEndian, &refsTmp)
 		rdr.Close()
 		if err != nil {
 			return 0, err
@@ -207,7 +209,7 @@ func (r *Reader) inodeRef(i uint32) (uint64, error) {
 	return r.exportTable[i], nil
 }
 
-func (r *Reader) Inode(i uint32) (inode.Inode, error) {
+func (r Reader) Inode(i uint32) (inode.Inode, error) {
 	ref, err := r.inodeRef(i)
 	if err != nil {
 		return inode.Inode{}, err

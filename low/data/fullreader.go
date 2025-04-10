@@ -1,15 +1,14 @@
 package data
 
 import (
-	"encoding/binary"
 	"errors"
 	"io"
+	"io/fs"
 	"math"
 	"runtime"
 	"sync"
 
 	"github.com/CalebQ42/squashfs/internal/decompress"
-	"github.com/CalebQ42/squashfs/internal/toreader"
 )
 
 type FragReaderConstructor func() (io.Reader, error)
@@ -23,10 +22,11 @@ type FullReader struct {
 	finalBlockSize uint64
 	blockSize      uint32
 	goroutineLimit uint16
+	closed         bool
 }
 
-func NewFullReader(r io.ReaderAt, initialOffset int64, d decompress.Decompressor, sizes []uint32, finalBlockSize uint64, blockSize uint32) *FullReader {
-	return &FullReader{
+func NewFullReader(r io.ReaderAt, initialOffset int64, d decompress.Decompressor, sizes []uint32, finalBlockSize uint64, blockSize uint32) FullReader {
+	return FullReader{
 		r:              r,
 		d:              d,
 		sizes:          sizes,
@@ -35,6 +35,15 @@ func NewFullReader(r io.ReaderAt, initialOffset int64, d decompress.Decompressor
 		finalBlockSize: finalBlockSize,
 		blockSize:      blockSize,
 	}
+}
+
+func (r *FullReader) Close() error {
+	r.closed = true
+	r.r = nil
+	r.d = nil
+	r.frag = nil
+	r.sizes = nil
+	return nil
 }
 
 func (r *FullReader) AddFrag(frag FragReaderConstructor) {
@@ -69,7 +78,7 @@ func (r FullReader) process(index uint64, fileOffset uint64, pool *sync.Pool, re
 		return
 	}
 	ret.data = make([]byte, realSize)
-	ret.err = binary.Read(toreader.NewReader(r.r, int64(r.initialOffset)+int64(fileOffset)), binary.LittleEndian, &ret.data)
+	_, ret.err = r.r.ReadAt(ret.data, r.initialOffset+int64(fileOffset))
 	if r.sizes[index] == realSize {
 		ret.data, ret.err = r.d.Decompress(ret.data)
 	}
@@ -77,6 +86,9 @@ func (r FullReader) process(index uint64, fileOffset uint64, pool *sync.Pool, re
 }
 
 func (r FullReader) WriteTo(w io.Writer) (int64, error) {
+	if r.closed {
+		return 0, fs.ErrClosed
+	}
 	// if wa, is := w.(io.WriterAt); is {
 	// 	return r.writeToWriteAt(wa)
 	// }

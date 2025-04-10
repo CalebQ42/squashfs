@@ -3,14 +3,30 @@ package decompress
 import (
 	"bytes"
 	"io"
+	"sync"
 
 	"github.com/therootcompany/xz"
 )
 
-type Xz struct{}
+type Xz struct {
+	pool sync.Pool
+}
 
-func (x Xz) Decompress(data []byte) ([]byte, error) {
-	rdr, err := xz.NewReader(bytes.NewReader(data), 0)
+func NewXz() *Xz {
+	return &Xz{
+		pool: sync.Pool{
+			New: func() any {
+				rdr, _ := xz.NewReader(nil, 0)
+				return rdr
+			},
+		},
+	}
+}
+
+func (x *Xz) Decompress(data []byte) ([]byte, error) {
+	rdr := x.pool.Get().(*xz.Reader)
+	defer x.pool.Put(rdr)
+	err := rdr.Reset(bytes.NewReader(data))
 	if err != nil {
 		return nil, err
 	}

@@ -1,8 +1,8 @@
 package data
 
 import (
-	"encoding/binary"
 	"io"
+	"io/fs"
 
 	"github.com/CalebQ42/squashfs/internal/decompress"
 )
@@ -17,10 +17,11 @@ type Reader struct {
 	curIndex       uint64
 	finalBlockSize uint64
 	blockSize      uint32
+	closed         bool
 }
 
-func NewReader(r io.Reader, d decompress.Decompressor, sizes []uint32, finalBlockSize uint64, blockSize uint32) *Reader {
-	return &Reader{
+func NewReader(r io.Reader, d decompress.Decompressor, sizes []uint32, finalBlockSize uint64, blockSize uint32) Reader {
+	return Reader{
 		r:              r,
 		d:              d,
 		sizes:          sizes,
@@ -54,7 +55,7 @@ func (r *Reader) advance() error {
 		return nil
 	}
 	r.dat = make([]byte, realSize)
-	err = binary.Read(r.r, binary.LittleEndian, &r.dat)
+	_, err = r.r.Read(r.dat)
 	if err != nil {
 		return err
 	}
@@ -66,6 +67,9 @@ func (r *Reader) advance() error {
 }
 
 func (r *Reader) Read(b []byte) (int, error) {
+	if r.closed {
+		return 0, fs.ErrClosed
+	}
 	curRead := 0
 	var toRead int
 	for curRead < len(b) {
@@ -83,6 +87,9 @@ func (r *Reader) Read(b []byte) (int, error) {
 }
 
 func (r *Reader) Close() error {
+	r.closed = true
+	r.r = nil
+	r.d = nil
 	if r.frag != nil {
 		if l, ok := r.frag.(*io.LimitedReader); ok {
 			if cl, ok := l.R.(io.Closer); ok {
@@ -90,6 +97,8 @@ func (r *Reader) Close() error {
 			}
 		}
 	}
+	r.frag = nil
+	r.sizes = nil
 	r.dat = nil
 	return nil
 }

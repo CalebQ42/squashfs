@@ -9,26 +9,26 @@ import (
 )
 
 type Reader struct {
-	*FS
+	FS
 	Low squashfslow.Reader
 }
 
-func NewReader(r io.ReaderAt) (*Reader, error) {
+func NewReader(r io.ReaderAt) (Reader, error) {
 	rdr, err := squashfslow.NewReader(r)
 	if err != nil {
-		return nil, err
+		return Reader{}, err
 	}
-	out := &Reader{
-		Low: *rdr,
+	out := Reader{
+		Low: rdr,
 	}
-	out.FS = &FS{
+	out.FS = FS{
 		d: rdr.Root,
-		r: out,
+		r: &out,
 	}
 	return out, nil
 }
 
-func NewReaderAtOffset(r io.ReaderAt, offset int64) (*Reader, error) {
+func NewReaderAtOffset(r io.ReaderAt, offset int64) (Reader, error) {
 	return NewReader(toreader.NewOffsetReader(r, offset))
 }
 

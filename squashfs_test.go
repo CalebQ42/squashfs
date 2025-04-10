@@ -17,7 +17,7 @@ import (
 
 const (
 	squashfsURL  = "https://darkstorm.tech/files/LinuxPATest.sfs"
-	squashfsName = "LinuxPATest.sfs"
+	squashfsName = "tensorflow.sqfs"
 )
 
 func preTest(dir string) (fil *os.File, err error) {
@@ -68,6 +68,26 @@ func TestMisc(t *testing.T) {
 	// t.Fatal("UM")
 }
 
+func BenchmarkExtract(b *testing.B) {
+	tmpDir := "testing"
+	fil, err := preTest(tmpDir)
+	if err != nil {
+		b.Fatal(err)
+	}
+	libPath := filepath.Join(tmpDir, "ExtractLib")
+	os.RemoveAll(libPath)
+	op := FastOptions()
+	op.IgnorePerm = true
+	rdr, err := NewReader(fil)
+	if err != nil {
+		b.Fatal(err)
+	}
+	err = rdr.ExtractWithOptions(libPath, op)
+	if err != nil {
+		b.Fatal(err)
+	}
+}
+
 func BenchmarkRace(b *testing.B) {
 	tmpDir := "testing"
 	fil, err := preTest(tmpDir)
@@ -91,7 +111,7 @@ func BenchmarkRace(b *testing.B) {
 		b.Fatal(err)
 	}
 	libTime = time.Since(start)
-	cmd := exec.Command("unsquashfs", "-d", unsquashPath, fil.Name())
+	cmd := exec.Command("unsquashfs", "-q", "-d", unsquashPath, fil.Name())
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	start = time.Now()
@@ -167,7 +187,7 @@ func TestExtractQuick(t *testing.T) {
 	}
 }
 
-var filePath = "Start.exe"
+var filePath = "usr/sbin/add-shell"
 
 func TestSingleFile(t *testing.T) {
 	tmpDir := "testing"
@@ -175,7 +195,7 @@ func TestSingleFile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	os.Remove(filepath.Join(tmpDir, filePath))
+	os.RemoveAll("testing/stuff")
 	rdr, err := NewReader(fil)
 	if err != nil {
 		t.Fatal(err)
@@ -186,7 +206,7 @@ func TestSingleFile(t *testing.T) {
 	}
 	op := DefaultOptions()
 	op.Verbose = true
-	err = f.(*File).ExtractWithOptions("testing", op)
+	err = f.(*File).ExtractWithOptions("testing/stuff", op)
 	if err != nil {
 		t.Fatal(err)
 	}

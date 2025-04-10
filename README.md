@@ -28,15 +28,14 @@ As of `v1.0`, FUSE capabilities has been moved to [a separate library](https://g
 
 ## Issues
 
-* Significantly slower then `unsquashfs` when nested images
+* Noticably slower then `unsquashfs` for extraction, especially on larger images.
   * This seems to be related to above along with the general optimization of `unsquashfs` and it's compression libraries.
-    * Not to mention it's written in C
   * Times seem to be largely dependent on file tree size and compression type.
-    * My main testing image (~100MB) using Zstd takes about 5x longer.
-    * An Arch Linux airootfs image (~780MB) using XZ compression with LZMA filters takes about 30x longer.
-    * A Tensorflow docker image (~3.3GB) using Zstd takes about 12x longer.
+    * My main testing image (~100MB) using Zstd takes ~2x longer.
+    * An Arch Linux airootfs image (~780MB) using XZ compression with LZMA filters takes ~28x longer.
+    * A Tensorflow docker image (~3.3GB) using Zstd takes ~3x longer.
 
-Note: These numbers are using `FastOptions()`. `DefaultOptions()` takes about 2x longer.
+Note: These numbers are using `FastOptions()`. `DefaultOptions()` takes ~2x longer.
 
 ## Recommendations on Usage
 
