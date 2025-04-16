@@ -56,7 +56,7 @@ func NewReader(r io.ReaderAt) (rdr Reader, err error) {
 	}
 	switch rdr.Superblock.CompType {
 	case ZlibCompression:
-		rdr.d = decompress.Zlib{}
+		rdr.d = decompress.NewZlib()
 	case LZMACompression:
 		rdr.d, err = decompress.NewLzma()
 		if err != nil {
@@ -72,7 +72,7 @@ func NewReader(r io.ReaderAt) (rdr Reader, err error) {
 	case LZ4Compression:
 		rdr.d = decompress.NewLz4()
 	case ZSTDCompression:
-		rdr.d = decompress.Zstd{}
+		rdr.d = decompress.NewZstd()
 	default:
 		return rdr, errors.New("invalid compression type. possible corrupted archive")
 	}
