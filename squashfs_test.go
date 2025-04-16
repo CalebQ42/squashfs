@@ -76,13 +76,11 @@ func BenchmarkExtract(b *testing.B) {
 	}
 	libPath := filepath.Join(tmpDir, "ExtractLib")
 	os.RemoveAll(libPath)
-	op := FastOptions()
-	op.IgnorePerm = true
 	rdr, err := NewReader(fil)
 	if err != nil {
 		b.Fatal(err)
 	}
-	err = rdr.ExtractWithOptions(libPath, op)
+	err = rdr.ExtractWithOptions(libPath, FastOptions())
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -99,14 +97,12 @@ func BenchmarkRace(b *testing.B) {
 	os.RemoveAll(libPath)
 	os.RemoveAll(unsquashPath)
 	var libTime, unsquashTime time.Duration
-	op := FastOptions()
-	op.IgnorePerm = true
 	start := time.Now()
 	rdr, err := NewReader(fil)
 	if err != nil {
 		b.Fatal(err)
 	}
-	err = rdr.ExtractWithOptions(libPath, op)
+	err = rdr.ExtractWithOptions(libPath, FastOptions())
 	if err != nil {
 		b.Fatal(err)
 	}
