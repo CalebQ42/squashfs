@@ -91,6 +91,10 @@ func (f *FS) Glob(pattern string) (out []string, err error) {
 
 // Opens the file at name. Returns a *File as an fs.File.
 func (f FS) Open(name string) (fs.File, error) {
+	return f.OpenFile(name)
+}
+
+func (f FS) OpenFile(name string) (*File, error) {
 	name = filepath.Clean(name)
 	if !fs.ValidPath(name) {
 		return nil, &fs.PathError{
@@ -111,7 +115,7 @@ func (f FS) Open(name string) (fs.File, error) {
 				Err:  fs.ErrNotExist,
 			}
 		} else {
-			return f.parent.Open(strings.Join(split[1:], "/"))
+			return f.parent.OpenFile(strings.Join(split[1:], "/"))
 		}
 	}
 	i, found := slices.BinarySearchFunc(f.d.Entries, split[0], func(e directory.Entry, name string) int {
@@ -146,7 +150,7 @@ func (f FS) Open(name string) (fs.File, error) {
 	if err != nil {
 		return nil, err
 	}
-	return f.r.FSFromDirectory(d, f).Open(strings.Join(split[1:], "/"))
+	return f.r.FSFromDirectory(d, f).OpenFile(strings.Join(split[1:], "/"))
 }
 
 // Returns all DirEntry's for the directory at name.

@@ -36,7 +36,7 @@ func groupName(gid int, numeric bool) string {
 	return gs
 }
 
-func printEntry(root, path string, d fs.DirEntry, numeric bool) {
+func printEntry(path string, d fs.DirEntry, numeric bool) {
 	fi, _ := d.Info()
 	sfi := fi.(squashfs.FileInfo)
 	owner := fmt.Sprintf("%s/%s",
@@ -50,7 +50,7 @@ func printEntry(root, path string, d fs.DirEntry, numeric bool) {
 		strings.ToLower(fi.Mode().String()),
 		owner, 26-len(owner), fi.Size(),
 		fi.ModTime().Format("2006-01-02 15:04"),
-		filepath.Join(root, path), link)
+		filepath.Join(path), link)
 }
 
 func main() {
@@ -60,8 +60,12 @@ func main() {
 	numeric := flag.Bool("lln", false, "List with attributes and numeric ids")
 	offset := flag.Int64("o", 0, "Offset")
 	ignore := flag.Bool("ip", false, "Ignore Permissions and extract all files/folders with 0755")
+	file := flag.String("e", "", "File or folder to extract")
 	flag.Parse()
-	if len(flag.Args()) < 2 {
+	if (*list || *long || *numeric) && flag.NArg() < 1 {
+		fmt.Println("Please provide a file name")
+		os.Exit(0)
+	} else if (!*list && !*long && !*numeric) && flag.NArg() < 2 {
 		fmt.Println("Please provide a file name and extraction path")
 		os.Exit(0)
 	}
@@ -73,26 +77,42 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+	extractFil := r.File()
+	if *file != "" {
+		extractFil, err = r.OpenFile(*file)
+		if err != nil {
+			panic(err)
+		}
+	}
 	if *list || *long || *numeric {
-		root := flag.Arg(1)
-		fs.WalkDir(r, ".", func(path string, d fs.DirEntry, err error) error {
+		if extractFil.IsDir() {
+			var filFs squashfs.FS
+			filFs, err = extractFil.FS()
 			if err != nil {
 				panic(err)
 			}
-			if *long || *numeric {
-				printEntry(root, path, d, *numeric)
-			} else {
-				fmt.Println(filepath.Join(root, path))
+			err = fs.WalkDir(filFs, ".", func(path string, d fs.DirEntry, err error) error {
+				if err != nil {
+					panic(err)
+				}
+				if *long || *numeric {
+					printEntry(path, d, *numeric)
+				} else {
+					fmt.Println(filepath.Clean(path))
+				}
+				return nil
+			})
+			if err != nil {
+				panic(err)
 			}
-			return nil
-		})
+		}
 		return
 	}
 	op := squashfs.DefaultOptions()
 	op.Verbose = *verbose
 	op.IgnorePerm = *ignore
 	n := time.Now()
-	err = r.ExtractWithOptions(flag.Arg(1), op)
+	err = extractFil.ExtractWithOptions(flag.Arg(1), op)
 	if err != nil {
 		panic(err)
 	}
