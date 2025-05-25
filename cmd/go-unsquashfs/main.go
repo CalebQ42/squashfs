@@ -3,7 +3,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"io/fs"
 	"os"
 	"os/user"
 	"path/filepath"
@@ -12,6 +11,7 @@ import (
 	"time"
 
 	"github.com/CalebQ42/squashfs"
+	squashfslow "github.com/CalebQ42/squashfs/low"
 )
 
 func userName(uid int, numeric bool) string {
@@ -36,31 +36,73 @@ func groupName(gid int, numeric bool) string {
 	return gs
 }
 
-func printEntry(path string, d fs.DirEntry, numeric bool) {
-	fi, _ := d.Info()
+var hardLinks = make(map[uint32]string)
+
+func printFile(rdr *squashfs.Reader, path string, f *squashfs.File) {
+	path = filepath.Join(path, f.Low.Name)
+	fi, _ := f.Stat()
 	sfi := fi.(squashfs.FileInfo)
 	owner := fmt.Sprintf("%s/%s",
-		userName(sfi.Uid(), numeric),
-		groupName(sfi.Gid(), numeric))
-	link := ""
+		userName(sfi.Uid(), *numeric),
+		groupName(sfi.Gid(), *numeric))
+	link, isHardLink := hardLinks[f.Low.Inode.Num]
+	var size int64
+	if isHardLink {
+		size = 0
+	} else {
+		size = fi.Size()
+		hardLinks[f.Low.Inode.Num] = path
+	}
 	if sfi.IsSymlink() {
 		link = " -> " + sfi.SymlinkPath()
+	} else if isHardLink {
+		link = " link to " + link
 	}
 	fmt.Printf("%s %s %*d %s %s%s\n",
 		strings.ToLower(fi.Mode().String()),
-		owner, 26-len(owner), fi.Size(),
+		owner, 26-len(owner), size,
 		fi.ModTime().Format("2006-01-02 15:04"),
-		filepath.Join(path), link)
+		path, link)
+	if f.IsDir() {
+		fs, _ := f.FS()
+		printDir(rdr, path, fs)
+	}
 }
 
+func printDir(rdr *squashfs.Reader, path string, f squashfs.FS) {
+	var base squashfslow.FileBase
+	var fil squashfs.File
+	var err error
+	for _, e := range f.LowDir.Entries {
+		base, err = rdr.Low.BaseFromEntry(e)
+		if err != nil {
+			panic(err)
+		}
+		fil = rdr.FileFromBase(base, f)
+		printFile(rdr, path, &fil)
+	}
+}
+
+var (
+	verbose       *bool
+	list          *bool
+	long          *bool
+	numeric       *bool
+	offset        *int64
+	ignore        *bool
+	file          *string
+	showHardLinks *bool
+)
+
 func main() {
-	verbose := flag.Bool("v", false, "Verbose")
-	list := flag.Bool("l", false, "List")
-	long := flag.Bool("ll", false, "List with attributes")
-	numeric := flag.Bool("lln", false, "List with attributes and numeric ids")
-	offset := flag.Int64("o", 0, "Offset")
-	ignore := flag.Bool("ip", false, "Ignore Permissions and extract all files/folders with 0755")
-	file := flag.String("e", "", "File or folder to extract")
+	verbose = flag.Bool("v", false, "Verbose")
+	list = flag.Bool("l", false, "List")
+	long = flag.Bool("ll", false, "List with attributes")
+	numeric = flag.Bool("lln", false, "List with attributes and numeric ids")
+	showHardLinks = flag.Bool("show-hard-links", false, "When used with ll or lln, shows hard links")
+	offset = flag.Int64("o", 0, "Offset")
+	ignore = flag.Bool("ip", false, "Ignore Permissions and extract all files/folders with 0755")
+	file = flag.String("e", "", "File or folder to extract")
 	flag.Parse()
 	if (*list || *long || *numeric) && flag.NArg() < 1 {
 		fmt.Println("Please provide a file name")
@@ -85,27 +127,7 @@ func main() {
 		}
 	}
 	if *list || *long || *numeric {
-		if extractFil.IsDir() {
-			var filFs squashfs.FS
-			filFs, err = extractFil.FS()
-			if err != nil {
-				panic(err)
-			}
-			err = fs.WalkDir(filFs, ".", func(path string, d fs.DirEntry, err error) error {
-				if err != nil {
-					panic(err)
-				}
-				if *long || *numeric {
-					printEntry(path, d, *numeric)
-				} else {
-					fmt.Println(filepath.Clean(path))
-				}
-				return nil
-			})
-			if err != nil {
-				panic(err)
-			}
-		}
+		printFile(&r, "", extractFil)
 		return
 	}
 	op := squashfs.DefaultOptions()
