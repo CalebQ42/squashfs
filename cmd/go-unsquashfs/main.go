@@ -45,13 +45,19 @@ func printFile(rdr *squashfs.Reader, path string, f *squashfs.File) {
 	owner := fmt.Sprintf("%s/%s",
 		userName(sfi.Uid(), *numeric),
 		groupName(sfi.Gid(), *numeric))
-	link, isHardLink := hardLinks[f.Low.Inode.Num]
+	var link string
+	var isHardLink bool
+	if *showHardLinks {
+		link, isHardLink = hardLinks[f.Low.Inode.Num]
+		if !isHardLink {
+			hardLinks[f.Low.Inode.Num] = path
+		}
+	}
 	var size int64
 	if isHardLink {
 		size = 0
 	} else {
 		size = fi.Size()
-		hardLinks[f.Low.Inode.Num] = path
 	}
 	if sfi.IsSymlink() {
 		link = " -> " + sfi.SymlinkPath()
