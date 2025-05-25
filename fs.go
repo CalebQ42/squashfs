@@ -17,13 +17,13 @@ import (
 type FS struct {
 	r      *Reader
 	parent *FS
-	d      squashfslow.Directory
+	LowDir squashfslow.Directory
 }
 
 // Creates a new *FS from the given squashfs.directory
 func (r *Reader) FSFromDirectory(d squashfslow.Directory, parent FS) FS {
 	return FS{
-		d:      d,
+		LowDir: d,
 		r:      r,
 		parent: &parent,
 	}
@@ -42,10 +42,10 @@ func (f *FS) Glob(pattern string) (out []string, err error) {
 		}
 	}
 	split := strings.Split(pattern, "/")
-	for i := range f.d.Entries {
-		if match, _ := path.Match(split[0], f.d.Entries[i].Name); match {
+	for i := range f.LowDir.Entries {
+		if match, _ := path.Match(split[0], f.LowDir.Entries[i].Name); match {
 			if len(split) == 1 {
-				out = append(out, f.d.Entries[i].Name)
+				out = append(out, f.LowDir.Entries[i].Name)
 				continue
 			}
 			sub, err := f.Sub(split[0])
@@ -81,7 +81,7 @@ func (f *FS) Glob(pattern string) (out []string, err error) {
 				}
 			}
 			for i := range subGlob {
-				subGlob[i] = f.d.Name + "/" + subGlob[i]
+				subGlob[i] = f.LowDir.Name + "/" + subGlob[i]
 			}
 			out = append(out, subGlob...)
 		}
@@ -91,6 +91,10 @@ func (f *FS) Glob(pattern string) (out []string, err error) {
 
 // Opens the file at name. Returns a *File as an fs.File.
 func (f FS) Open(name string) (fs.File, error) {
+	return f.OpenFile(name)
+}
+
+func (f FS) OpenFile(name string) (*File, error) {
 	name = filepath.Clean(name)
 	if !fs.ValidPath(name) {
 		return nil, &fs.PathError{
@@ -111,10 +115,10 @@ func (f FS) Open(name string) (fs.File, error) {
 				Err:  fs.ErrNotExist,
 			}
 		} else {
-			return f.parent.Open(strings.Join(split[1:], "/"))
+			return f.parent.OpenFile(strings.Join(split[1:], "/"))
 		}
 	}
-	i, found := slices.BinarySearchFunc(f.d.Entries, split[0], func(e directory.Entry, name string) int {
+	i, found := slices.BinarySearchFunc(f.LowDir.Entries, split[0], func(e directory.Entry, name string) int {
 		return strings.Compare(e.Name, name)
 	})
 	if !found {
@@ -124,13 +128,13 @@ func (f FS) Open(name string) (fs.File, error) {
 			Err:  fs.ErrNotExist,
 		}
 	}
-	b, err := f.r.Low.BaseFromEntry(f.d.Entries[i])
+	b, err := f.r.Low.BaseFromEntry(f.LowDir.Entries[i])
 	if err != nil {
 		return nil, err
 	}
 	if len(split) == 1 {
 		return &File{
-			b:      b,
+			Low:    b,
 			r:      f.r,
 			parent: f,
 		}, nil
@@ -146,7 +150,7 @@ func (f FS) Open(name string) (fs.File, error) {
 	if err != nil {
 		return nil, err
 	}
-	return f.r.FSFromDirectory(d, f).Open(strings.Join(split[1:], "/"))
+	return f.r.FSFromDirectory(d, f).OpenFile(strings.Join(split[1:], "/"))
 }
 
 // Returns all DirEntry's for the directory at name.
@@ -256,20 +260,20 @@ func (f FS) ExtractWithOptions(folder string, op *ExtractionOptions) error {
 func (f FS) File() *File {
 	if f.parent != nil {
 		return &File{
-			b:      f.d.FileBase,
+			Low:    f.LowDir.FileBase,
 			parent: *f.parent,
 			r:      f.r,
 		}
 	}
 	return &File{
-		b: f.d.FileBase,
-		r: f.r,
+		Low: f.LowDir.FileBase,
+		r:   f.r,
 	}
 }
 
 func (f FS) path() string {
 	if f.parent == nil {
-		return f.d.Name
+		return f.LowDir.Name
 	}
-	return filepath.Join(f.parent.path(), f.d.Name)
+	return filepath.Join(f.parent.path(), f.LowDir.Name)
 }

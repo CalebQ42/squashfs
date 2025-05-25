@@ -22,8 +22,8 @@ func NewReader(r io.ReaderAt) (Reader, error) {
 		Low: rdr,
 	}
 	out.FS = FS{
-		d: rdr.Root,
-		r: &out,
+		LowDir: rdr.Root,
+		r:   &out,
 	}
 	return out, nil
 }
