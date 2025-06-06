@@ -40,10 +40,17 @@ type Inode struct {
 }
 
 func Read(r io.Reader, blockSize uint32) (i Inode, err error) {
-	err = binary.Read(r, binary.LittleEndian, &i.Header)
+	dat := make([]byte, 16)
+	_, err = r.Read(dat)
 	if err != nil {
 		return
 	}
+	i.Type = binary.LittleEndian.Uint16(dat[0:2])
+	i.Perm = binary.LittleEndian.Uint16(dat[2:4])
+	i.UidInd = binary.LittleEndian.Uint16(dat[4:6])
+	i.GidInd = binary.LittleEndian.Uint16(dat[6:8])
+	i.ModTime = binary.LittleEndian.Uint32(dat[8:12])
+	i.Num = binary.LittleEndian.Uint32(dat[12:16])
 	switch i.Type {
 	case Dir:
 		i.Data, err = ReadDir(r)

@@ -20,10 +20,10 @@ func ReadFile(r io.Reader, blockSize uint32) (f File, err error) {
 	if err != nil {
 		return
 	}
-	f.BlockStart = binary.LittleEndian.Uint32(dat)
-	f.FragInd = binary.LittleEndian.Uint32(dat[4:])
-	f.FragOffset = binary.LittleEndian.Uint32(dat[8:])
-	f.Size = binary.LittleEndian.Uint32(dat[12:])
+	f.BlockStart = binary.LittleEndian.Uint32(dat[0:4])
+	f.FragInd = binary.LittleEndian.Uint32(dat[4:8])
+	f.FragOffset = binary.LittleEndian.Uint32(dat[8:12])
+	f.Size = binary.LittleEndian.Uint32(dat[12:16])
 	toRead := int(math.Floor(float64(f.Size) / float64(blockSize)))
 	if f.FragInd == 0xFFFFFFFF && f.Size%blockSize > 0 {
 		toRead++
@@ -57,14 +57,14 @@ func ReadEFile(r io.Reader, blockSize uint32) (f EFile, err error) {
 	if err != nil {
 		return
 	}
-	f.BlockStart = binary.LittleEndian.Uint64(dat)
-	f.Size = binary.LittleEndian.Uint64(dat[8:])
-	f.Sparse = binary.LittleEndian.Uint64(dat[16:])
-	f.LinkCount = binary.LittleEndian.Uint32(dat[24:])
-	f.FragInd = binary.LittleEndian.Uint32(dat[28:])
-	f.FragOffset = binary.LittleEndian.Uint32(dat[32:])
-	f.XattrInd = binary.LittleEndian.Uint32(dat[36:])
-	toRead := int(math.Floor(float64(f.Size) / float64(blockSize)))
+	f.BlockStart = binary.LittleEndian.Uint64(dat[0:8])
+	f.Size = binary.LittleEndian.Uint64(dat[8:16])
+	f.Sparse = binary.LittleEndian.Uint64(dat[16:24])
+	f.LinkCount = binary.LittleEndian.Uint32(dat[24:28])
+	f.FragInd = binary.LittleEndian.Uint32(dat[28:32])
+	f.FragOffset = binary.LittleEndian.Uint32(dat[32:36])
+	f.XattrInd = binary.LittleEndian.Uint32(dat[36:40])
+	toRead := f.Size / uint64(blockSize)
 	if f.FragInd == 0xFFFFFFFF && f.Size%uint64(blockSize) > 0 {
 		toRead++
 	}

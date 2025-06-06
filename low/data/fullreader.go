@@ -50,9 +50,6 @@ func (f *FullReader) AddFragData(blockStart uint64, blockSize uint32, offset uin
 	if err != nil {
 		return err
 	}
-	if realSize == 0 {
-
-	}
 	if blockSize == realSize {
 		dat, err = f.decomp.Decompress(dat)
 		if err != nil {

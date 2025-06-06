@@ -16,5 +16,9 @@ func NewZstd() Zstd {
 }
 
 func (z Zstd) Decompress(data []byte) ([]byte, error) {
-	return z.rdr.DecodeAll(data, nil)
+	dat, err := z.rdr.DecodeAll(data, nil)
+	if err != nil {
+		return nil, err
+	}
+	return dat, err
 }
