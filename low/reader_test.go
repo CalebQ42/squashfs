@@ -77,7 +77,7 @@ func TestReader(t *testing.T) {
 	path := filepath.Join(tmpDir, "extractTest")
 	os.RemoveAll(path)
 	os.MkdirAll(path, 0777)
-	err = extractToDir(rdr, &rdr.Root.FileBase, path)
+	err = extractToDir(rdr, rdr.Root.FileBase, path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -103,7 +103,7 @@ func TestSingleFile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = extractToDir(rdr, &b, path)
+	err = extractToDir(rdr, b, path)
 	if err != nil {
 		t.Fatal(err)
 	}

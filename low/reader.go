@@ -4,10 +4,8 @@ import (
 	"encoding/binary"
 	"errors"
 	"io"
-	"math"
 
 	"github.com/CalebQ42/squashfs/internal/decompress"
-	"github.com/CalebQ42/squashfs/internal/metadata"
 	"github.com/CalebQ42/squashfs/internal/toreader"
 	"github.com/CalebQ42/squashfs/low/inode"
 )
@@ -30,13 +28,13 @@ var (
 )
 
 type Reader struct {
+	Root        Directory
+	Superblock  superblock
 	r           io.ReaderAt
 	d           decompress.Decompressor
-	Root        Directory
-	fragTable   []fragEntry
-	idTable     []uint32
-	exportTable []uint64
-	Superblock  superblock
+	fragTable   *Table[fragEntry]
+	idTable     *Table[uint32]
+	exportTable *Table[uint64]
 }
 
 func NewReader(r io.ReaderAt) (rdr Reader, err error) {
@@ -80,119 +78,29 @@ func NewReader(r io.ReaderAt) (rdr Reader, err error) {
 	if err != nil {
 		return rdr, errors.Join(errors.New("failed to read root directory"), err)
 	}
+	rdr.fragTable = NewTable[fragEntry](&rdr, rdr.Superblock.FragTableStart, rdr.Superblock.FragCount)
+	rdr.idTable = NewTable[uint32](&rdr, rdr.Superblock.IdTableStart, uint32(rdr.Superblock.IdCount))
+	rdr.exportTable = NewTable[uint64](&rdr, rdr.Superblock.ExportTableStart, rdr.Superblock.InodeCount)
 	return
 }
 
 // Get a uid/gid at the given index. Lazily populates the reader's Id table as necessary.
 func (r *Reader) Id(i uint16) (uint32, error) {
-	if len(r.idTable) > int(i) {
-		return r.idTable[i], nil
-	} else if i >= r.Superblock.IdCount {
-		return 0, errors.New("id out of bounds")
-	}
-	// Populate the id table as needed
-	var blockNum uint32
-	if i != 0 { // If i == 0, we go negatives causing issues with uint32s
-		blockNum = uint32(math.Ceil(float64(i+1)/2048)) - 1
-	} else {
-		blockNum = 0
-	}
-	blocksRead := len(r.idTable) / 2048
-	blocksToRead := int(blockNum) - blocksRead + 1
-
-	var offset uint64
-	var idsToRead uint16
-	var idsTmp []uint32
-	var err error
-	var rdr metadata.Reader
-	// We can *maybe* have a slight speed increase by manually decoding instead of using reflection via binary.Read
-	for i := blocksRead; i < int(blocksRead)+blocksToRead; i++ {
-		err = binary.Read(toreader.NewReader(r.r, int64(r.Superblock.IdTableStart)+int64(8*i)), binary.LittleEndian, &offset)
-		if err != nil {
-			return 0, err
-		}
-		idsToRead = min(r.Superblock.IdCount-uint16(len(r.idTable)), 2048)
-		idsTmp = make([]uint32, idsToRead)
-		rdr = metadata.NewReader(toreader.NewReader(r.r, int64(offset)), r.d)
-		err = binary.Read(&rdr, binary.LittleEndian, &idsTmp)
-		rdr.Close()
-		if err != nil {
-			return 0, err
-		}
-		r.idTable = append(r.idTable, idsTmp...)
-	}
-	return r.idTable[i], nil
+	return r.idTable.Get(uint32(i))
 }
 
 // Get a fragment entry at the given index. Lazily populates the reader's fragment table as necessary.
 func (r *Reader) fragEntry(i uint32) (fragEntry, error) {
-	return readPagedItems(int(i), 512, &r.fragTable, int(r.Superblock.FragCount),
-		func(startBlock, fragsToRead int) ([]fragEntry, error) {
-			// get the offset of the next block of fragments
-			var offset uint64
-			err := binary.Read(toreader.NewReader(r.r, int64(r.Superblock.FragTableStart)+int64(8*startBlock)), binary.LittleEndian, &offset)
-			if err != nil {
-				return nil, err
-			}
-
-			fragsTmp := make([]fragEntry, fragsToRead)
-			rdr := metadata.NewReader(toreader.NewReader(r.r, int64(offset)), r.d)
-			defer rdr.Close()
-			err = binary.Read(rdr, binary.LittleEndian, &fragsTmp)
-			if err != nil {
-				return nil, err
-			}
-
-			return fragsTmp, nil
-		})
+	return r.fragTable.Get(i)
 }
 
 // Get an inode reference at the given index. Lazily populates the reader's export table as necessary.
 func (r *Reader) inodeRef(i uint32) (uint64, error) {
-	if !r.Superblock.Exportable() {
-		return 0, ErrorNotExportable
-	}
-	if len(r.exportTable) > int(i) {
-		return r.exportTable[i], nil
-	} else if i >= r.Superblock.InodeCount {
-		return 0, errors.New("inode out of bounds")
-	}
-	// Populate the export table as needed
-	var blockNum uint32
-	if i != 0 { // If i == 0, we go negatives causing issues with uint32s
-		blockNum = uint32(math.Ceil(float64(i+1)/1024)) - 1
-	} else {
-		blockNum = 0
-	}
-	blocksRead := len(r.exportTable) / 1024
-	blocksToRead := int(blockNum) - blocksRead + 1
-
-	var offset uint64
-	var refsToRead uint32
-	var refsTmp []uint64
-	var err error
-	var rdr metadata.Reader
-	// We can *maybe* have a slight speed increase by manually decoding instead of using reflection via binary.Read
-	for i := blocksRead; i < int(blocksRead)+blocksToRead; i++ {
-		err = binary.Read(toreader.NewReader(r.r, int64(r.Superblock.ExportTableStart)+int64(8*i)), binary.LittleEndian, &offset)
-		if err != nil {
-			return 0, err
-		}
-		refsToRead = min(r.Superblock.InodeCount-uint32(len(r.exportTable)), 1024)
-		refsTmp = make([]uint64, refsToRead)
-		rdr = metadata.NewReader(toreader.NewReader(r.r, int64(offset)), r.d)
-		err = binary.Read(&rdr, binary.LittleEndian, &refsTmp)
-		rdr.Close()
-		if err != nil {
-			return 0, err
-		}
-		r.exportTable = append(r.exportTable, refsTmp...)
-	}
-	return r.exportTable[i], nil
+	return r.exportTable.Get(i)
 }
 
 func (r Reader) Inode(i uint32) (inode.Inode, error) {
-	ref, err := r.inodeRef(i)
+	ref, err := r.inodeRef(i - 1) // Inode table is 1 indexed
 	if err != nil {
 		return inode.Inode{}, err
 	}
