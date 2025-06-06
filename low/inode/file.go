@@ -14,21 +14,6 @@ type File struct {
 	BlockSizes []uint32
 }
 
-type eFileInit struct {
-	BlockStart uint64
-	Size       uint64
-	Sparse     uint64
-	LinkCount  uint32
-	FragInd    uint32
-	FragOffset uint32
-	XattrInd   uint32
-}
-
-type EFile struct {
-	eFileInit
-	BlockSizes []uint32
-}
-
 func ReadFile(r io.Reader, blockSize uint32) (f File, err error) {
 	dat := make([]byte, 16)
 	_, err = r.Read(dat)
@@ -55,16 +40,42 @@ func ReadFile(r io.Reader, blockSize uint32) (f File, err error) {
 	return
 }
 
+type EFile struct {
+	BlockStart uint64
+	Size       uint64
+	Sparse     uint64
+	LinkCount  uint32
+	FragInd    uint32
+	FragOffset uint32
+	XattrInd   uint32
+	BlockSizes []uint32
+}
+
 func ReadEFile(r io.Reader, blockSize uint32) (f EFile, err error) {
-	err = binary.Read(r, binary.LittleEndian, &f.eFileInit)
+	dat := make([]byte, 40)
+	_, err = r.Read(dat)
 	if err != nil {
 		return
 	}
+	f.BlockStart = binary.LittleEndian.Uint64(dat)
+	f.Size = binary.LittleEndian.Uint64(dat[8:])
+	f.Sparse = binary.LittleEndian.Uint64(dat[16:])
+	f.LinkCount = binary.LittleEndian.Uint32(dat[24:])
+	f.FragInd = binary.LittleEndian.Uint32(dat[28:])
+	f.FragOffset = binary.LittleEndian.Uint32(dat[32:])
+	f.XattrInd = binary.LittleEndian.Uint32(dat[36:])
 	toRead := int(math.Floor(float64(f.Size) / float64(blockSize)))
 	if f.FragInd == 0xFFFFFFFF && f.Size%uint64(blockSize) > 0 {
 		toRead++
 	}
+	dat = make([]byte, toRead*4)
+	_, err = r.Read(dat)
+	if err != nil {
+		return
+	}
 	f.BlockSizes = make([]uint32, toRead)
-	err = binary.Read(r, binary.LittleEndian, &f.BlockSizes)
+	for i := range toRead {
+		f.BlockSizes[i] = binary.LittleEndian.Uint32(dat[i*4:])
+	}
 	return
 }

@@ -17,7 +17,7 @@ import (
 
 const (
 	squashfsURL  = "https://darkstorm.tech/files/LinuxPATest.sfs"
-	squashfsName = "tensorflow.sqfs"
+	squashfsName = "test.sfs"
 )
 
 func preTest(dir string) (fil *os.File, err error) {

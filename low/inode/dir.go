@@ -13,6 +13,20 @@ type Directory struct {
 	ParentNum  uint32
 }
 
+func ReadDir(r io.Reader) (d Directory, err error) {
+	dat := make([]byte, 16)
+	_, err = r.Read(dat)
+	if err != nil {
+		return
+	}
+	d.BlockStart = binary.LittleEndian.Uint32(dat)
+	d.LinkCount = binary.LittleEndian.Uint32(dat[4:])
+	d.Size = binary.LittleEndian.Uint16(dat[8:])
+	d.Offset = binary.LittleEndian.Uint16(dat[10:])
+	d.ParentNum = binary.LittleEndian.Uint32(dat[12:])
+	return
+}
+
 type EDirectory struct {
 	LinkCount  uint32
 	Size       uint32
@@ -29,20 +43,6 @@ type DirectoryIndex struct {
 	Start    uint32
 	NameSize uint32
 	Name     []byte
-}
-
-func ReadDir(r io.Reader) (d Directory, err error) {
-	dat := make([]byte, 16)
-	_, err = r.Read(dat)
-	if err != nil {
-		return
-	}
-	d.BlockStart = binary.LittleEndian.Uint32(dat)
-	d.LinkCount = binary.LittleEndian.Uint32(dat[4:])
-	d.Size = binary.LittleEndian.Uint16(dat[8:])
-	d.Offset = binary.LittleEndian.Uint16(dat[10:])
-	d.ParentNum = binary.LittleEndian.Uint32(dat[12:])
-	return
 }
 
 func ReadEDir(r io.Reader) (d EDirectory, err error) {
