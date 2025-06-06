@@ -13,13 +13,14 @@ import (
 
 	"github.com/CalebQ42/squashfs/internal/routinemanager"
 	squashfslow "github.com/CalebQ42/squashfs/low"
+	"github.com/CalebQ42/squashfs/low/data"
 	"github.com/CalebQ42/squashfs/low/inode"
 )
 
 // File represents a file inside a squashfs archive.
 type File struct {
-	// full     data.FullReader
-	// rdr      data.Reader
+	full     data.FullReader
+	rdr      data.Reader
 	rdrInit  bool
 	parent   FS
 	r        *Reader
