@@ -77,8 +77,10 @@ func TestReader(t *testing.T) {
 	path := filepath.Join(tmpDir, "extractTest")
 	os.RemoveAll(path)
 	os.MkdirAll(path, 0777)
-	err = extractToDir(rdr, rdr.Root.FileBase, path)
-	t.Fatal(err)
+	err = extractToDir(rdr, &rdr.Root.FileBase, path)
+	if err != nil {
+		t.Fatal(err)
+	}
 }
 
 var singleFile = "PortableApps/CPU-X/CPU-X-v4.2.0-x86_64.AppImage"
@@ -101,8 +103,10 @@ func TestSingleFile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = extractToDir(rdr, b, path)
-	t.Fatal(err)
+	err = extractToDir(rdr, &b, path)
+	if err != nil {
+		t.Fatal(err)
+	}
 }
 
 func extractToDir(rdr Reader, b FileBase, folder string) error {
