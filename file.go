@@ -19,49 +19,47 @@ import (
 
 // File represents a file inside a squashfs archive.
 type File struct {
-	full     *data.FullReader
-	rdr      *data.Reader
-	parent   *FS
+	full     data.FullReader
+	rdr      data.Reader
+	rdrInit  bool
+	parent   FS
 	r        *Reader
-	b        squashfslow.FileBase
+	Low      squashfslow.FileBase
 	dirsRead int
 }
 
 // Creates a new *File from the given *squashfs.Base
-func (r *Reader) FileFromBase(b squashfslow.FileBase, parent *FS) *File {
-	return &File{
-		b:      b,
+func (r *Reader) FileFromBase(b squashfslow.FileBase, parent FS) File {
+	return File{
+		Low:    b,
 		parent: parent,
 		r:      r,
 	}
 }
 
-func (f *File) FS() (*FS, error) {
+func (f File) FS() (FS, error) {
 	if !f.IsDir() {
-		return nil, errors.New("not a directory")
+		return FS{}, errors.New("not a directory")
 	}
-	d, err := f.b.ToDir(&f.r.Low)
+	d, err := f.Low.ToDir(f.r.Low)
 	if err != nil {
-		return nil, err
+		return FS{}, err
 	}
-	return &FS{d: d, parent: f.parent, r: f.r}, nil
+	return FS{LowDir: d, parent: &f.parent, r: f.r}, nil
 }
 
 // Closes the underlying readers.
 // Further calls to Read and WriteTo will re-create the readers.
 // Never returns an error.
 func (f *File) Close() error {
-	if f.rdr != nil {
-		return f.rdr.Close()
-	}
-	f.rdr = nil
-	f.full = nil
+	f.rdr.Close()
+	f.full.Close()
 	return nil
 }
 
 // Returns the file the symlink points to.
 // If the file isn't a symlink, or points to a file outside the archive, returns nil.
-func (f *File) GetSymlinkFile() fs.File {
+func (f File) GetSymlinkFile() fs.File {
 	if !f.IsSymlink() {
 		return nil
 	}
@@ -76,22 +74,22 @@ func (f *File) GetSymlinkFile() fs.File {
 }
 
 // Returns whether the file is a directory.
-func (f *File) IsDir() bool {
-	return f.b.IsDir()
+func (f File) IsDir() bool {
+	return f.Low.IsDir()
 }
 
 // Returns whether the file is a regular file.
-func (f *File) IsRegular() bool {
-	return f.b.IsRegular()
+func (f File) IsRegular() bool {
+	return f.Low.IsRegular()
 }
 
 // Returns whether the file is a symlink.
-func (f *File) IsSymlink() bool {
-	return f.b.Inode.Type == inode.Sym || f.b.Inode.Type == inode.ESym
+func (f File) IsSymlink() bool {
+	return f.Low.Inode.Type == inode.Sym || f.Low.Inode.Type == inode.ESym
 }
 
-func (f *File) Mode() fs.FileMode {
-	return f.b.Inode.Mode()
+func (f File) Mode() fs.FileMode {
+	return f.Low.Inode.Mode()
 }
 
 // Read reads the data from the file. Only works if file is a normal file.
@@ -99,7 +97,7 @@ func (f *File) Read(b []byte) (int, error) {
 	if !f.IsRegular() {
 		return 0, errors.New("file is not a regular file")
 	}
-	if f.rdr == nil {
+	if !f.rdrInit {
 		err := f.initializeReaders()
 		if err != nil {
 			return 0, err
@@ -114,7 +112,7 @@ func (f *File) ReadDir(n int) ([]fs.DirEntry, error) {
 	if !f.IsDir() {
 		return nil, errors.New("file is not a directory")
 	}
-	d, err := f.b.ToDir(&f.r.Low)
+	d, err := f.Low.ToDir(f.r.Low)
 	if err != nil {
 		return nil, err
 	}
@@ -127,7 +125,7 @@ func (f *File) ReadDir(n int) ([]fs.DirEntry, error) {
 		}
 	}
 	var out []fs.DirEntry
-	var fi fileInfo
+	var fi FileInfo
 	for _, e := range d.Entries[start:end] {
 		fi, err = f.r.newFileInfo(e)
 		if err != nil {
@@ -141,17 +139,25 @@ func (f *File) ReadDir(n int) ([]fs.DirEntry, error) {
 }
 
 // Returns the file's fs.FileInfo
-func (f *File) Stat() (fs.FileInfo, error) {
-	return newFileInfo(f.b.Name, &f.b.Inode), nil
+func (f File) Stat() (fs.FileInfo, error) {
+	uid, err := f.Low.Uid(&f.r.Low)
+	if err != nil {
+		return nil, err
+	}
+	gid, err := f.Low.Gid(&f.r.Low)
+	if err != nil {
+		return nil, err
+	}
+	return newFileInfo(f.Low.Name, uid, gid, &f.Low.Inode), nil
 }
 
 // SymlinkPath returns the symlink's target path. Is the File isn't a symlink, returns an empty string.
-func (f *File) SymlinkPath() string {
-	switch f.b.Inode.Type {
+func (f File) SymlinkPath() string {
+	switch f.Low.Inode.Type {
 	case inode.Sym:
-		return string(f.b.Inode.Data.(inode.Symlink).Target)
+		return string(f.Low.Inode.Data.(inode.Symlink).Target)
 	case inode.ESym:
-		return string(f.b.Inode.Data.(inode.ESymlink).Target)
+		return string(f.Low.Inode.Data.(inode.ESymlink).Target)
 	}
 	return ""
 }
@@ -162,7 +168,7 @@ func (f *File) WriteTo(w io.Writer) (int64, error) {
 	if !f.IsRegular() {
 		return 0, errors.New("file is not a regular file")
 	}
-	if f.full == nil {
+	if !f.rdrInit {
 		err := f.initializeReaders()
 		if err != nil {
 			return 0, err
@@ -173,36 +179,43 @@ func (f *File) WriteTo(w io.Writer) (int64, error) {
 
 func (f *File) initializeReaders() error {
 	var err error
-	f.rdr, f.full, err = f.b.GetRegFileReaders(&f.r.Low)
+	f.rdr, f.full, err = f.Low.GetRegFileReaders(f.r.Low)
+	if err == nil {
+		f.rdrInit = true
+	} else {
+		f.rdr.Close()
+		f.full.Close()
+	}
 	return err
 }
 
-func (f *File) deviceDevices() (maj uint32, min uint32) {
+func (f File) deviceDevices() (maj uint32, min uint32) {
 	var dev uint32
-	if f.b.Inode.Type == inode.Char || f.b.Inode.Type == inode.Block {
-		dev = f.b.Inode.Data.(inode.Device).Dev
-	} else if f.b.Inode.Type == inode.EChar || f.b.Inode.Type == inode.EBlock {
-		dev = f.b.Inode.Data.(inode.EDevice).Dev
+	switch f.Low.Inode.Type {
+	case inode.Char, inode.Block:
+		dev = f.Low.Inode.Data.(inode.Device).Dev
+	case inode.EChar, inode.EBlock:
+		dev = f.Low.Inode.Data.(inode.EDevice).Dev
 	}
 	return dev >> 8, dev & 0x000FF
 }
 
-func (f *File) path() string {
-	if f.parent == nil {
-		return f.b.Name
+func (f File) path() string {
+	if f.parent.LowDir.Name == "" {
+		return f.Low.Name
 	}
-	return filepath.Join(f.parent.path(), f.b.Name)
+	return filepath.Join(f.parent.path(), f.Low.Name)
 }
 
 // Extract the file to the given folder. If the file is a folder, the folder's contents will be extracted to the folder.
 // Uses default extraction options.
-func (f *File) Extract(folder string) error {
+func (f File) Extract(folder string) error {
 	return f.ExtractWithOptions(folder, DefaultOptions())
 }
 
 // Extract the file to the given folder. If the file is a folder, the folder's contents will be extracted to the folder.
 // Allows setting various extraction options via ExtractionOptions.
-func (f *File) ExtractWithOptions(path string, op *ExtractionOptions) error {
+func (f File) ExtractWithOptions(path string, op *ExtractionOptions) error {
 	if op.manager == nil {
 		op.manager = routinemanager.NewManager(op.SimultaneousFiles)
 		if op.LogOutput != nil {
@@ -216,9 +229,9 @@ func (f *File) ExtractWithOptions(path string, op *ExtractionOptions) error {
 			return err
 		}
 	}
-	switch f.b.Inode.Type {
+	switch f.Low.Inode.Type {
 	case inode.Dir, inode.EDir:
-		d, err := f.b.ToDir(&f.r.Low)
+		d, err := f.Low.ToDir(f.r.Low)
 		if err != nil {
 			if op.Verbose {
 				log.Println("Failed to create squashfs.Directory for", path)
@@ -266,7 +279,7 @@ func (f *File) ExtractWithOptions(path string, op *ExtractionOptions) error {
 			}(b, path)
 		}
 		var errCache []error
-		for i := 0; i < len(d.Entries); i++ {
+		for range d.Entries {
 			err := <-errChan
 			if err != nil {
 				errCache = append(errCache, err)
@@ -276,7 +289,7 @@ func (f *File) ExtractWithOptions(path string, op *ExtractionOptions) error {
 			return errors.Join(errors.New("failed to extract folder: "+path), errors.Join(errCache...))
 		}
 	case inode.Fil, inode.EFil:
-		path = filepath.Join(path, f.b.Name)
+		path = filepath.Join(path, f.Low.Name)
 		outFil, err := os.Create(path)
 		if err != nil {
 			if op.Verbose {
@@ -285,7 +298,7 @@ func (f *File) ExtractWithOptions(path string, op *ExtractionOptions) error {
 			return errors.Join(errors.New("failed to create file: "+path), err)
 		}
 		defer outFil.Close()
-		full, err := f.b.GetFullReader(&f.r.Low)
+		full, err := f.Low.GetFullReader(&f.r.Low)
 		if err != nil {
 			if op.Verbose {
 				log.Println("Failed to create full reader for", path)
@@ -311,11 +324,11 @@ func (f *File) ExtractWithOptions(path string, op *ExtractionOptions) error {
 				return errors.New("failed to get symlink's file")
 			}
 			fil := filTmp.(*File)
-			fil.b.Name = f.b.Name
+			fil.Low.Name = f.Low.Name
 			err := fil.ExtractWithOptions(path, op)
 			if err != nil {
 				if op.Verbose {
-					log.Println("Failed to extract symlink's file:", filepath.Join(path, f.b.Name))
+					log.Println("Failed to extract symlink's file:", filepath.Join(path, f.Low.Name))
 				}
 				return errors.Join(errors.New("failed to extract symlink's file: "+path), err)
 			}
@@ -338,7 +351,7 @@ func (f *File) ExtractWithOptions(path string, op *ExtractionOptions) error {
 					return errors.Join(errors.New("failed to extract symlink's file: "+extractLoc), err)
 				}
 			}
-			path = filepath.Join(path, f.b.Name)
+			path = filepath.Join(path, f.Low.Name)
 			err := os.Symlink(f.SymlinkPath(), path)
 			if err != nil {
 				if op.Verbose {
@@ -361,13 +374,14 @@ func (f *File) ExtractWithOptions(path string, op *ExtractionOptions) error {
 			}
 			return errors.Join(errors.New("mknot command not found"), err)
 		}
-		path = filepath.Join(path, f.b.Name)
+		path = filepath.Join(path, f.Low.Name)
 		var typ string
-		if f.b.Inode.Type == inode.Char || f.b.Inode.Type == inode.EChar {
+		switch f.Low.Inode.Type {
+		case inode.Char, inode.EChar:
 			typ = "c"
-		} else if f.b.Inode.Type == inode.Block || f.b.Inode.Type == inode.EBlock {
+		case inode.Block, inode.EBlock:
 			typ = "b"
-		} else { //Fifo IPC
+		default: //Fifo IPC
 			if runtime.GOOS == "darwin" {
 				if op.Verbose {
 					log.Println(f.path(), "ignored. A Fifo file and can't be created on Darwin.")
@@ -398,7 +412,7 @@ func (f *File) ExtractWithOptions(path string, op *ExtractionOptions) error {
 		}
 		return nil
 	default:
-		return errors.New("Unsupported file type. Inode type: " + strconv.Itoa(int(f.b.Inode.Type)))
+		return errors.New("Unsupported file type. Inode type: " + strconv.Itoa(int(f.Low.Inode.Type)))
 	}
 	if op.Verbose {
 		log.Println(f.path(), "extracted to", path)
@@ -406,7 +420,7 @@ func (f *File) ExtractWithOptions(path string, op *ExtractionOptions) error {
 	if op.IgnorePerm {
 		return nil
 	}
-	uid, err := f.b.Uid(&f.r.Low)
+	uid, err := f.Low.Uid(&f.r.Low)
 	if err != nil {
 		if op.Verbose {
 			log.Println("Failed to get uid for", path)
@@ -414,7 +428,7 @@ func (f *File) ExtractWithOptions(path string, op *ExtractionOptions) error {
 		}
 		return nil
 	}
-	gid, err := f.b.Gid(&f.r.Low)
+	gid, err := f.Low.Gid(&f.r.Low)
 	if err != nil {
 		if op.Verbose {
 			log.Println("Failed to get gid for", path)

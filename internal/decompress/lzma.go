@@ -1,3 +1,5 @@
+//go:build !no_obsolete
+
 package decompress
 
 import (
@@ -8,6 +10,10 @@ import (
 )
 
 type Lzma struct{}
+
+func NewLzma() (Lzma, error) {
+	return Lzma{}, nil
+}
 
 func (l Lzma) Decompress(data []byte) ([]byte, error) {
 	rdr, err := lzma.NewReader(bytes.NewReader(data))

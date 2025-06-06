@@ -14,8 +14,8 @@ type Reader struct {
 	curOffset uint16
 }
 
-func NewReader(r io.Reader, d decompress.Decompressor) *Reader {
-	return &Reader{
+func NewReader(r io.Reader, d decompress.Decompressor) Reader {
+	return Reader{
 		r: r,
 		d: d,
 	}
@@ -23,14 +23,15 @@ func NewReader(r io.Reader, d decompress.Decompressor) *Reader {
 
 func (r *Reader) advance() error {
 	r.curOffset = 0
-	var size uint16
-	err := binary.Read(r.r, binary.LittleEndian, &size)
+	dat := make([]byte, 2)
+	_, err := r.r.Read(dat)
 	if err != nil {
 		return err
 	}
+	size := binary.LittleEndian.Uint16(dat)
 	realSize := size &^ 0x8000
 	r.dat = make([]byte, realSize)
-	err = binary.Read(r.r, binary.LittleEndian, &r.dat)
+	_, err = r.r.Read(r.dat)
 	if err != nil {
 		return err
 	}
@@ -50,10 +51,7 @@ func (r *Reader) Read(b []byte) (int, error) {
 				return curRead, err
 			}
 		}
-		toRead = len(b) - curRead
-		if toRead > len(r.dat)-int(r.curOffset) {
-			toRead = len(r.dat) - int(r.curOffset)
-		}
+		toRead = min(len(b)-curRead, len(r.dat)-int(r.curOffset))
 		copy(b[curRead:], r.dat[r.curOffset:int(r.curOffset)+toRead])
 		r.curOffset += uint16(toRead)
 		curRead += toRead

@@ -39,41 +39,46 @@ type Reader struct {
 	Superblock  superblock
 }
 
-func NewReader(r io.ReaderAt) (rdr *Reader, err error) {
-	rdr = new(Reader)
+func NewReader(r io.ReaderAt) (rdr Reader, err error) {
 	rdr.r = r
 	err = binary.Read(toreader.NewReader(r, 0), binary.LittleEndian, &rdr.Superblock)
 	if err != nil {
-		return nil, errors.Join(errors.New("failed to read superblock"), err)
+		return rdr, errors.Join(errors.New("failed to read superblock"), err)
 	}
 	if !rdr.Superblock.ValidMagic() {
-		return nil, ErrorMagic
+		return rdr, ErrorMagic
 	}
 	if !rdr.Superblock.ValidBlockLog() {
-		return nil, ErrorLog
+		return rdr, ErrorLog
 	}
 	if !rdr.Superblock.ValidVersion() {
-		return nil, ErrorVersion
+		return rdr, ErrorVersion
 	}
 	switch rdr.Superblock.CompType {
 	case ZlibCompression:
-		rdr.d = decompress.Zlib{}
+		rdr.d = decompress.NewZlib()
 	case LZMACompression:
-		rdr.d = decompress.Lzma{}
+		rdr.d, err = decompress.NewLzma()
+		if err != nil {
+			return rdr, err
+		}
 	case LZOCompression:
-		rdr.d = decompress.Lzo{}
+		rdr.d, err = decompress.NewLzo()
+		if err != nil {
+			return rdr, err
+		}
 	case XZCompression:
-		rdr.d = decompress.Xz{}
+		rdr.d = decompress.NewXz()
 	case LZ4Compression:
-		rdr.d = decompress.Lz4{}
+		rdr.d = decompress.NewLz4()
 	case ZSTDCompression:
-		rdr.d = &decompress.Zstd{}
+		rdr.d = decompress.NewZstd()
 	default:
-		return nil, errors.New("invalid compression type. possible corrupted archive")
+		return rdr, errors.New("invalid compression type. possible corrupted archive")
 	}
 	rdr.Root, err = rdr.directoryFromRef(rdr.Superblock.RootInodeRef, "")
 	if err != nil {
-		return nil, errors.Join(errors.New("failed to read root directory"), err)
+		return rdr, errors.Join(errors.New("failed to read root directory"), err)
 	}
 	return
 }
@@ -88,7 +93,7 @@ func (r *Reader) Id(i uint16) (uint32, error) {
 	// Populate the id table as needed
 	var blockNum uint32
 	if i != 0 { // If i == 0, we go negatives causing issues with uint32s
-		blockNum = uint32(math.Ceil(float64(i)/2048)) - 1
+		blockNum = uint32(math.Ceil(float64(i+1)/2048)) - 1
 	} else {
 		blockNum = 0
 	}
@@ -99,19 +104,17 @@ func (r *Reader) Id(i uint16) (uint32, error) {
 	var idsToRead uint16
 	var idsTmp []uint32
 	var err error
-	var rdr *metadata.Reader
+	var rdr metadata.Reader
+	// We can *maybe* have a slight speed increase by manually decoding instead of using reflection via binary.Read
 	for i := blocksRead; i < int(blocksRead)+blocksToRead; i++ {
 		err = binary.Read(toreader.NewReader(r.r, int64(r.Superblock.IdTableStart)+int64(8*i)), binary.LittleEndian, &offset)
 		if err != nil {
 			return 0, err
 		}
-		idsToRead = r.Superblock.IdCount - uint16(len(r.idTable))
-		if idsToRead > 2048 {
-			idsToRead = 2048
-		}
+		idsToRead = min(r.Superblock.IdCount-uint16(len(r.idTable)), 2048)
 		idsTmp = make([]uint32, idsToRead)
 		rdr = metadata.NewReader(toreader.NewReader(r.r, int64(offset)), r.d)
-		err = binary.Read(rdr, binary.LittleEndian, &idsTmp)
+		err = binary.Read(&rdr, binary.LittleEndian, &idsTmp)
 		rdr.Close()
 		if err != nil {
 			return 0, err
@@ -157,7 +160,7 @@ func (r *Reader) inodeRef(i uint32) (uint64, error) {
 	// Populate the export table as needed
 	var blockNum uint32
 	if i != 0 { // If i == 0, we go negatives causing issues with uint32s
-		blockNum = uint32(math.Ceil(float64(i)/1024)) - 1
+		blockNum = uint32(math.Ceil(float64(i+1)/1024)) - 1
 	} else {
 		blockNum = 0
 	}
@@ -168,19 +171,17 @@ func (r *Reader) inodeRef(i uint32) (uint64, error) {
 	var refsToRead uint32
 	var refsTmp []uint64
 	var err error
-	var rdr *metadata.Reader
+	var rdr metadata.Reader
+	// We can *maybe* have a slight speed increase by manually decoding instead of using reflection via binary.Read
 	for i := blocksRead; i < int(blocksRead)+blocksToRead; i++ {
 		err = binary.Read(toreader.NewReader(r.r, int64(r.Superblock.ExportTableStart)+int64(8*i)), binary.LittleEndian, &offset)
 		if err != nil {
 			return 0, err
 		}
-		refsToRead = r.Superblock.InodeCount - uint32(len(r.exportTable))
-		if refsToRead > 1024 {
-			refsToRead = 1024
-		}
+		refsToRead = min(r.Superblock.InodeCount-uint32(len(r.exportTable)), 1024)
 		refsTmp = make([]uint64, refsToRead)
 		rdr = metadata.NewReader(toreader.NewReader(r.r, int64(offset)), r.d)
-		err = binary.Read(rdr, binary.LittleEndian, &refsTmp)
+		err = binary.Read(&rdr, binary.LittleEndian, &refsTmp)
 		rdr.Close()
 		if err != nil {
 			return 0, err
@@ -190,7 +191,7 @@ func (r *Reader) inodeRef(i uint32) (uint64, error) {
 	return r.exportTable[i], nil
 }
 
-func (r *Reader) Inode(i uint32) (inode.Inode, error) {
+func (r Reader) Inode(i uint32) (inode.Inode, error) {
 	ref, err := r.inodeRef(i)
 	if err != nil {
 		return inode.Inode{}, err

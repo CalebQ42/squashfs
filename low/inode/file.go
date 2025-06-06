@@ -6,15 +6,11 @@ import (
 	"math"
 )
 
-type fileInit struct {
+type File struct {
 	BlockStart uint32
 	FragInd    uint32
 	FragOffset uint32
 	Size       uint32
-}
-
-type File struct {
-	fileInit
 	BlockSizes []uint32
 }
 
@@ -34,16 +30,28 @@ type EFile struct {
 }
 
 func ReadFile(r io.Reader, blockSize uint32) (f File, err error) {
-	err = binary.Read(r, binary.LittleEndian, &f.fileInit)
+	dat := make([]byte, 16)
+	_, err = r.Read(dat)
 	if err != nil {
 		return
 	}
+	f.BlockStart = binary.LittleEndian.Uint32(dat)
+	f.FragInd = binary.LittleEndian.Uint32(dat[4:])
+	f.FragOffset = binary.LittleEndian.Uint32(dat[8:])
+	f.Size = binary.LittleEndian.Uint32(dat[12:])
 	toRead := int(math.Floor(float64(f.Size) / float64(blockSize)))
 	if f.FragInd == 0xFFFFFFFF && f.Size%blockSize > 0 {
 		toRead++
 	}
+	dat = make([]byte, toRead*4)
+	_, err = r.Read(dat)
+	if err != nil {
+		return
+	}
 	f.BlockSizes = make([]uint32, toRead)
-	err = binary.Read(r, binary.LittleEndian, &f.BlockSizes)
+	for i := range toRead {
+		f.BlockSizes[i] = binary.LittleEndian.Uint32(dat[i*4:])
+	}
 	return
 }
 
