@@ -19,18 +19,19 @@ type FullReader struct {
 	fragDat        []byte
 }
 
-func NewFullReader(rdr io.ReaderAt, decomp decompress.Decompressor, size uint64, start uint64, blockSizes []uint32) FullReader {
+func NewFullReader(rdr io.ReaderAt, decomp decompress.Decompressor, blockSize uint32, size uint64, start uint64, sizes []uint32) FullReader {
 	out := FullReader{
-		fileSize: size,
-		rdr:      rdr,
-		decomp:   decomp,
-		sizes:    blockSizes,
+		fileSize:  size,
+		blockSize: blockSize,
+		rdr:       rdr,
+		decomp:    decomp,
+		sizes:     sizes,
 	}
-	out.blockOffsets = make([]uint64, len(blockSizes))
+	out.blockOffsets = make([]uint64, len(sizes))
 	curOffset := start
-	for i := range blockSizes {
+	for i := range sizes {
 		out.blockOffsets[i] = curOffset
-		curOffset += uint64(blockSizes[i]) &^ (1 << 24)
+		curOffset += uint64(sizes[i]) &^ (1 << 24)
 	}
 	return out
 }
@@ -42,12 +43,15 @@ func (f *FullReader) Close() error {
 	return nil
 }
 
-func (f *FullReader) AddFragData(blockStart uint64, offset uint32, blockSize uint32) error {
+func (f *FullReader) AddFragData(blockStart uint64, blockSize uint32, offset uint32) error {
 	realSize := blockSize &^ (1 << 24)
 	dat := make([]byte, realSize)
 	_, err := f.rdr.ReadAt(dat, int64(blockStart))
 	if err != nil {
 		return err
+	}
+	if realSize == 0 {
+
 	}
 	if blockSize == realSize {
 		dat, err = f.decomp.Decompress(dat)
@@ -120,8 +124,8 @@ func (f FullReader) WriteTo(w io.Writer) (wrote int64, err error) {
 	}
 	for i := range f.BlockNum() {
 		go func(idx uint32) {
-			_, closed := <-dispatchChan
-			if closed {
+			_, open := <-dispatchChan
+			if !open {
 				resChan <- blockResults{}
 				return
 			}
@@ -143,6 +147,7 @@ func (f FullReader) WriteTo(w io.Writer) (wrote int64, err error) {
 			errOut = append(errOut, res.err)
 		}
 		if len(errOut) > 0 {
+			i++
 			continue
 		}
 		if wa, is := w.(io.WriterAt); is {
@@ -152,6 +157,7 @@ func (f FullReader) WriteTo(w io.Writer) (wrote int64, err error) {
 			} else {
 				out = max(out, int64(res.idx)*int64(f.blockSize)+int64(len(res.block)))
 			}
+			i++
 			continue
 		}
 		var err error

@@ -107,7 +107,7 @@ func (b FileBase) GetRegFileReaders(r Reader) (data.Reader, data.FullReader, err
 		sizes = b.Inode.Data.(inode.EFile).BlockSizes
 		fileSize = b.Inode.Data.(inode.EFile).Size
 	}
-	outFull := data.NewFullReader(r.r, r.d, fileSize, blockStart, sizes)
+	outFull := data.NewFullReader(r.r, r.d, r.Superblock.BlockSize, fileSize, blockStart, sizes)
 	if fragIndex != 0xffffffff {
 		outFull.AddFragData(r.fragTable[fragIndex].Start, fragOffset, r.fragTable[fragIndex].Size)
 	}
@@ -140,9 +140,13 @@ func (b FileBase) GetFullReader(r *Reader) (data.FullReader, error) {
 		sizes = b.Inode.Data.(inode.EFile).BlockSizes
 		fileSize = b.Inode.Data.(inode.EFile).Size
 	}
-	outFull := data.NewFullReader(r.r, r.d, fileSize, blockStart, sizes)
+	outFull := data.NewFullReader(r.r, r.d, r.Superblock.BlockSize, fileSize, blockStart, sizes)
 	if fragIndex != 0xffffffff {
-		outFull.AddFragData(r.fragTable[fragIndex].Start, fragOffset, r.fragTable[fragIndex].Size)
+		ent, err := r.fragEntry(fragIndex)
+		if err != nil {
+			return data.FullReader{}, err
+		}
+		outFull.AddFragData(ent.Start, ent.Size, fragOffset)
 	}
 	return outFull, nil
 }
