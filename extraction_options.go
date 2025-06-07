@@ -20,15 +20,18 @@ type ExtractionOptions struct {
 	SimultaneousFiles  uint16        //Depreciated: Only use ExtractionRoutines
 }
 
-// The default extraction options.
+// The default extraction options. Uses half of your CPU cores.
 func DefaultOptions() *ExtractionOptions {
+	return &ExtractionOptions{
+		Perm:               0777,
+		ExtractionRoutines: uint16(runtime.NumCPU() / 2),
+	}
+}
+
+// Faster extraction option. Uses all CPU cores.
+func FastOptions() *ExtractionOptions {
 	return &ExtractionOptions{
 		Perm:               0777,
 		ExtractionRoutines: uint16(runtime.NumCPU()),
 	}
-}
-
-// Depreciated: This just calls DefaultOptions()
-func FastOptions() *ExtractionOptions {
-	return DefaultOptions()
 }

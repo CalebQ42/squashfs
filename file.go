@@ -54,6 +54,7 @@ func (f File) FS() (FS, error) {
 func (f *File) Close() error {
 	f.rdr.Close()
 	f.full.Close()
+	f.rdrInit = false
 	return nil
 }
 
