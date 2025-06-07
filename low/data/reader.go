@@ -1,104 +1,60 @@
 package data
 
-import (
-	"io"
-	"io/fs"
-
-	"github.com/CalebQ42/squashfs/internal/decompress"
-)
+import "io"
 
 type Reader struct {
-	r              io.Reader
-	d              decompress.Decompressor
-	frag           io.Reader
-	sizes          []uint32
-	dat            []byte
-	curOffset      int
-	curIndex       uint64
-	finalBlockSize uint64
-	blockSize      uint32
-	closed         bool
+	f         *FullReader
+	curBlock  []byte
+	nextIdx   uint32
+	curOffset uint32
 }
 
-func NewReader(r io.Reader, d decompress.Decompressor, sizes []uint32, finalBlockSize uint64, blockSize uint32) Reader {
-	return Reader{
-		r:              r,
-		d:              d,
-		sizes:          sizes,
-		finalBlockSize: finalBlockSize,
-		blockSize:      blockSize,
+func NewReader(f *FullReader) (Reader, error) {
+	dat, err := f.Block(0)
+	if err != nil {
+		return Reader{}, err
 	}
+	return Reader{
+		f:         f,
+		curBlock:  dat,
+		nextIdx:   1,
+		curOffset: 0,
+	}, nil
 }
 
-func (r *Reader) AddFrag(fragRdr io.Reader) {
-	r.frag = fragRdr
+func (d *Reader) Close() error {
+	d.curBlock = nil
+	return nil
 }
 
-func (r *Reader) advance() error {
-	r.curOffset = 0
-	defer func() { r.curIndex++ }()
-	var err error
-	if r.curIndex == uint64(len(r.sizes)) && r.frag != nil {
-		r.dat, err = io.ReadAll(r.frag)
-		return err
-	} else if r.curIndex >= uint64(len(r.sizes)) {
-		r.dat = []byte{}
+func (d *Reader) advanceBlock() error {
+	if d.nextIdx >= d.f.BlockNum() {
+		d.curBlock = nil
 		return io.EOF
 	}
-	realSize := r.sizes[r.curIndex] &^ (1 << 24)
-	if realSize == 0 {
-		if r.curIndex == uint64(len(r.sizes))-1 && r.frag == nil {
-			r.dat = make([]byte, r.finalBlockSize)
-		} else {
-			r.dat = make([]byte, r.blockSize)
-		}
-		return nil
-	}
-	r.dat = make([]byte, realSize)
-	_, err = r.r.Read(r.dat)
+	var err error
+	d.curBlock, err = d.f.Block(d.nextIdx)
 	if err != nil {
 		return err
 	}
-	if r.sizes[r.curIndex] != realSize {
-		return nil
-	}
-	r.dat, err = r.d.Decompress(r.dat)
-	return err
-}
-
-func (r *Reader) Read(b []byte) (int, error) {
-	if r.closed {
-		return 0, fs.ErrClosed
-	}
-	curRead := 0
-	var toRead int
-	for curRead < len(b) {
-		if r.curOffset >= len(r.dat) {
-			if err := r.advance(); err != nil {
-				return curRead, err
-			}
-		}
-		toRead = min(len(b)-curRead, len(r.dat)-r.curOffset)
-		toRead = copy(b[curRead:], r.dat[r.curOffset:r.curOffset+toRead])
-		r.curOffset += toRead
-		curRead += toRead
-	}
-	return curRead, nil
-}
-
-func (r *Reader) Close() error {
-	r.closed = true
-	r.r = nil
-	r.d = nil
-	if r.frag != nil {
-		if l, ok := r.frag.(*io.LimitedReader); ok {
-			if cl, ok := l.R.(io.Closer); ok {
-				cl.Close()
-			}
-		}
-	}
-	r.frag = nil
-	r.sizes = nil
-	r.dat = nil
+	d.nextIdx++
+	d.curOffset = 0
 	return nil
+}
+
+func (d *Reader) Read(buf []byte) (int, error) {
+	totRed := 0
+	toRead := 0
+	var err error
+	for totRed < len(buf) {
+		if int(d.curOffset) >= len(d.curBlock) {
+			err = d.advanceBlock()
+			if err != nil {
+				return totRed, err
+			}
+		}
+		toRead = min(len(d.curBlock)-int(d.curOffset), len(buf)-totRed)
+		copy(buf[totRed:], d.curBlock[d.curOffset:d.curOffset+uint32(toRead)])
+	}
+	return totRed, nil
 }

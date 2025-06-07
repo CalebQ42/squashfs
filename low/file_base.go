@@ -2,7 +2,6 @@ package squashfslow
 
 import (
 	"errors"
-	"io"
 
 	"github.com/CalebQ42/squashfs/internal/metadata"
 	"github.com/CalebQ42/squashfs/internal/toreader"
@@ -84,6 +83,8 @@ func (b FileBase) IsRegular() bool {
 	return b.Inode.Type == inode.Fil || b.Inode.Type == inode.EFil
 }
 
+// Returns a regular file's readers. They are linked, so the data.Reader calls to the data.FullReader.
+// Aka: closing the FullReader breaks the Reader
 func (b FileBase) GetRegFileReaders(r Reader) (data.Reader, data.FullReader, error) {
 	if !b.IsRegular() {
 		return data.Reader{}, data.FullReader{}, errors.New("not a regular file")
@@ -91,41 +92,32 @@ func (b FileBase) GetRegFileReaders(r Reader) (data.Reader, data.FullReader, err
 	var blockStart uint64
 	var fragIndex uint32
 	var fragOffset uint32
-	var fragSize uint64
 	var sizes []uint32
+	var fileSize uint64
 	if b.Inode.Type == inode.Fil {
 		blockStart = uint64(b.Inode.Data.(inode.File).BlockStart)
 		fragIndex = b.Inode.Data.(inode.File).FragInd
 		fragOffset = b.Inode.Data.(inode.File).FragOffset
 		sizes = b.Inode.Data.(inode.File).BlockSizes
-		fragSize = uint64(b.Inode.Data.(inode.File).Size % r.Superblock.BlockSize)
+		fileSize = uint64(b.Inode.Data.(inode.File).Size)
 	} else {
 		blockStart = b.Inode.Data.(inode.EFile).BlockStart
 		fragIndex = b.Inode.Data.(inode.EFile).FragInd
 		fragOffset = b.Inode.Data.(inode.EFile).FragOffset
 		sizes = b.Inode.Data.(inode.EFile).BlockSizes
-		fragSize = b.Inode.Data.(inode.EFile).Size % uint64(r.Superblock.BlockSize)
+		fileSize = b.Inode.Data.(inode.EFile).Size
 	}
-	frag := func() (io.Reader, error) {
+	outFull := data.NewFullReader(r.r, r.d, r.Superblock.BlockSize, fileSize, blockStart, sizes)
+	if fragIndex != 0xFFFFFFFF {
 		ent, err := r.fragEntry(fragIndex)
-		if err != nil {
-			return nil, err
-		}
-		frag := data.NewReader(toreader.NewReader(r.r, int64(ent.Start)), r.d, []uint32{ent.Size}, uint64(r.Superblock.BlockSize), r.Superblock.BlockSize)
-		frag.Read(make([]byte, fragOffset))
-		return io.LimitReader(&frag, int64(fragSize)), nil
-	}
-	outRdr := data.NewReader(toreader.NewReader(r.r, int64(blockStart)), r.d, sizes, fragSize, r.Superblock.BlockSize)
-	if fragIndex != 0xffffffff {
-		f, err := frag()
 		if err != nil {
 			return data.Reader{}, data.FullReader{}, err
 		}
-		outRdr.AddFrag(f)
+		outFull.AddFragData(ent.Start, ent.Size, fragOffset)
 	}
-	outFull := data.NewFullReader(r.r, int64(blockStart), r.d, sizes, fragSize, r.Superblock.BlockSize)
-	if fragIndex != 0xffffffff {
-		outFull.AddFrag(frag)
+	outRdr, err := data.NewReader(&outFull)
+	if err != nil {
+		return data.Reader{}, data.FullReader{}, err
 	}
 	return outRdr, outFull, nil
 }
@@ -137,67 +129,28 @@ func (b FileBase) GetFullReader(r *Reader) (data.FullReader, error) {
 	var blockStart uint64
 	var fragIndex uint32
 	var fragOffset uint32
-	var fragSize uint64
 	var sizes []uint32
+	var fileSize uint64
 	if b.Inode.Type == inode.Fil {
 		blockStart = uint64(b.Inode.Data.(inode.File).BlockStart)
 		fragIndex = b.Inode.Data.(inode.File).FragInd
 		fragOffset = b.Inode.Data.(inode.File).FragOffset
 		sizes = b.Inode.Data.(inode.File).BlockSizes
-		fragSize = uint64(b.Inode.Data.(inode.File).Size % r.Superblock.BlockSize)
+		fileSize = uint64(b.Inode.Data.(inode.File).Size)
 	} else {
 		blockStart = b.Inode.Data.(inode.EFile).BlockStart
 		fragIndex = b.Inode.Data.(inode.EFile).FragInd
 		fragOffset = b.Inode.Data.(inode.EFile).FragOffset
 		sizes = b.Inode.Data.(inode.EFile).BlockSizes
-		fragSize = b.Inode.Data.(inode.EFile).Size % uint64(r.Superblock.BlockSize)
+		fileSize = b.Inode.Data.(inode.EFile).Size
 	}
-	outFull := data.NewFullReader(r.r, int64(blockStart), r.d, sizes, fragSize, r.Superblock.BlockSize)
-	if fragIndex != 0xffffffff {
-		outFull.AddFrag(func() (io.Reader, error) {
-			ent, err := r.fragEntry(fragIndex)
-			if err != nil {
-				return nil, err
-			}
-			frag := data.NewReader(toreader.NewReader(r.r, int64(ent.Start)), r.d, []uint32{ent.Size}, uint64(r.Superblock.BlockSize), r.Superblock.BlockSize)
-			frag.Read(make([]byte, fragOffset))
-			return io.LimitReader(&frag, int64(fragSize)), nil
-		})
-	}
-	return outFull, nil
-}
-
-func (b FileBase) GetReader(r *Reader) (data.Reader, error) {
-	if !b.IsRegular() {
-		return data.Reader{}, errors.New("not a regular file")
-	}
-	var blockStart uint64
-	var fragIndex uint32
-	var fragOffset uint32
-	var fragSize uint64
-	var sizes []uint32
-	if b.Inode.Type == inode.Fil {
-		blockStart = uint64(b.Inode.Data.(inode.File).BlockStart)
-		fragIndex = b.Inode.Data.(inode.File).FragInd
-		fragOffset = b.Inode.Data.(inode.File).FragOffset
-		sizes = b.Inode.Data.(inode.File).BlockSizes
-		fragSize = uint64(b.Inode.Data.(inode.File).Size % r.Superblock.BlockSize)
-	} else {
-		blockStart = b.Inode.Data.(inode.EFile).BlockStart
-		fragIndex = b.Inode.Data.(inode.EFile).FragInd
-		fragOffset = b.Inode.Data.(inode.EFile).FragOffset
-		sizes = b.Inode.Data.(inode.EFile).BlockSizes
-		fragSize = b.Inode.Data.(inode.EFile).Size % uint64(r.Superblock.BlockSize)
-	}
-	outRdr := data.NewReader(toreader.NewReader(r.r, int64(blockStart)), r.d, sizes, fragSize, r.Superblock.BlockSize)
-	if fragIndex != 0xffffffff {
+	outFull := data.NewFullReader(r.r, r.d, r.Superblock.BlockSize, fileSize, blockStart, sizes)
+	if fragIndex != 0xFFFFFFFF {
 		ent, err := r.fragEntry(fragIndex)
 		if err != nil {
-			return data.Reader{}, err
+			return data.FullReader{}, err
 		}
-		frag := data.NewReader(toreader.NewReader(r.r, int64(ent.Start)), r.d, []uint32{ent.Size}, uint64(r.Superblock.BlockSize), r.Superblock.BlockSize)
-		frag.Read(make([]byte, fragOffset))
-		outRdr.AddFrag(io.LimitReader(&frag, int64(fragSize)))
+		outFull.AddFragData(ent.Start, ent.Size, fragOffset)
 	}
-	return outRdr, nil
+	return outFull, nil
 }

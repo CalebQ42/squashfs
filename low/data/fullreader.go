@@ -3,258 +3,230 @@ package data
 import (
 	"errors"
 	"io"
-	"io/fs"
-	"math"
 	"runtime"
 	"sync"
 
 	"github.com/CalebQ42/squashfs/internal/decompress"
 )
 
-type FragReaderConstructor func() (io.Reader, error)
-
 type FullReader struct {
-	r              io.ReaderAt
-	d              decompress.Decompressor
-	frag           FragReaderConstructor
-	sizes          []uint32
-	initialOffset  int64
-	finalBlockSize uint64
-	blockSize      uint32
-	goroutineLimit uint16
-	closed         bool
+	fileSize     uint64
+	blockSize    uint32
+	dispatcher   chan struct{}
+	pool         *sync.Pool
+	rdr          io.ReaderAt
+	decomp       decompress.Decompressor
+	sizes        []uint32
+	blockOffsets []uint64
+	fragDat      []byte
 }
 
-func NewFullReader(r io.ReaderAt, initialOffset int64, d decompress.Decompressor, sizes []uint32, finalBlockSize uint64, blockSize uint32) FullReader {
-	return FullReader{
-		r:              r,
-		d:              d,
-		sizes:          sizes,
-		initialOffset:  initialOffset,
-		goroutineLimit: uint16(runtime.NumCPU()),
-		finalBlockSize: finalBlockSize,
-		blockSize:      blockSize,
+func NewFullReader(rdr io.ReaderAt, decomp decompress.Decompressor, blockSize uint32, size uint64, start uint64, sizes []uint32) FullReader {
+	out := FullReader{
+		fileSize:  size,
+		blockSize: blockSize,
+		rdr:       rdr,
+		decomp:    decomp,
+		sizes:     sizes,
 	}
+	out.blockOffsets = make([]uint64, len(sizes))
+	curOffset := start
+	for i := range sizes {
+		out.blockOffsets[i] = curOffset
+		curOffset += uint64(sizes[i]) &^ (1 << 24)
+	}
+	return out
 }
 
-func (r *FullReader) Close() error {
-	r.closed = true
-	r.r = nil
-	r.d = nil
-	r.frag = nil
-	r.sizes = nil
+func (f *FullReader) Close() error {
+	f.fragDat = nil
+	f.sizes = nil
+	f.blockOffsets = nil
 	return nil
 }
 
-func (r *FullReader) AddFrag(frag FragReaderConstructor) {
-	r.frag = frag
-}
-
-func (r *FullReader) SetGoroutineLimit(limit uint16) {
-	if limit <= 0 {
-		r.goroutineLimit = 1
+func (f *FullReader) AddFragData(blockStart uint64, blockSize uint32, offset uint32) error {
+	realSize := blockSize &^ (1 << 24)
+	dat := make([]byte, realSize)
+	_, err := f.rdr.ReadAt(dat, int64(blockStart))
+	if err != nil {
+		return err
 	}
-	r.goroutineLimit = limit
+	if blockSize == realSize {
+		dat, err = f.decomp.Decompress(dat)
+		if err != nil {
+			return err
+		}
+	}
+	f.fragDat = make([]byte, f.fileSize%uint64(f.blockSize))
+	copy(f.fragDat, dat[offset:])
+	dat = nil
+	return nil
 }
 
-type retValue struct {
-	err   error
-	data  []byte
-	index uint64
+func (f *FullReader) SetDispatcherPool(dispatcher chan struct{}, pool *sync.Pool) {
+	f.dispatcher = dispatcher
+	f.pool = pool
 }
 
-func (r FullReader) process(index uint64, fileOffset uint64, pool *sync.Pool, retChan chan *retValue) {
-	ret := pool.Get().(*retValue)
-	ret.index = index
-	realSize := r.sizes[index] &^ (1 << 24)
+// The number of blocks, including the fragment block if present
+func (f FullReader) BlockNum() uint32 {
+	out := len(f.sizes)
+	if f.fragDat != nil {
+		out++
+	}
+	return uint32(out)
+}
+
+// Returns the data block at the given index
+func (f FullReader) Block(i uint32) ([]byte, error) {
+	if i == uint32(len(f.sizes)) && f.fragDat != nil {
+		return f.fragDat, nil
+	}
+	if i >= uint32(len(f.sizes)) {
+		return nil, errors.New("invalid block index")
+	}
+	realSize := f.sizes[i] &^ (1 << 24)
 	if realSize == 0 {
-		if index == uint64(len(r.sizes))-1 && r.frag == nil {
-			ret.data = make([]byte, r.finalBlockSize)
-		} else {
-			ret.data = make([]byte, r.blockSize)
+		if i == uint32(len(f.sizes)-1) && f.fragDat == nil {
+			return make([]byte, f.fileSize%uint64(f.blockSize)), nil
 		}
-		ret.err = nil
-		retChan <- ret
-		return
+		return make([]byte, f.blockSize), nil
 	}
-	ret.data = make([]byte, realSize)
-	_, ret.err = r.r.ReadAt(ret.data, r.initialOffset+int64(fileOffset))
-	if r.sizes[index] == realSize {
-		ret.data, ret.err = r.d.Decompress(ret.data)
+	dat := make([]byte, realSize)
+	_, err := f.rdr.ReadAt(dat, int64(f.blockOffsets[i]))
+	if err != nil {
+		return nil, err
 	}
-	retChan <- ret
+	if realSize == f.sizes[i] {
+		dat, err = f.decomp.Decompress(dat)
+	}
+	return dat, err
 }
 
-func (r FullReader) WriteTo(w io.Writer) (int64, error) {
-	if r.closed {
-		return 0, fs.ErrClosed
+func (f FullReader) blockFromPool(i uint32) *BlockResults {
+	out := f.pool.Get().(*BlockResults)
+	out.idx = i
+	out.err = nil
+	if i == uint32(len(f.sizes)) && f.fragDat != nil {
+		out.block = f.fragDat
+		return out
 	}
-	// if wa, is := w.(io.WriterAt); is {
-	// 	return r.writeToWriteAt(wa)
-	// }
-	var curIndex uint64
-	var curOffset uint64
-	var toProcess uint16
-	var wrote int64
-	cache := make(map[uint64]*retValue)
-	var errCache []error
-	retChan := make(chan *retValue, r.goroutineLimit)
-	pool := &sync.Pool{
-		New: func() any {
-			return &retValue{}
-		},
+	if i >= uint32(len(f.sizes)) {
+		out.err = errors.New("invalid block index")
+		return out
 	}
-	for i := uint64(0); i < uint64(math.Ceil(float64(len(r.sizes))/float64(r.goroutineLimit))); i++ {
-		toProcess = min(uint16(len(r.sizes))-(uint16(i)*r.goroutineLimit), r.goroutineLimit)
-		// Start all the goroutines
-		for j := uint16(0); j < toProcess; j++ {
-			go r.process((i*uint64(r.goroutineLimit))+uint64(j), curOffset, pool, retChan)
-			curOffset += uint64(r.sizes[(i*uint64(r.goroutineLimit))+uint64(j)]) &^ (1 << 24)
+	realSize := f.sizes[i] &^ (1 << 24)
+	if realSize == 0 {
+		if i == uint32(len(f.sizes)-1) && f.fragDat == nil {
+			out.block = make([]byte, f.fileSize%uint64(f.blockSize))
+			return out
 		}
-		// Then consume the results on retChan
-		for j := uint16(0); j < toProcess; j++ {
-			res := <-retChan
-			// If there's an error, we don't care about the results.
-			if res.err != nil {
-				errCache = append(errCache, res.err)
-				if len(cache) > 0 {
-					clear(cache)
-				}
-				continue
+		out.block = make([]byte, f.blockSize)
+	}
+	out.block = make([]byte, realSize)
+	_, out.err = f.rdr.ReadAt(out.block, int64(f.blockOffsets[i]))
+	if out.err != nil {
+		return out
+	}
+	if realSize == f.sizes[i] {
+		out.block, out.err = f.decomp.Decompress(out.block)
+	}
+	return out
+}
+
+type BlockResults struct {
+	idx   uint32
+	block []byte
+	err   error
+}
+
+func (f FullReader) WriteTo(w io.Writer) (wrote int64, err error) {
+	if f.dispatcher == nil {
+		f.dispatcher = make(chan struct{}, runtime.NumCPU())
+		for range runtime.NumCPU() {
+			f.dispatcher <- struct{}{}
+		}
+	}
+	if f.pool == nil {
+		f.pool = &sync.Pool{
+			New: func() any {
+				return &BlockResults{}
+			},
+		}
+	}
+	open := true
+	resChan := make(chan *BlockResults, len(f.dispatcher))
+	var results map[uint32]*BlockResults
+	if _, is := w.(io.WriterAt); !is {
+		results = make(map[uint32]*BlockResults)
+	}
+	for i := range f.BlockNum() {
+		go func(idx uint32) {
+			<-f.dispatcher
+			defer func() { f.dispatcher <- struct{}{} }()
+			if !open {
+				resChan <- f.pool.Get().(*BlockResults)
+				return
 			}
-			// If there has been an error previously, we don't care about the results.
-			// We still want to wait for all the goroutines to prevent resources being wasted.
-			if len(errCache) > 0 {
-				continue
-			}
-			// If we don't need the data yet, we cache it and move on
-			if res.index != curIndex {
-				cache[res.index] = res
-				continue
-			}
-			// If we do need the data, we write it
-			wr, err := w.Write(res.data)
-			wrote += int64(wr)
+			resChan <- f.blockFromPool(idx)
+		}(i)
+	}
+	out := int64(0)
+	errOut := make([]error, 0)
+	for i := uint32(0); i < f.BlockNum(); {
+		res := <-resChan
+		defer f.pool.Put(res)
+		if res.err != nil {
+			open = false
+			errOut = append(errOut, res.err)
+		}
+		if len(errOut) > 0 {
+			i++
+			continue
+		}
+		if wa, is := w.(io.WriterAt); is {
+			_, err := wa.WriteAt(res.block, int64(res.idx)*int64(f.blockSize))
 			if err != nil {
-				errCache = append(errCache, err)
-				if len(cache) > 0 {
-					clear(cache)
-				}
-				continue
+				errOut = append(errOut, err)
+			} else {
+				out = max(out, int64(res.idx)*int64(f.blockSize)+int64(len(res.block)))
 			}
-			pool.Put(res)
-			curIndex++
-			// Now we recursively try to clear the cache
-			for len(cache) > 0 {
-				res, ok := cache[curIndex]
-				if !ok {
-					break
-				}
-				wr, err := w.Write(res.data)
-				wrote += int64(wr)
+			i++
+			continue
+		}
+		var err error
+		if res.idx == i {
+			_, err = w.Write(res.block)
+			if err != nil {
+				errOut = append(errOut, err)
+			} else {
+				out = max(out, int64(res.idx)*int64(f.blockSize)+int64(len(res.block)))
+			}
+			i++
+		} else {
+			results[res.idx] = res
+		}
+		var has bool
+		for {
+			res, has = results[i]
+			if has {
+				_, err = w.Write(res.block)
 				if err != nil {
-					errCache = append(errCache, err)
-					if len(cache) > 0 {
-						clear(cache)
-					}
-					break
+					errOut = append(errOut, err)
+				} else {
+					out = max(out, int64(res.idx)*int64(f.blockSize)+int64(len(res.block)))
 				}
-				delete(cache, curIndex)
-				pool.Put(res)
-				curIndex++
+				i++
+				delete(results, i)
+				f.pool.Put(res)
+			} else {
+				break
 			}
 		}
-		if len(errCache) > 0 {
-			return wrote, errors.Join(errCache...)
-		}
 	}
-	if r.frag != nil {
-		rdr, err := r.frag()
-		if err != nil {
-			return wrote, err
-		}
-		wr, err := io.Copy(w, rdr)
-		wrote += wr
-		if l, ok := rdr.(*io.LimitedReader); ok {
-			if cl, ok := l.R.(io.Closer); ok {
-				cl.Close()
-			}
-		}
-		if err != nil {
-			return wrote, err
-		}
+	if len(errOut) > 0 {
+		return out, errors.Join(errOut...)
 	}
-	return wrote, nil
+	return out, nil
 }
-
-// func (r FullReader) writeToWriteAt(w io.WriterAt) (out int64, outErr error) {
-// 	wait := &sync.WaitGroup{}
-// 	wait.Add(len(r.sizes))
-// 	mgr := routinemanager.NewManager(r.goroutineLimit)
-// 	curOffset := r.initialOffset
-// 	for i := uint64(0); i < uint64(len(r.sizes)); i++ {
-// 		go func(index uint64, fileOffset int64) {
-// 			lckNum := mgr.Lock()
-// 			defer mgr.Unlock(lckNum)
-// 			defer wait.Done()
-// 			realSize := r.sizes[index] &^ (1 << 24)
-// 			if realSize == 0 {
-// 				if index == uint64(len(r.sizes))-1 && r.frag == nil {
-// 					_, err := w.WriteAt([]byte{0}, int64((uint64(r.blockSize)*index)+r.finalBlockSize)-1)
-// 					if err != nil {
-// 						outErr = errors.Join(outErr, err)
-// 						return
-// 					}
-// 					out = max(out, int64((uint64(r.blockSize)*index)+r.finalBlockSize))
-// 				}
-// 				return
-// 			}
-// 			data := make([]byte, realSize)
-// 			err := binary.Read(toreader.NewReader(r.r, int64(fileOffset)), binary.LittleEndian, &data)
-// 			if err != nil {
-// 				outErr = errors.Join(outErr, err)
-// 				return
-// 			}
-// 			if r.sizes[index] == realSize {
-// 				data, err = r.d.Decompress(data)
-// 			}
-// 			if err != nil {
-// 				outErr = errors.Join(outErr, err)
-// 				return
-// 			}
-// 			_, err = w.WriteAt(data, int64(uint64(r.blockSize)*index))
-// 			if err != nil {
-// 				outErr = errors.Join(outErr, err)
-// 				return
-// 			}
-// 			out = max(out, int64(uint64(r.blockSize)*(index+1)))
-// 		}(i, curOffset)
-// 		curOffset += int64(r.sizes[i]) &^ (1 << 24)
-// 	}
-// 	if r.frag != nil {
-// 		wait.Add(1)
-// 		go func() {
-// 			lckNum := mgr.Lock()
-// 			defer mgr.Unlock(lckNum)
-// 			defer wait.Done()
-// 			rdr, err := r.frag()
-// 			if err != nil {
-// 				outErr = errors.Join(outErr, err)
-// 				return
-// 			}
-// 			dat, err := io.ReadAll(rdr)
-// 			if err != nil {
-// 				outErr = errors.Join(outErr, err)
-// 				return
-// 			}
-// 			_, err = w.WriteAt(dat, int64(int(r.blockSize)*len(r.sizes)))
-// 			if err != nil {
-// 				outErr = errors.Join(outErr, err)
-// 				return
-// 			}
-// 			out = int64(int(r.blockSize)*len(r.sizes)) + int64(r.finalBlockSize)
-// 		}()
-// 	}
-// 	wait.Wait()
-// 	return
-// }

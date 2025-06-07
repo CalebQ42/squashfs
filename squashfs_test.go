@@ -116,8 +116,8 @@ func BenchmarkRace(b *testing.B) {
 		b.Log("Unsquashfs error:", err)
 	}
 	unsquashTime = time.Since(start)
-	b.Log("Library took:", libTime.Round(time.Millisecond))
-	b.Log("unsquashfs took:", unsquashTime.Round(time.Millisecond))
+	// b.Log("Library took:", libTime.Round(time.Millisecond))
+	// b.Log("unsquashfs took:", unsquashTime.Round(time.Millisecond))
 	b.Log("unsquashfs is", strconv.FormatFloat(float64(libTime.Milliseconds())/float64(unsquashTime.Milliseconds()), 'f', 2, 64), "times faster")
 }
 

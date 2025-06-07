@@ -4,46 +4,34 @@ import (
 	"io"
 	"io/fs"
 	"runtime"
-
-	"github.com/CalebQ42/squashfs/internal/routinemanager"
+	"sync"
 )
 
 type ExtractionOptions struct {
-	manager            *routinemanager.Manager
-	LogOutput          io.Writer   //Where the verbose log should write.
-	DereferenceSymlink bool        //Replace symlinks with the target file.
-	UnbreakSymlink     bool        //Try to make sure symlinks remain unbroken when extracted, without changing the symlink.
-	Verbose            bool        //Prints extra info to log on an error.
-	IgnorePerm         bool        //Ignore file's permissions and instead use Perm.
-	Perm               fs.FileMode //Permission to use when IgnorePerm. Defaults to 0777.
-	SimultaneousFiles  uint16      //Number of files to process in parallel. Default set based on runtime.NumCPU().
-	ExtractionRoutines uint16      //Number of goroutines to use for each file's extraction. Only applies to regular files. Default set based on runtime.NumCPU().
+	dispatcher         chan struct{} // Limits the amount of work being done simultaneously.
+	fullRdrPool        sync.Pool     // Pool for data.FullReader results.
+	LogOutput          io.Writer     //Where the verbose log should write.
+	DereferenceSymlink bool          //Replace symlinks with the target file.
+	UnbreakSymlink     bool          //Try to make sure symlinks remain unbroken when extracted, without changing the symlink.
+	Verbose            bool          //Prints extra info to log on an error.
+	IgnorePerm         bool          //Ignore file's permissions and instead use Perm.
+	Perm               fs.FileMode   //Permission to use when IgnorePerm. Defaults to 0777.
+	ExtractionRoutines uint16        //The number of threads to use during extraction. Defaults to a number based on runtime.NumCPU().
+	SimultaneousFiles  uint16        //Depreciated: Only use ExtractionRoutines
 }
 
-// The default extraction options.
+// The default extraction options. Uses half of your CPU cores.
 func DefaultOptions() *ExtractionOptions {
-	cores := uint16(runtime.NumCPU() / 2)
-	var files, routines uint16
-	if cores <= 4 {
-		files = 1
-		routines = cores
-	} else {
-		files = cores - 4
-		routines = 4
-	}
 	return &ExtractionOptions{
 		Perm:               0777,
-		SimultaneousFiles:  files,
-		ExtractionRoutines: routines,
+		ExtractionRoutines: uint16(runtime.NumCPU() / 2),
 	}
 }
 
-// Less limited default options. Can run up 2x faster than DefaultOptions.
-// Tends to use all available CPU resources.
+// Faster extraction option. Uses all CPU cores.
 func FastOptions() *ExtractionOptions {
 	return &ExtractionOptions{
 		Perm:               0777,
-		SimultaneousFiles:  uint16(runtime.NumCPU()),
 		ExtractionRoutines: uint16(runtime.NumCPU()),
 	}
 }
