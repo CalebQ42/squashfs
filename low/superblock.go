@@ -14,7 +14,7 @@ type superblock struct {
 	IdCount          uint16
 	VerMaj           uint16
 	VerMin           uint16
-	RootInodeRef     uint64
+	RootInodeRef     InodeRef
 	Size             uint64
 	IdTableStart     uint64
 	XattrTableStart  uint64

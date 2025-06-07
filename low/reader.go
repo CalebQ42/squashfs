@@ -34,7 +34,7 @@ type Reader struct {
 	d           decompress.Decompressor
 	fragTable   *Table[fragEntry]
 	idTable     *Table[uint32]
-	exportTable *Table[uint64]
+	exportTable *Table[InodeRef]
 }
 
 func NewReader(r io.ReaderAt) (rdr Reader, err error) {
@@ -78,10 +78,40 @@ func NewReader(r io.ReaderAt) (rdr Reader, err error) {
 	if err != nil {
 		return rdr, errors.Join(errors.New("failed to read root directory"), err)
 	}
-	rdr.fragTable = NewTable[fragEntry](&rdr, rdr.Superblock.FragTableStart, rdr.Superblock.FragCount)
-	rdr.idTable = NewTable[uint32](&rdr, rdr.Superblock.IdTableStart, uint32(rdr.Superblock.IdCount))
-	rdr.exportTable = NewTable[uint64](&rdr, rdr.Superblock.ExportTableStart, rdr.Superblock.InodeCount)
+	rdr.fragTable = NewTable(&rdr, rdr.Superblock.FragTableStart, rdr.Superblock.FragCount, readFrag)
+	rdr.idTable = NewTable(&rdr, rdr.Superblock.IdTableStart, uint32(rdr.Superblock.IdCount), readId)
+	rdr.exportTable = NewTable(&rdr, rdr.Superblock.ExportTableStart, rdr.Superblock.InodeCount, readRef)
 	return
+}
+
+func readFrag(r io.Reader) (fragEntry, error) {
+	dat := make([]byte, 16)
+	_, err := r.Read(dat)
+	if err != nil {
+		return fragEntry{}, err
+	}
+	return fragEntry{
+		Start: binary.LittleEndian.Uint64(dat[0:8]),
+		Size:  binary.LittleEndian.Uint32(dat[8:12]),
+	}, nil
+}
+
+func readId(r io.Reader) (uint32, error) {
+	dat := make([]byte, 4)
+	_, err := r.Read(dat)
+	if err != nil {
+		return 0, err
+	}
+	return binary.LittleEndian.Uint32(dat), nil
+}
+
+func readRef(r io.Reader) (InodeRef, error) {
+	dat := make([]byte, 8)
+	_, err := r.Read(dat)
+	if err != nil {
+		return 0, err
+	}
+	return binary.LittleEndian.Uint64(dat), nil
 }
 
 // Get a uid/gid at the given index. Lazily populates the reader's Id table as necessary.
@@ -95,7 +125,7 @@ func (r *Reader) fragEntry(i uint32) (fragEntry, error) {
 }
 
 // Get an inode reference at the given index. Lazily populates the reader's export table as necessary.
-func (r *Reader) inodeRef(i uint32) (uint64, error) {
+func (r *Reader) inodeRef(i uint32) (InodeRef, error) {
 	return r.exportTable.Get(i)
 }
 

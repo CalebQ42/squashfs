@@ -7,7 +7,9 @@ import (
 	"github.com/CalebQ42/squashfs/low/inode"
 )
 
-func (r Reader) InodeFromRef(ref uint64) (inode.Inode, error) {
+type InodeRef = uint64
+
+func (r Reader) InodeFromRef(ref InodeRef) (inode.Inode, error) {
 	offset, meta := (ref>>16)+r.Superblock.InodeTableStart, ref&0xFFFF
 	rdr := metadata.NewReader(toreader.NewReader(r.r, int64(offset)), r.d)
 	defer rdr.Close()

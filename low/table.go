@@ -3,6 +3,7 @@ package squashfslow
 import (
 	"encoding/binary"
 	"errors"
+	"io"
 	"sync"
 
 	"github.com/CalebQ42/squashfs/internal/metadata"
@@ -13,6 +14,8 @@ var errOutOfBounds = errors.New("out of bounds")
 var errUnexpectedOutOfBounds = errors.New("unexpected out of bounds")
 var errNilCollection = errors.New("nil collection")
 
+type CreateFunction[T any] = func(io.Reader) (T, error)
+
 type Table[T any] struct {
 	totalItems    uint32
 	itemsPerBlock uint32
@@ -20,9 +23,10 @@ type Table[T any] struct {
 	mut           sync.RWMutex
 	currentItems  []T
 	rdr           *Reader
+	createFunc    CreateFunction[T]
 }
 
-func NewTable[T any](rdr *Reader, start uint64, totalItems uint32) *Table[T] {
+func NewTable[T any](rdr *Reader, start uint64, totalItems uint32, createFunc CreateFunction[T]) *Table[T] {
 	var zero T
 	return &Table[T]{
 		totalItems:    totalItems,
@@ -30,6 +34,7 @@ func NewTable[T any](rdr *Reader, start uint64, totalItems uint32) *Table[T] {
 		offset:        start,
 		mut:           sync.RWMutex{},
 		rdr:           rdr,
+		createFunc:    createFunc,
 	}
 }
 
@@ -65,14 +70,16 @@ func (t *Table[T]) fillAndGet(requestedItemIndex uint32) (T, error) {
 		}
 		t.offset += 8
 		toRead = min(t.itemsPerBlock, t.totalItems-uint32(len(t.currentItems)))
-		new := make([]T, toRead)
+		oldLen := uint32(len(t.currentItems))
+		t.currentItems = append(t.currentItems, make([]T, toRead)...)
 		metaRdr = metadata.NewReader(toreader.NewReader(t.rdr.r, int64(offset)), t.rdr.d)
-		err = binary.Read(&metaRdr, binary.LittleEndian, new)
-		if err != nil {
-			var zero T
-			return zero, err
+		for i := range toRead {
+			t.currentItems[oldLen+i], err = t.createFunc(&metaRdr)
+			if err != nil {
+				var zero T
+				return zero, err
+			}
 		}
-		t.currentItems = append(t.currentItems, new...)
 	}
 	return t.currentItems[requestedItemIndex], nil
 }
