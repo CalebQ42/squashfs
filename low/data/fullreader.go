@@ -4,19 +4,21 @@ import (
 	"errors"
 	"io"
 	"runtime"
+	"sync"
 
 	"github.com/CalebQ42/squashfs/internal/decompress"
 )
 
 type FullReader struct {
-	fileSize       uint64
-	blockSize      uint32
-	goroutineLimit uint16
-	rdr            io.ReaderAt
-	decomp         decompress.Decompressor
-	sizes          []uint32
-	blockOffsets   []uint64
-	fragDat        []byte
+	fileSize     uint64
+	blockSize    uint32
+	dispatcher   chan struct{}
+	pool         *sync.Pool
+	rdr          io.ReaderAt
+	decomp       decompress.Decompressor
+	sizes        []uint32
+	blockOffsets []uint64
+	fragDat      []byte
 }
 
 func NewFullReader(rdr io.ReaderAt, decomp decompress.Decompressor, blockSize uint32, size uint64, start uint64, sizes []uint32) FullReader {
@@ -56,12 +58,15 @@ func (f *FullReader) AddFragData(blockStart uint64, blockSize uint32, offset uin
 			return err
 		}
 	}
-	f.fragDat = dat[offset : offset+uint32(f.fileSize%uint64(f.blockSize))]
+	f.fragDat = make([]byte, f.fileSize%uint64(f.blockSize))
+	copy(f.fragDat, dat[offset:])
+	dat = nil
 	return nil
 }
 
-func (f *FullReader) SetGoroutineLimit(limit uint16) {
-	f.goroutineLimit = limit
+func (f *FullReader) SetDispatcherPool(dispatcher chan struct{}, pool *sync.Pool) {
+	f.dispatcher = dispatcher
+	f.pool = pool
 }
 
 // The number of blocks, including the fragment block if present
@@ -94,53 +99,86 @@ func (f FullReader) Block(i uint32) ([]byte, error) {
 		return nil, err
 	}
 	if realSize == f.sizes[i] {
-		return f.decomp.Decompress(dat)
+		dat, err = f.decomp.Decompress(dat)
 	}
-	return dat, nil
+	return dat, err
 }
 
-type blockResults struct {
+func (f FullReader) blockFromPool(i uint32) *BlockResults {
+	out := f.pool.Get().(*BlockResults)
+	out.idx = i
+	out.err = nil
+	if i == uint32(len(f.sizes)) && f.fragDat != nil {
+		out.block = f.fragDat
+		return out
+	}
+	if i >= uint32(len(f.sizes)) {
+		out.err = errors.New("invalid block index")
+		return out
+	}
+	realSize := f.sizes[i] &^ (1 << 24)
+	if realSize == 0 {
+		if i == uint32(len(f.sizes)-1) && f.fragDat == nil {
+			out.block = make([]byte, f.fileSize%uint64(f.blockSize))
+			return out
+		}
+		out.block = make([]byte, f.blockSize)
+	}
+	out.block = make([]byte, realSize)
+	_, out.err = f.rdr.ReadAt(out.block, int64(f.blockOffsets[i]))
+	if out.err != nil {
+		return out
+	}
+	if realSize == f.sizes[i] {
+		out.block, out.err = f.decomp.Decompress(out.block)
+	}
+	return out
+}
+
+type BlockResults struct {
 	idx   uint32
 	block []byte
 	err   error
 }
 
 func (f FullReader) WriteTo(w io.Writer) (wrote int64, err error) {
-	routineLimit := f.goroutineLimit
-	if routineLimit == 0 {
-		routineLimit = uint16(runtime.NumCPU() / 2)
+	if f.dispatcher == nil {
+		f.dispatcher = make(chan struct{}, runtime.NumCPU())
+		for range runtime.NumCPU() {
+			f.dispatcher <- struct{}{}
+		}
 	}
-	dispatchChan := make(chan struct{}, routineLimit)
-	for range int(routineLimit) {
-		dispatchChan <- struct{}{}
+	if f.pool == nil {
+		f.pool = &sync.Pool{
+			New: func() any {
+				return &BlockResults{}
+			},
+		}
 	}
-	resChan := make(chan blockResults, routineLimit)
-	var results map[uint32]blockResults
+	open := true
+	resChan := make(chan *BlockResults, len(f.dispatcher))
+	var results map[uint32]*BlockResults
 	if _, is := w.(io.WriterAt); !is {
-		results = make(map[uint32]blockResults)
+		results = make(map[uint32]*BlockResults)
 	}
 	for i := range f.BlockNum() {
 		go func(idx uint32) {
-			_, open := <-dispatchChan
+			<-f.dispatcher
+			defer func() { f.dispatcher <- struct{}{} }()
 			if !open {
-				resChan <- blockResults{}
+				resChan <- f.pool.Get().(*BlockResults)
 				return
 			}
-			block, err := f.Block(idx)
-			resChan <- blockResults{
-				idx:   idx,
-				block: block,
-				err:   err,
-			}
-			dispatchChan <- struct{}{}
+			resChan <- f.blockFromPool(idx)
 		}(i)
 	}
 	out := int64(0)
 	errOut := make([]error, 0)
 	for i := uint32(0); i < f.BlockNum(); {
 		res := <-resChan
+		defer f.pool.Put(res)
 		if res.err != nil {
-			close(dispatchChan)
+			open = false
 			errOut = append(errOut, res.err)
 		}
 		if len(errOut) > 0 {
@@ -180,6 +218,8 @@ func (f FullReader) WriteTo(w io.Writer) (wrote int64, err error) {
 					out = max(out, int64(res.idx)*int64(f.blockSize)+int64(len(res.block)))
 				}
 				i++
+				delete(results, i)
+				f.pool.Put(res)
 			} else {
 				break
 			}

@@ -10,8 +10,8 @@ import (
 	"path/filepath"
 	"runtime"
 	"strconv"
+	"sync"
 
-	"github.com/CalebQ42/squashfs/internal/routinemanager"
 	squashfslow "github.com/CalebQ42/squashfs/low"
 	"github.com/CalebQ42/squashfs/low/data"
 	"github.com/CalebQ42/squashfs/low/inode"
@@ -216,8 +216,16 @@ func (f File) Extract(folder string) error {
 // Extract the file to the given folder. If the file is a folder, the folder's contents will be extracted to the folder.
 // Allows setting various extraction options via ExtractionOptions.
 func (f File) ExtractWithOptions(path string, op *ExtractionOptions) error {
-	if op.manager == nil {
-		op.manager = routinemanager.NewManager(op.SimultaneousFiles)
+	if op.dispatcher == nil {
+		op.fullRdrPool = sync.Pool{
+			New: func() any {
+				return &data.BlockResults{}
+			},
+		}
+		op.dispatcher = make(chan struct{}, op.ExtractionRoutines)
+		for range op.ExtractionRoutines {
+			op.dispatcher <- struct{}{}
+		}
 		if op.LogOutput != nil {
 			log.SetOutput(op.LogOutput)
 		}
@@ -231,11 +239,13 @@ func (f File) ExtractWithOptions(path string, op *ExtractionOptions) error {
 	}
 	switch f.Low.Inode.Type {
 	case inode.Dir, inode.EDir:
+		<-op.dispatcher
 		d, err := f.Low.ToDir(f.r.Low)
 		if err != nil {
 			if op.Verbose {
 				log.Println("Failed to create squashfs.Directory for", path)
 			}
+			op.dispatcher <- struct{}{}
 			return errors.Join(errors.New("failed to create squashfs.Directory: "+path), err)
 		}
 		errChan := make(chan error, len(d.Entries))
@@ -248,19 +258,21 @@ func (f File) ExtractWithOptions(path string, op *ExtractionOptions) error {
 				return errors.Join(errors.New("failed to get base from entry: "+path), err)
 			}
 			go func(b squashfslow.FileBase, path string) {
-				i := op.manager.Lock()
 				if b.IsDir() {
+					<-op.dispatcher
 					extDir := filepath.Join(path, b.Name)
 					err = os.Mkdir(extDir, 0777)
-					op.manager.Unlock(i)
 					if err != nil {
 						if op.Verbose {
 							log.Println("Failed to create directory", path)
 						}
+						op.dispatcher <- struct{}{}
 						errChan <- errors.Join(errors.New("failed to create directory: "+path), err)
 						return
 					}
-					err = f.r.FileFromBase(b, f.r.FSFromDirectory(d, f.parent)).ExtractWithOptions(extDir, op)
+					fil := f.r.FileFromBase(b, f.r.FSFromDirectory(d, f.parent))
+					op.dispatcher <- struct{}{}
+					err = fil.ExtractWithOptions(extDir, op)
 					if err != nil {
 						if op.Verbose {
 							log.Println("Failed to extract directory", path)
@@ -272,12 +284,12 @@ func (f File) ExtractWithOptions(path string, op *ExtractionOptions) error {
 				} else {
 					fil := f.r.FileFromBase(b, f.r.FSFromDirectory(d, f.parent))
 					err = fil.ExtractWithOptions(path, op)
-					op.manager.Unlock(i)
 					fil.Close()
 					errChan <- err
 				}
 			}(b, path)
 		}
+		op.dispatcher <- struct{}{}
 		var errCache []error
 		for range d.Entries {
 			err := <-errChan
@@ -289,23 +301,28 @@ func (f File) ExtractWithOptions(path string, op *ExtractionOptions) error {
 			return errors.Join(errors.New("failed to extract folder: "+path), errors.Join(errCache...))
 		}
 	case inode.Fil, inode.EFil:
+		<-op.dispatcher
 		path = filepath.Join(path, f.Low.Name)
 		outFil, err := os.Create(path)
 		if err != nil {
 			if op.Verbose {
 				log.Println("Failed to create file", path)
 			}
+			op.dispatcher <- struct{}{}
 			return errors.Join(errors.New("failed to create file: "+path), err)
 		}
 		defer outFil.Close()
 		full, err := f.Low.GetFullReader(&f.r.Low)
+		defer full.Close()
 		if err != nil {
 			if op.Verbose {
 				log.Println("Failed to create full reader for", path)
 			}
+			op.dispatcher <- struct{}{}
 			return errors.Join(errors.New("failed to create full reader: "+path), err)
 		}
-		full.SetGoroutineLimit(op.ExtractionRoutines)
+		full.SetDispatcherPool(op.dispatcher, &op.fullRdrPool)
+		op.dispatcher <- struct{}{}
 		_, err = full.WriteTo(outFil)
 		if err != nil {
 			if op.Verbose {
@@ -314,6 +331,8 @@ func (f File) ExtractWithOptions(path string, op *ExtractionOptions) error {
 			return errors.Join(errors.New("failed to write file: "+path), err)
 		}
 	case inode.Sym, inode.ESym:
+		<-op.dispatcher
+		defer func() { op.dispatcher <- struct{}{} }()
 		symPath := f.SymlinkPath()
 		if op.DereferenceSymlink {
 			filTmp := f.GetSymlinkFile()
@@ -361,6 +380,8 @@ func (f File) ExtractWithOptions(path string, op *ExtractionOptions) error {
 			}
 		}
 	case inode.Char, inode.EChar, inode.Block, inode.EBlock, inode.Fifo, inode.EFifo:
+		<-op.dispatcher
+		defer func() { op.dispatcher <- struct{}{} }()
 		if runtime.GOOS == "windows" {
 			if op.Verbose {
 				log.Println(f.path(), "ignored. A device link and can't be created on Windows.")
