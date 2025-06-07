@@ -1,2 +1,6 @@
 testing
 /go-unsquashfs
+
+# Memory and CPU pprof profiles
+mem.out
+cpu.out
