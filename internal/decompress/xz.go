@@ -5,7 +5,7 @@ import (
 	"io"
 	"sync"
 
-	"github.com/therootcompany/xz"
+	"github.com/mikelolasagasti/xz"
 )
 
 type Xz struct {
