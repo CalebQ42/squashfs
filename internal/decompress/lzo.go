@@ -1,11 +1,7 @@
-//go:build !no_gpl
-
 package decompress
 
 import (
-	"bytes"
-
-	"github.com/rasky/go-lzo"
+	"github.com/anchore/go-lzo"
 )
 
 type Lzo struct{}
@@ -15,5 +11,7 @@ func NewLzo() (Lzo, error) {
 }
 
 func (l Lzo) Decompress(data []byte) ([]byte, error) {
-	return lzo.Decompress1X(bytes.NewReader(data), len(data), 0)
+	var dest []byte
+	_, err := lzo.Decompress(data, dest)
+	return dest, err
 }
