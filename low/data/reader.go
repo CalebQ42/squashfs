@@ -55,6 +55,8 @@ func (d *Reader) Read(buf []byte) (int, error) {
 		}
 		toRead = min(len(d.curBlock)-int(d.curOffset), len(buf)-totRed)
 		copy(buf[totRed:], d.curBlock[d.curOffset:d.curOffset+uint32(toRead)])
+		totRed += toRead
+		d.curOffset += uint32(toRead)
 	}
 	return totRed, nil
 }
