@@ -5,3 +5,7 @@ squashfs.test
 # Memory and CPU pprof profiles
 mem.out
 cpu.out
+
+# IDEs
+.idea/
+.vscode/

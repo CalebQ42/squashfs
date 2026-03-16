@@ -2,22 +2,25 @@
 
 [![PkgGoDev](https://pkg.go.dev/badge/github.com/CalebQ42/squashfs)](https://pkg.go.dev/github.com/CalebQ42/squashfs) [![Go Report Card](https://goreportcard.com/badge/github.com/CalebQ42/squashfs)](https://goreportcard.com/report/github.com/CalebQ42/squashfs)
 
-A PURE Go library to read squashfs. There is currently no plans to add archive creation support as it will almost always be better to just call `mksquashfs`. I could see some possible use cases, but probably won't spend time on it unless it's requested (open a discussion if you want this feature).
+A PURE Go library to read squashfs. There are currently no plans to add archive creation support as it will almost always be better to just call `mksquashfs`.
+I could see some possible use cases, but probably won't spend time on it unless it's requested (open a discussion if you want this feature).
 
 The library has two parts with this `github.com/CalebQ42/squashfs` being easy to use as it implements `io/fs` interfaces and doesn't expose unnecessary information. 95% this is the library you want. If you need lower level access to the information, use `github.com/CalebQ42/squashfs/low` where far more information is exposed.
 
 Currently has support for reading squashfs files and extracting files and folders.
 
-Special thanks to <https://dr-emann.github.io/squashfs/> for some VERY important information in an easy to understand format.
-Thanks also to [distri's squashfs library](https://github.com/distr1/distri/tree/master/internal/squashfs) as I referenced it to figure some things out (and double check others).
+Special thanks to <https://dr-emann.github.io/squashfs/> for some VERY important information in an easy-to-understand format.
+Thanks also to [distri's squashfs library](https://github.com/distr1/distri/tree/master/internal/squashfs) as I referenced it to figure some things out (and double-check others).
 
 ## Build tags
 
-As of `v1.1.0` this library has two optional build tags: `no_gpl` and `no_obsolete`. `no_gpl` disables the ability to read archives with lzo compression due to the library's gpl license. `no_obsolete` removes "obsolete" compression types for a reduced compilation size; currently this only disable lzma compression since it's superseded by xz.
+This library has two optional build tags: 
+- `no_gpl` disables the ability to read archives with lzo compression due to the library's gpl license (this has been removed in `v1.2.0`). 
+- `no_obsolete` removes "obsolete" compression types for a reduced compilation size; currently this only disables lzma compression since it's superseded by xz.
 
 ## FUSE
 
-As of `v1.0`, FUSE capabilities has been moved to [a separate library](https://github.com/CalebQ42/squashfuse).
+As of `v1.0`, FUSE capabilities have been moved to [a separate library](https://github.com/CalebQ42/squashfuse).
 
 ## Limitations
 
@@ -28,7 +31,7 @@ As of `v1.0`, FUSE capabilities has been moved to [a separate library](https://g
 
 ## Issues
 
-* Noticably slower then `unsquashfs` for extraction, especially on larger images.
+* Noticeably slower then `unsquashfs` for extraction, especially on larger images.
   * This seems to be related to above along with the general optimization of `unsquashfs` and it's compression libraries.
   * Times seem to be largely dependent on file tree size and compression type.
     * My main testing image (~100MB) using Zstd takes ~2x longer.
