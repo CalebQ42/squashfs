@@ -10,6 +10,9 @@ type Reader struct {
 }
 
 func NewReader(f *FullReader) (Reader, error) {
+	if f.fileSize == 0 && f.BlockNum() == 0 {
+		return Reader{f: f}, nil
+	}
 	dat, err := f.Block(0)
 	if err != nil {
 		return Reader{}, err
